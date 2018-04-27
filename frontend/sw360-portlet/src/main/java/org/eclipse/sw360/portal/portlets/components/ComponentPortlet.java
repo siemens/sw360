@@ -55,6 +55,7 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityService
 import org.eclipse.sw360.exporter.ComponentExporter;
 import org.eclipse.sw360.portal.common.*;
 import org.eclipse.sw360.portal.portlets.FossologyAwarePortlet;
+import org.eclipse.sw360.portal.portlets.projects.ProjectPortletUtils;
 import org.eclipse.sw360.portal.users.LifeRayUserSession;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 

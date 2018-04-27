@@ -21,6 +21,7 @@ import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
 import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
+import org.eclipse.sw360.datahandler.thrift.Visibility;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -52,10 +53,10 @@ public class ProjectHandlerTest {
     public void setUp() throws Exception {
         List<Project> projects = new ArrayList<>();
 
-        projects.add(new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1"));
-        projects.add(new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2"));
+        projects.add(new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
+        projects.add(new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
         projects.get(1).addToContributors("user1");
-        projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3"));
+        projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
 
         // Create the database
         TestUtils.createDatabase(DatabaseSettings.getConfiguredHttpClient(), dbName);
@@ -148,7 +149,7 @@ public class ProjectHandlerTest {
     @Test
     public void testAddProject() throws Exception {
         Project project4 = new Project();
-        project4.setName("Project4").setBusinessUnit("AB CD FE");
+        project4.setName("Project4").setBusinessUnit("AB CD FE").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS);
 
         String id = handler.addProject(project4, user2).getId();
 

@@ -38,6 +38,18 @@ public class ScheduleConstants {
     public static final String AUTOSTART_PROPERTY_NAME = "autostart";
     public static final String CVESEARCH_OFFSET_DEFAULT  = 0 + "" ; // default 00:00 am, in seconds
     public static final String CVESEARCH_INTERVAL_DEFAULT  = (24*60*60)+"" ; // default 24h, in seconds
+    public static final String SVMSYNC_OFFSET_PROPERTY_NAME = "schedule.svmsync.firstOffset.seconds";
+    public static final String SVMSYNC_INTERVAL_PROPERTY_NAME = "schedule.svmsync.interval.seconds";
+    public static final String SVMSYNC_OFFSET_DEFAULT  = (1*60*60) + "" ; // default 01:00 am, in seconds
+    public static final String SVMSYNC_INTERVAL_DEFAULT  = (24*60*60)+"" ; // default 24h, in seconds
+    public static final String SVMMATCH_OFFSET_PROPERTY_NAME = "schedule.svmmatch.firstOffset.seconds";
+    public static final String SVMMATCH_INTERVAL_PROPERTY_NAME = "schedule.svmmatch.interval.seconds";
+    public static final String SVMMATCH_OFFSET_DEFAULT  = (2*60*60) + "" ; // default 01:00 am, in seconds
+    public static final String SVMMATCH_INTERVAL_DEFAULT  = (24*60*60)+"" ; // default 24h, in seconds
+    public static final String SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME = "schedule.svmlistupdate.firstOffset.seconds";
+    public static final String SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME = "schedule.svmlistupdate.interval.seconds";
+    public static final String SVM_LIST_UPDATE_OFFSET_DEFAULT  = (3*60*60) + "" ; // default 03:00 am, in seconds
+    public static final String SVM_LIST_UPDATE_INTERVAL_DEFAULT  = (24*60*60)+"" ; // default 24h, in seconds
 
 
     // scheduler properties
@@ -69,6 +81,72 @@ public class ScheduleConstants {
         } catch (NumberFormatException nfe){
             log.error("Property " + CVESEARCH_INTERVAL_PROPERTY_NAME + " is not an integer.");
             invalidConfiguredServices.add(ThriftClients.CVESEARCH_SERVICE);
+        }
+
+        if(! props.containsKey(SVMSYNC_OFFSET_PROPERTY_NAME)){
+            log.info("Property "+ SVMSYNC_OFFSET_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmSyncOffset  = props.getProperty(SVMSYNC_OFFSET_PROPERTY_NAME, SVMSYNC_OFFSET_DEFAULT);
+        try {
+            SYNC_FIRST_RUN_OFFSET_SEC.put(ThriftClients.SVMSYNC_SERVICE, Integer.parseInt(svmSyncOffset));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVMSYNC_OFFSET_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVMSYNC_SERVICE);
+        }
+
+        if(! props.containsKey(SVMSYNC_INTERVAL_PROPERTY_NAME)){
+            log.info("Property "+ SVMSYNC_INTERVAL_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmSyncInterval  = props.getProperty(SVMSYNC_INTERVAL_PROPERTY_NAME, SVMSYNC_INTERVAL_DEFAULT);
+        try {
+            SYNC_INTERVAL_SEC.put(ThriftClients.SVMSYNC_SERVICE, Integer.parseInt(svmSyncInterval));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVMSYNC_INTERVAL_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVMSYNC_SERVICE);
+        }
+
+        if(! props.containsKey(SVMMATCH_OFFSET_PROPERTY_NAME)){
+            log.info("Property "+ SVMMATCH_OFFSET_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmMatchOffset  = props.getProperty(SVMMATCH_OFFSET_PROPERTY_NAME, SVMMATCH_OFFSET_DEFAULT);
+        try {
+            SYNC_FIRST_RUN_OFFSET_SEC.put(ThriftClients.SVMMATCH_SERVICE, Integer.parseInt(svmMatchOffset));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVMMATCH_OFFSET_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVMMATCH_SERVICE);
+        }
+
+        if(! props.containsKey(SVMMATCH_INTERVAL_PROPERTY_NAME)){
+            log.info("Property "+ SVMMATCH_INTERVAL_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmMatchInterval  = props.getProperty(SVMMATCH_INTERVAL_PROPERTY_NAME, SVMMATCH_INTERVAL_DEFAULT);
+        try {
+            SYNC_INTERVAL_SEC.put(ThriftClients.SVMMATCH_SERVICE, Integer.parseInt(svmMatchInterval));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVMMATCH_INTERVAL_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVMMATCH_SERVICE);
+        }
+
+        if(! props.containsKey(SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME)){
+            log.info("Property "+ SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmListUpdateOffset  = props.getProperty(SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME, SVM_LIST_UPDATE_OFFSET_DEFAULT);
+        try {
+            SYNC_FIRST_RUN_OFFSET_SEC.put(ThriftClients.SVM_LIST_UPDATE_SERVICE, Integer.parseInt(svmListUpdateOffset));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVM_LIST_UPDATE_SERVICE);
+        }
+
+        if(! props.containsKey(SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME)){
+            log.info("Property "+ SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String svmListUpdateInterval  = props.getProperty(SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME, SVM_LIST_UPDATE_INTERVAL_DEFAULT);
+        try {
+            SYNC_INTERVAL_SEC.put(ThriftClients.SVM_LIST_UPDATE_SERVICE, Integer.parseInt(svmListUpdateInterval));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.SVM_LIST_UPDATE_SERVICE);
         }
 
         String autostartServicesString = props.getProperty(AUTOSTART_PROPERTY_NAME, "");
