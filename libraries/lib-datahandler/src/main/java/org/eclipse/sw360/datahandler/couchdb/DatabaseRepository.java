@@ -89,6 +89,12 @@ public class DatabaseRepository<T> extends CouchDbRepositorySupport<T> {
         return queryForIds(query);
     }
 
+
+    public Set<String> queryForIds(String queryName, Set<String> keys) {
+        ViewQuery query = createQuery(queryName).keys(keys);
+        return queryForIds(query);
+    }
+
     public Set<String> queryForIdsAsValue(String queryName, String key) {
         ViewQuery query = createQuery(queryName).key(key);
         return queryForIdsAsValue(query);
@@ -104,6 +110,10 @@ public class DatabaseRepository<T> extends CouchDbRepositorySupport<T> {
         return queryForIdsAsValue(query);
     }
 
+    public Set<String> getAllIdsByView(String queryName, boolean descending) {
+        ViewQuery query = createQuery(queryName).descending(descending);
+        return queryForIds(query);
+    }
 
     public Set<String> queryForIds(String queryName, String startKey, String endKey) {
         ViewQuery query = createQuery(queryName).startKey(startKey).endKey(endKey);

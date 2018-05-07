@@ -86,6 +86,11 @@
             #end
         </ul>
 
+        <p>
+            <strong>
+                Please note the following license conditions and copyright notices applicable to Open Source Software and/or other components (or parts thereof):
+            </strong>
+        </p>
         <ul id="releases" style="list-style-type:none">
             #foreach($releaseName in $licenseInfoResults.keySet())
                 <li id="$esc.xml($releaseName).replace(" ","_").replace(",","-")" class="release" title="$esc.xml($releaseName)">

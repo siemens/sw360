@@ -14,6 +14,7 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableListMultimap;
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.SummaryAwareRepository;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -33,6 +34,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
  *
  * @author cedric.bodet@tngtech.com
  * @author Johannes.Najjar@tngtech.com
+ * @author stefan.jaeger@evosoft.com
  */
 @Views({
         @View(name = "all",
@@ -61,6 +63,12 @@ import static com.google.common.base.Strings.isNullOrEmpty;
                     "      emit(doc.componentId, doc);" +
                     "  }" +
                     "}"),
+        @View(name = "releaseIdsByVendorId",
+                map = "function(doc) {" +
+                        " if (doc.type == 'release'){" +
+                        "      emit(doc.vendorId, doc._id);" +
+                        "  }" +
+                        "}"),
         @View(name = "releaseIdsByLicenseId",
                 map = "function(doc) {" +
                       "  if (doc.type == 'release'){" +
@@ -71,6 +79,27 @@ import static com.google.common.base.Strings.isNullOrEmpty;
                       "}")
 })
 public class ReleaseRepository extends SummaryAwareRepository<Release> {
+
+    private static final String BY_LOWERCASE_RELEASE_CPE_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.cpeid != null) {" +
+                    "    emit(doc.cpeid.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String BY_LOWERCASE_RELEASE_NAME_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.name != null) {" +
+                    "    emit(doc.name.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String BY_LOWERCASE_RELEASE_VERSION_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.version != null) {" +
+                    "    emit(doc.version.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
 
     public ReleaseRepository(DatabaseConnector db, VendorRepository vendorRepository) {
         super(Release.class, db, new ReleaseSummary(vendorRepository));
@@ -123,8 +152,27 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return makeSummaryFromFullDocs(SummaryType.SHORT, queryByIds("releaseIdByVendorId", ids));
     }
 
+   public Set<String> getReleaseIdsFromVendorIds(Set<String> ids) {
+        return queryForIds("releaseIdsByVendorId", ids);
+    }
+
     public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
 
         return queryView("releaseIdsByLicenseId", licenseId);
+    }
+
+    @View(name = "releaseByCpeId", map = BY_LOWERCASE_RELEASE_CPE_VIEW)
+    public Set<String> getReleaseByLowercaseCpe(String cpeid) {
+        return queryForIdsAsValue("releaseByCpeId", cpeid != null ? cpeid.toLowerCase() : cpeid);
+    }
+
+    @View(name = "releaseByName", map = BY_LOWERCASE_RELEASE_NAME_VIEW)
+    public Set<String> getReleaseByLowercaseNamePrefix(String namePrefix) {
+        return queryForIdsByPrefix("releaseByName", namePrefix != null ? namePrefix.toLowerCase() : namePrefix);
+    }
+
+    @View(name = "releaseByVersion", map = BY_LOWERCASE_RELEASE_VERSION_VIEW)
+    public Set<String> getReleaseByLowercaseVersionPrefix(String versionPrefix) {
+        return queryForIdsByPrefix("releaseByVersion", versionPrefix != null ? versionPrefix.toLowerCase() : versionPrefix);
     }
 }

@@ -66,7 +66,7 @@ public class ProjectDatabaseHandlerTest {
 
         List<Project> projects = new ArrayList<>();
 
-        Project p1 = new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1")
+        Project p1 = new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS)
                 .setReleaseIdToUsage(ImmutableMap.<String, ProjectReleaseRelationship>builder()
                         .put("r1", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE))
                         .put("r2", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE))
@@ -76,7 +76,7 @@ public class ProjectDatabaseHandlerTest {
                         .put("r6", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE))
                         .build());
         projects.add(p1);
-        Project p2 = new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2")
+        Project p2 = new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS)
                 .setReleaseIdToUsage(ImmutableMap.<String, ProjectReleaseRelationship>builder()
                         .put("r1", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE))
                         .put("r2", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE))
@@ -85,6 +85,7 @@ public class ProjectDatabaseHandlerTest {
 
         projects.add(p2);
         projects.get(1).addToContributors("user1");
+        projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
         projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3"));
         Project p4 = new Project().setId("P4").setName("Project4").setBusinessUnit("AB CD EF").setCreatedBy("user1")
                 .setVisbility(Visibility.PRIVATE)
@@ -94,7 +95,7 @@ public class ProjectDatabaseHandlerTest {
                         .build())
                 .setLinkedProjects(ImmutableMap.<String, ProjectRelationship>builder().put("P5", ProjectRelationship.CONTAINED).build());
         projects.add(p4);
-        projects.add(new Project().setId("P5").setName("Project5").setBusinessUnit("AB CD EF").setCreatedBy("user1"));
+        projects.add(new Project().setId("P5").setName("Project5").setBusinessUnit("AB CD EF").setCreatedBy("user1").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
 
         List<Release> releases = new ArrayList<>();
         releases.add(new Release().setId("r1").setComponentId("c1"));
