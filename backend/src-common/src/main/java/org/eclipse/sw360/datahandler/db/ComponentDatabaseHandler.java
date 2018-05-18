@@ -898,6 +898,15 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return ThriftUtils.getIdMap(releases);
     }
 
+    void fillVendors(Collection<Release> releases){
+        releases.forEach(vendorRepository::fillVendor);
+    }
+
+    public Map<String, Component> getAllComponentsIdMap() {
+        final List<Component> components = componentRepository.getAll();
+        return ThriftUtils.getIdMap(components);
+    }
+
     @NotNull
     private List<ReleaseLink> iterateReleaseRelationShips(Map<String, ?> relations, String parentNodeId, Deque<String> visitedIds, Map<String, Release> releaseMap) {
         List<ReleaseLink> out = new ArrayList<>();
@@ -991,6 +1000,37 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public List<Release> getFullReleases(Set<String> ids) {
         return releaseRepository.makeSummary(SummaryType.SUMMARY, ids);
+    }
+
+    public Set<String> getReleaseIdsByVendorIds(Set<String> vendorIds){
+        return releaseRepository.getReleaseIdsFromVendorIds(vendorIds);
+    }
+
+    public Set<String> getReleaseIdsByCpeCaseInsensitive(String cpeId){
+        return releaseRepository.getReleaseByLowercaseCpe(cpeId);
+    }
+
+    public Set<String> getReleaseIdsByNamePrefixCaseInsensitive(String namePrefix){
+        return releaseRepository.getReleaseByLowercaseNamePrefix(namePrefix);
+    }
+
+    public Set<String> getReleaseIdsByVersionPrefixCaseInsensitive(String versionPrefix){
+        return releaseRepository.getReleaseByLowercaseVersionPrefix(versionPrefix);
+    }
+
+    public Set<String> getAllReleaseIds(){
+        return releaseRepository.getAllIds();
+    }
+
+    public Set<String> getVendorIdsByNamePrefixCaseInsensitive(String namePrefix){
+        Set<String> fullnameList = vendorRepository.getVendorByLowercaseFullnamePrefix(namePrefix);
+        Set<String> shortnameList = vendorRepository.getVendorByLowercaseShortnamePrefix(namePrefix);
+
+        if (fullnameList == null) return shortnameList;
+        if (shortnameList == null) return fullnameList;
+        // both lists available
+        fullnameList.addAll(shortnameList);
+        return fullnameList;
     }
 
     public List<Release> getReleasesWithPermissions(Set<String> ids, User user) {

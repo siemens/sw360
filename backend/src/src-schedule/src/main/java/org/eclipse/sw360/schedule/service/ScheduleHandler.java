@@ -69,13 +69,22 @@ public class ScheduleHandler implements ScheduleService.Iface {
             case ThriftClients.CVESEARCH_SERVICE:
                 successSync = wrapSupplierException(() -> thriftClients.makeCvesearchClient().update(), serviceName);
                 break;
+            case ThriftClients.SVMSYNC_SERVICE:
+                successSync = wrapSupplierException(() -> thriftClients.makeVMClient().synchronizeComponents().getRequestStatus(), serviceName);
+                break;
+            case ThriftClients.SVMMATCH_SERVICE:
+                successSync = wrapSupplierException(() -> thriftClients.makeVMClient().triggerReverseMatch().getRequestStatus(), serviceName);
+                break;
+            case ThriftClients.SVM_LIST_UPDATE_SERVICE:
+                successSync = wrapSupplierException(() -> thriftClients.makeProjectClient().exportForMonitoringList(), serviceName);
+                break;
             default:
                 log.error("Could not schedule service: " + serviceName + ". Reason: service is not registered in ThriftClients.");
         }
 
         if (successSync){
             RequestSummary summary = new RequestSummary(RequestStatus.SUCCESS);
-            summary.setMessage(SW360Utils.getDateTimeString(Scheduler.getNextSync()));
+            summary.setMessage(getNextSync(serviceName));
             return summary;
         } else {
             return new RequestSummary(RequestStatus.FAILURE);
