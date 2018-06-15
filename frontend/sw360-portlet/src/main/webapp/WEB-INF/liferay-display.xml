@@ -36,6 +36,7 @@
 		<portlet id="bulkReleaseEdit"/>
 		<portlet id="signup"/>
 		<portlet id="vulnerabilities"/>
+		<portlet id="vulnerabilityManagement"/>
 		<portlet id="ecc"/>
 	</category>
 </display>

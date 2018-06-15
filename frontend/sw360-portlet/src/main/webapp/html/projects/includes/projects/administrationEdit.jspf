@@ -110,7 +110,7 @@
     </thead>
     <tr>
         <td>
-            <textarea name="<portlet:namespace/><%=Project._Fields.LICENSE_INFO_HEADER_TEXT%>" class="projectLicenseInfoHeaderText" id="licenseInfoHeaderText" data-defaulttext="${defaultLicenseInfoHeaderText}"><sw360:DisplayLicenseInfoHeader project="${project}" defaultText="${defaultLicenseInfoHeaderText}"/></textarea>
+            <textarea name="<portlet:namespace/><%=Project._Fields.LICENSE_INFO_HEADER_TEXT%>" class="projectLicenseInfoHeaderText" id="licenseInfoHeaderText" data-defaulttext="<sw360:out value="${defaultLicenseInfoHeaderText}" stripNewlines="false"></sw360:out> "><sw360:DisplayLicenseInfoHeader project="${project}" defaultText="${defaultLicenseInfoHeaderText}"/></textarea>
         </td>
     </tr>
 </table>
