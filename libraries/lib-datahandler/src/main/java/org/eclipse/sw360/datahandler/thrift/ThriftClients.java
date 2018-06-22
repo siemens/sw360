@@ -11,6 +11,7 @@
  */
 package org.eclipse.sw360.datahandler.thrift;
 
+import com.siemens.sw360.datahandler.thrift.vmcomponents.VMComponentService;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentService;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
@@ -65,10 +66,14 @@ public class ThriftClients {
     private static final String PROJECTIMPORT_SERVICE_URL = "/bdpimport/thrift";
     private static final String VULNERABILITY_SERVICE_URL = "/vulnerabilities/thrift";
     private static final String SCHEDULE_SERVICE_URL = "/schedule/thrift";
+    private static final String VM_SERVICE_URL = "/vmcomponents/thrift";
 
     // A service which has to be scheduled by the scheduler should be registered here!
     // names of services that can be scheduled by the schedule service, i.e. that have an "update" method
     public static final String CVESEARCH_SERVICE = "cvesearchService";
+    public static final String SVMSYNC_SERVICE = "svmsyncService";
+    public static final String SVMMATCH_SERVICE = "svmmatchService";
+    public static final String SVM_LIST_UPDATE_SERVICE = "svmListUpdateService";
 
     static {
         Properties props = CommonUtils.loadProperties(ThriftClients.class, PROPERTIES_FILE_PATH);
@@ -139,6 +144,10 @@ public class ThriftClients {
 
     public VulnerabilityService.Iface makeVulnerabilityClient() {
         return new VulnerabilityService.Client(makeProtocol(BACKEND_URL, VULNERABILITY_SERVICE_URL));
+    }
+
+    public VMComponentService.Iface makeVMClient() {
+        return new VMComponentService.Client(makeProtocol(BACKEND_URL, VM_SERVICE_URL));
     }
 
     public LicenseInfoService.Client makeLicenseInfoClient() {

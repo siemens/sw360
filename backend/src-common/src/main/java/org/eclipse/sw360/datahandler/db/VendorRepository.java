@@ -24,6 +24,7 @@ import org.ektorp.support.View;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
+import java.util.Set;
 
 /**
  * CRUD access for the Vendor class
@@ -33,6 +34,20 @@ import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePerm
  */
 @View(name = "all", map = "function(doc) { if (doc.type == 'vendor') emit(null, doc._id) }")
 public class VendorRepository extends DatabaseRepository<Vendor> {
+
+    private static final String BY_LOWERCASE_VENDOR_SHORTNAME_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'vendor' && doc.shortname != null) {" +
+                    "    emit(doc.shortname.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String BY_LOWERCASE_VENDOR_FULLNAME_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'vendor' && doc.fullname != null) {" +
+                    "    emit(doc.fullname.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
 
     public VendorRepository(DatabaseConnector db) {
         super(Vendor.class, db);
@@ -50,5 +65,15 @@ public class VendorRepository extends DatabaseRepository<Vendor> {
             }
             release.unsetVendorId();
         }
+    }
+
+    @View(name = "vendorbyshortname", map = BY_LOWERCASE_VENDOR_SHORTNAME_VIEW)
+    public Set<String> getVendorByLowercaseShortnamePrefix(String shortnamePrefix) {
+        return queryForIdsByPrefix("vendorbyshortname", shortnamePrefix != null ? shortnamePrefix.toLowerCase() : shortnamePrefix);
+    }
+
+    @View(name = "vendorbyfullname", map = BY_LOWERCASE_VENDOR_FULLNAME_VIEW)
+    public Set<String> getVendorByLowercaseFullnamePrefix(String fullnamePrefix) {
+        return queryForIdsByPrefix("vendorbyfullname", fullnamePrefix != null ? fullnamePrefix.toLowerCase() : fullnamePrefix);
     }
 }
