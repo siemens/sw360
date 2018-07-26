@@ -748,6 +748,31 @@
             <role-name>user</role-name>
         </security-role-ref>
     </portlet>
+    <portlet>
+        <portlet-name>vulnerabilityManagement</portlet-name>
+        <display-name>vulnerabilityManagement</display-name>
+        <portlet-class>
+            com.siemens.sw360.portal.portlets.admin.VulnerabilityManagementPortlet
+        </portlet-class>
+        <init-param>
+            <name>view-template</name>
+            <value>/html/admin/vulnerabilityManagement/view.jsp</value>
+        </init-param>
+        <expiration-cache>0</expiration-cache>
+        <supports>
+            <mime-type>text/html</mime-type>
+            <portlet-mode>view</portlet-mode>
+        </supports>
+        <portlet-info>
+            <title>vulnerabilityManagement</title>
+            <short-title>vulnerabilityManagement</short-title>
+            <keywords/>
+        </portlet-info>
+        <security-role-ref>
+            <role-name>administrator</role-name>
+        </security-role-ref>
+    </portlet>
+
 
     <portlet>
         <portlet-name>ecc</portlet-name>
