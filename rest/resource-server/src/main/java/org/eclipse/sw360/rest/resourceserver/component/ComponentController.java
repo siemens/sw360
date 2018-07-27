@@ -1,6 +1,6 @@
 /*
  * Copyright Siemens AG, 2017-2018.
- * Copyright Bosch Software Innovations GmbH, 2017.
+ * Copyright Bosch Software Innovations GmbH, 2017-2018.
  * Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
@@ -10,18 +10,21 @@
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
+
 package org.eclipse.sw360.rest.resourceserver.component;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
+import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
@@ -73,6 +76,7 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
     @RequestMapping(value = COMPONENTS_URL, method = RequestMethod.GET)
     public ResponseEntity<Resources<Resource<Component>>> getComponents(@RequestParam(value = "name", required = false) String name,
                                                                         @RequestParam(value = "type", required = false) String componentType,
+                                                                        @RequestParam(value = "fields", required = false) List<String> fields,
                                                                         OAuth2Authentication oAuth2Authentication) throws TException {
 
         User sw360User = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
@@ -87,7 +91,7 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
         sw360Components.stream()
                 .filter(component -> componentType == null || componentType.equals(component.componentType.name()))
                 .forEach(c -> {
-                    Component embeddedComponent = restControllerHelper.convertToEmbeddedComponent(c);
+                    Component embeddedComponent = restControllerHelper.convertToEmbeddedComponent(c, fields);
                     componentResources.add(new Resource<>(embeddedComponent));
                 });
 
@@ -102,6 +106,39 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
         Component sw360Component = componentService.getComponentForUserById(id, user);
         HalResource<Component> userHalResource = createHalComponent(sw360Component, user);
         return new ResponseEntity<>(userHalResource, HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = COMPONENTS_URL + "/{id}", method = RequestMethod.PATCH)
+    public ResponseEntity<Resource<Component>> patchComponent(
+            @PathVariable("id") String id,
+            @RequestBody Component updateComponent,
+            OAuth2Authentication oAuth2Authentication) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
+        Component sw360Component = componentService.getComponentForUserById(id, user);
+        sw360Component = this.restControllerHelper.updateComponent(sw360Component, updateComponent);
+        componentService.updateComponent(sw360Component, user);
+        HalResource<Component> userHalResource = createHalComponent(sw360Component, user);
+        return new ResponseEntity<>(userHalResource, HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = COMPONENTS_URL + "/{ids}", method = RequestMethod.DELETE)
+    public ResponseEntity<List<MultiStatus>> deleteComponents(
+            @PathVariable("ids") List<String> idsToDelete, OAuth2Authentication oAuth2Authentication) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
+        List<MultiStatus> results = new ArrayList<>();
+        for(String id:idsToDelete) {
+            RequestStatus requestStatus = componentService.deleteComponent(id, user);
+            if(requestStatus == RequestStatus.SUCCESS) {
+                results.add(new MultiStatus(id, HttpStatus.OK));
+            } else if(requestStatus == RequestStatus.IN_USE) {
+                results.add(new MultiStatus(id, HttpStatus.CONFLICT));
+            } else {
+                results.add(new MultiStatus(id, HttpStatus.INTERNAL_SERVER_ERROR));
+            }
+        }
+        return new ResponseEntity<>(results, HttpStatus.MULTI_STATUS);
     }
 
     @PreAuthorize("hasAuthority('WRITE')")

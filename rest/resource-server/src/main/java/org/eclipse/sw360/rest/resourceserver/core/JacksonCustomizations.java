@@ -1,6 +1,6 @@
 /*
  * Copyright Siemens AG, 2017-2018.
- * Copyright Bosch Software Innovations GmbH, 2017.
+ * Copyright Bosch Software Innovations GmbH, 2017-2018.
  * Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
@@ -52,6 +52,7 @@ class JacksonCustomizations {
     @SuppressWarnings("serial")
     static class Sw360Module extends SimpleModule {
         public Sw360Module() {
+            setMixInAnnotation(MultiStatus.class, MultiStatusMixin.class);
             setMixInAnnotation(Project.class, Sw360Module.ProjectMixin.class);
             setMixInAnnotation(User.class, Sw360Module.UserMixin.class);
             setMixInAnnotation(Component.class, Sw360Module.ComponentMixin.class);
@@ -62,6 +63,12 @@ class JacksonCustomizations {
             setMixInAnnotation(Vulnerability.class, Sw360Module.VulnerabilityMixin.class);
             setMixInAnnotation(VulnerabilityDTO.class, Sw360Module.VulnerabilityDTOMixin.class);
             setMixInAnnotation(EccInformation.class, Sw360Module.EccInformationMixin.class);
+        }
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        static abstract class MultiStatusMixin extends MultiStatus {
+            @JsonProperty("status")
+            abstract public int getStatusCode();
         }
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -202,7 +209,7 @@ class JacksonCustomizations {
         }
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
-        @JsonIgnoreProperties({
+        @JsonIgnoreProperties(value = {
                 "id",
                 "revision",
                 "attachments",
@@ -281,7 +288,7 @@ class JacksonCustomizations {
         })
         static abstract class ComponentMixin extends Component {
             @Override
-            @JsonProperty("vendors")
+            @JsonProperty(PropertyKeyMapping.COMPONENT_VENDOR_KEY_JSON)
             abstract public Set<String> getVendorNames();
         }
 
@@ -454,7 +461,8 @@ class JacksonCustomizations {
                 "risksIterator",
                 "setRisks",
                 "setText",
-                "mainLicenseIdsIterator"
+                "mainLicenseIdsIterator",
+                "setChecked"
         })
         static abstract class LicenseMixin extends License {
             @Override

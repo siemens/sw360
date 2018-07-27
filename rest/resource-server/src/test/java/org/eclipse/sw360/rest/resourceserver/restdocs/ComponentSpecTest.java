@@ -1,15 +1,18 @@
 /*
  * Copyright Siemens AG, 2017-2018. Part of the SW360 Portal Project.
+ * Copyright Bosch Software Innovations GmbH, 2018.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
+
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
 import com.google.common.collect.ImmutableSet;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -35,7 +38,9 @@ import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.li
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.links;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -108,6 +113,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         given(this.componentServiceMock.getComponentsForUser(anyObject())).willReturn(componentList);
         given(this.componentServiceMock.getComponentForUserById(eq("17653524"), anyObject())).willReturn(angularComponent);
         given(this.componentServiceMock.searchComponentByName(eq(angularComponent.getName()))).willReturn(componentListByName);
+        given(this.componentServiceMock.deleteComponent(eq(angularComponent.getId()), anyObject())).willReturn(RequestStatus.SUCCESS);
 
         User user = new User();
         user.setId("123456789");
@@ -158,6 +164,27 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                         ),
                         responseFields(
                                 fieldWithPath("_embedded.sw360:components[]name").description("The name of the component"),
+                                fieldWithPath("_embedded.sw360:components[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
+                                fieldWithPath("_embedded.sw360:components").description("An array of <<resources-components, Components resources>>"),
+                                fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
+    }
+
+    @Test
+    public void should_document_get_components_with_fields() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/components?fields=ownerGroup,ownerCountry")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
+                        responseFields(
+                                fieldWithPath("_embedded.sw360:components[]name").description("The name of the component"),
+                                fieldWithPath("_embedded.sw360:components[]ownerGroup").description("The ownerGroup of the component"),
+                                fieldWithPath("_embedded.sw360:components[]ownerCountry").description("The ownerCountry of the component"),
                                 fieldWithPath("_embedded.sw360:components[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
                                 fieldWithPath("_embedded.sw360:components").description("An array of <<resources-components, Components resources>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
@@ -270,6 +297,56 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("_embedded.sw360:components[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
                                 fieldWithPath("_embedded.sw360:components").description("An array of <<resources-components, Components resources>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
+    }
+
+    @Test
+    public void should_document_update_component() throws Exception {
+        Component updateComponent = new Component();
+        updateComponent.setName("Updated Component");
+
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(patch("/api/components/17653524")
+                .contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(updateComponent))
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("self").description("The <<resources-components,Component resource>>")
+                        ),
+                        responseFields(
+                                fieldWithPath("name").description("The name of the component"),
+                                fieldWithPath("componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
+                                fieldWithPath("description").description("The component description"),
+                                fieldWithPath("createdOn").description("The date the component was created"),
+                                fieldWithPath("componentOwner").description("The owner name of the component"),
+                                fieldWithPath("ownerAccountingUnit").description("The owner accounting unit of the component"),
+                                fieldWithPath("ownerGroup").description("The owner group of the component"),
+                                fieldWithPath("ownerCountry").description("The owner country of the component"),
+                                fieldWithPath("categories").description("The component categories"),
+                                fieldWithPath("languages").description("The language of the component"),
+                                fieldWithPath("operatingSystems").description("The OS on which the component operates"),
+                                fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("_embedded.createdBy").description("The user who created this component"),
+                                fieldWithPath("_embedded.sw360:releases").description("An array of all component releases with version and link to their <<resources-releases,Releases resource>>"),
+                                fieldWithPath("_embedded.sw360:moderators").description("An array of all component moderators with email and link to their <<resources-user-get,User resource>>"),
+                                fieldWithPath("_embedded.sw360:vendors").description("An array of all component vendors with ful name and link to their <<resources-vendor-get,Vendor resource>>")
+                        )));
+    }
+
+    @Test
+    public void should_document_delete_components() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(delete("/api/components/" + angularComponent.getId())
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isMultiStatus())
+                .andDo(this.documentationHandler.document(
+                        responseFields(
+                                fieldWithPath("[].resourceId").description("id of the deleted resource"),
+                                fieldWithPath("[].status").description("status of the delete operation")
                         )));
     }
 }

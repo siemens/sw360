@@ -98,6 +98,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private static final TSerializer JSON_THRIFT_SERIALIZER = new TSerializer(new TSimpleJSONProtocol.Factory());
 
     // Component view datatables, index of columns
+    private static final int COMPONENT_NO_SORT = -1;
     private static final int COMPONENT_DT_ROW_VENDOR = 0;
     private static final int COMPONENT_DT_ROW_NAME = 1;
     private static final int COMPONENT_DT_ROW_MAIN_LICENSES = 2;
@@ -1248,9 +1249,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void serveComponentList(ResourceRequest request, ResourceResponse response) throws PortletException {
         HttpServletRequest originalServletRequest = PortalUtil.getOriginalServletRequest(PortalUtil.getHttpServletRequest(request));
         PaginationParameters paginationParameters = PaginationParser.parametersFrom(originalServletRequest);
+        handlePaginationSortOrder(request, paginationParameters);
         List<Component> componentList = getFilteredComponentList(request);
-        JSONArray jsonComponents = getComponentData(componentList, paginationParameters);
 
+        JSONArray jsonComponents = getComponentData(componentList, paginationParameters);
         JSONObject jsonResult = createJSONObject();
         jsonResult.put(DATATABLE_RECORDS_TOTAL, componentList.size());
         jsonResult.put(DATATABLE_RECORDS_FILTERED, componentList.size());
@@ -1261,6 +1263,17 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         } catch (IOException e) {
             log.error("Problem rendering RequestStatus", e);
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE, "500");
+        }
+    }
+
+    private void handlePaginationSortOrder(ResourceRequest request, PaginationParameters paginationParameters) {
+        if (!paginationParameters.getSortingColumn().isPresent()) {
+            for (Component._Fields filteredField : componentFilteredFields) {
+                if (!isNullOrEmpty(request.getParameter(filteredField.toString()))) {
+                    paginationParameters.setSortingColumn(Optional.of(COMPONENT_NO_SORT));
+                    break;
+                }
+            }
         }
     }
 
@@ -1306,22 +1319,23 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private List<Component> sortComponentList(List<Component> componentList, PaginationParameters componentParameters) {
+        boolean isAsc = componentParameters.isAscending().orElse(true);
 
-        switch (componentParameters.getSortingColumn()) {
+        switch (componentParameters.getSortingColumn().orElse(COMPONENT_DT_ROW_NAME)) {
             case COMPONENT_DT_ROW_VENDOR:
-                Collections.sort(componentList, compareByVendor(componentParameters.isAscending()));
+                Collections.sort(componentList, compareByVendor(isAsc));
                 break;
             case COMPONENT_DT_ROW_NAME:
-                Collections.sort(componentList, compareByName(componentParameters.isAscending()));
+                Collections.sort(componentList, compareByName(isAsc));
                 break;
             case COMPONENT_DT_ROW_MAIN_LICENSES:
-                Collections.sort(componentList, compareByMainLicenses(componentParameters.isAscending()));
+                Collections.sort(componentList, compareByMainLicenses(isAsc));
                 break;
             case COMPONENT_DT_ROW_TYPE:
-                Collections.sort(componentList, compareByComponentType(componentParameters.isAscending()));
+                Collections.sort(componentList, compareByComponentType(isAsc));
                 break;
             case COMPONENT_DT_ROW_ACTION:
-                Collections.sort(componentList, compareById(componentParameters.isAscending()));
+                Collections.sort(componentList, compareById(isAsc));
                 break;
             default:
                 break;

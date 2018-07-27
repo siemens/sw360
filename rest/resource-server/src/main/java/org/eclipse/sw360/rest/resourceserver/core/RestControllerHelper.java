@@ -41,8 +41,7 @@ import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
@@ -222,6 +221,16 @@ public class RestControllerHelper {
         halResource.addEmbeddedResource("sw360:projects", halProject);
     }
 
+    public Component updateComponent(Component componentToUpdate, Component requestBodyComponent) {
+        for(Component._Fields field:Component._Fields.values()) {
+            Object fieldValue = requestBodyComponent.getFieldValue(field);
+            if(fieldValue != null) {
+                componentToUpdate.setFieldValue(field, fieldValue);
+            }
+        }
+        return componentToUpdate;
+    }
+
     public Project convertToEmbeddedProject(Project project) {
         Project embeddedProject = new Project(project.getName());
         embeddedProject.setId(project.getId());
@@ -237,6 +246,20 @@ public class RestControllerHelper {
         embeddedComponent.setName(component.getName());
         embeddedComponent.setComponentType(component.getComponentType());
         embeddedComponent.setType(null);
+        return embeddedComponent;
+    }
+
+    public Component convertToEmbeddedComponent(Component component, List<String> fields) {
+        Component embeddedComponent = this.convertToEmbeddedComponent(component);
+        if (fields != null) {
+            for(String fieldName:fields) {
+                String thriftField = PropertyKeyMapping.componentThriftKeyFromJSONKey(fieldName);
+                Component._Fields componentField = Component._Fields.findByName(thriftField);
+                if(componentField != null) {
+                    embeddedComponent.setFieldValue(componentField, component.getFieldValue(componentField));
+                }
+            }
+        }
         return embeddedComponent;
     }
 
