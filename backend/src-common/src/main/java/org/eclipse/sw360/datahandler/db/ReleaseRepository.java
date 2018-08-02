@@ -10,11 +10,8 @@
  */
 package org.eclipse.sw360.datahandler.db;
 
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableListMultimap;
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
-import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.SummaryAwareRepository;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -23,6 +20,7 @@ import org.ektorp.ViewQuery;
 import org.ektorp.support.View;
 import org.ektorp.support.Views;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -145,6 +143,10 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
 
     public List<Release> getReleasesFromComponentId(String id, User user) {
         return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, queryView("releasesByComponentId", id), user);
+    }
+
+    public List<Release> getReleasesIgnoringNotFound(Collection<String> ids){
+        return getConnector().get(Release.class, ids, true);
     }
 
     public List<Release> getReleasesFromVendorIds(Set<String> ids) {

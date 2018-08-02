@@ -74,6 +74,7 @@ public class ThriftClients {
     public static final String SVMSYNC_SERVICE = "svmsyncService";
     public static final String SVMMATCH_SERVICE = "svmmatchService";
     public static final String SVM_LIST_UPDATE_SERVICE = "svmListUpdateService";
+    public static final String SVM_TRACKING_FEEDBACK_SERVICE = "svmTrackingFeedbackService";
 
     static {
         Properties props = CommonUtils.loadProperties(ThriftClients.class, PROPERTIES_FILE_PATH);

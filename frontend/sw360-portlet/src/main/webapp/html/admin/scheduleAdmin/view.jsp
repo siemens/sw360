@@ -31,6 +31,10 @@
 <jsp:useBean id='svmListUpdateOffset' type="java.lang.String" scope="request"/>
 <jsp:useBean id='svmListUpdateInterval' type="java.lang.String" scope="request"/>
 <jsp:useBean id='svmListUpdateNextSync' type="java.lang.String" scope="request"/>
+<jsp:useBean id='trackingFeedbackIsScheduled' type="java.lang.Boolean" scope="request"/>
+<jsp:useBean id='trackingFeedbackOffset' type="java.lang.String" scope="request"/>
+<jsp:useBean id='trackingFeedbackInterval' type="java.lang.String" scope="request"/>
+<jsp:useBean id='trackingFeedbackNextSync' type="java.lang.String" scope="request"/>
 
 
 <portlet:defineObjects/>
@@ -61,6 +65,15 @@
 </portlet:actionURL>
 
 <portlet:actionURL var="triggerSvmListUpdateURL" name="triggerSvmListUpdate">
+</portlet:actionURL>
+
+<portlet:actionURL var="scheduleTrackingFeedbackURL" name="scheduleTrackingFeedback">
+</portlet:actionURL>
+
+<portlet:actionURL var="unscheduleTrackingFeedbackURL" name="unscheduleTrackingFeedback">
+</portlet:actionURL>
+
+<portlet:actionURL var="triggerTrackingFeedbackURL" name="triggerTrackingFeedback">
 </portlet:actionURL>
 
 <portlet:actionURL var="unscheduleAllServicesURL" name="unscheduleAllServices">
@@ -137,6 +150,23 @@ Next Synchronization: ${svmListUpdateNextSync}<br/>
        <core_rt:if test="${not svmListUpdateIsScheduled}">class="notApplicableButton"</core_rt:if>
        value="Cancel Scheduled SVM Monitoring List Update"/>
 
+<h4 class="withTopMargin">SVM Release Tracking Feedback</h4>
+<br/>
+<b>Settings for scheduling the SVM Release Tracking Feedback service:</b><br/>
+Offset: ${trackingFeedbackOffset} (hh:mm:ss)<br/>
+Interval: ${trackingFeedbackInterval} (hh:mm:ss)<br/>
+Next Synchronization: ${trackingFeedbackNextSync}<br/>
+<br/>
+<input type="button"
+       <core_rt:if test="${trackingFeedbackIsScheduled}">class="notApplicableButton"</core_rt:if>
+       <core_rt:if test="${not trackingFeedbackIsScheduled}">class="addButton" onclick="window.location.href='<%=scheduleTrackingFeedbackURL%>'"</core_rt:if>
+       value="Schedule SVM Release Tracking Feedback"/>
+
+<input type="button"
+       <core_rt:if test="${trackingFeedbackIsScheduled}">class="addButton"  onclick="window.location.href='<%=unscheduleTrackingFeedbackURL%>'"</core_rt:if>
+       <core_rt:if test="${not trackingFeedbackIsScheduled}">class="notApplicableButton"</core_rt:if>
+       value="Cancel Scheduled SVM Release Tracking Feedback"/>
+
 <h4 class="withTopMargin">All Services:</h4>
 
 <input type="button"
@@ -146,3 +176,4 @@ Next Synchronization: ${svmListUpdateNextSync}<br/>
 
 <h4 class="withTopMargin">Manual triggering of scheduled services</h4>
 <input type="button" class="addButton" onclick="window.location.href='<%=triggerSvmListUpdateURL%>'" value="Trigger SVM Monitoring List Update"/>
+<input type="button" class="addButton" onclick="window.location.href='<%=triggerTrackingFeedbackURL%>'" value="Trigger SVM Release Tracking Feedback"/>

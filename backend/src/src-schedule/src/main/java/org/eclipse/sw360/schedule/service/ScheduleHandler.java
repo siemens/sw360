@@ -78,6 +78,9 @@ public class ScheduleHandler implements ScheduleService.Iface {
             case ThriftClients.SVM_LIST_UPDATE_SERVICE:
                 successSync = wrapSupplierException(() -> thriftClients.makeProjectClient().exportForMonitoringList(), serviceName);
                 break;
+            case ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE:
+                successSync = wrapSupplierException(() -> thriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback(), serviceName);
+                break;
             default:
                 log.error("Could not schedule service: " + serviceName + ". Reason: service is not registered in ThriftClients.");
         }
