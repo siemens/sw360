@@ -5,7 +5,7 @@ types:
   - deploy
 
 services:
-  - couchdb
+  - couchdb:1.7.1
 
 build_sw360:
   type : build
