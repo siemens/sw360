@@ -55,6 +55,9 @@ public class SW360Constants {
     public static final String TYPE_PROJECT = "project";
     public static final String TYPE_MODERATION = "moderation";
 
+    public static final String SIEMENS_SVM_COMPONENT_ID = "com.siemens.svm.component.id";
+    public static final String SIEMENS_MAINLINE_COMPONENT_ID = "com.siemens.mainl.component.id";
+
     /**
      * Hashmap containing the name field for each type.
      * Used by the search service to fill the search results

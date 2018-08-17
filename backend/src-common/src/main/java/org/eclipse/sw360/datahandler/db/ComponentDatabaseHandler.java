@@ -44,6 +44,7 @@ import org.ektorp.DocumentOperationResult;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -85,6 +86,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final UserRepository userRepository;
 
     private final AttachmentConnector attachmentConnector;
+    private SvmConnector svmConnector;
     /**
      * Access to moderation
      */
@@ -1340,4 +1342,40 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 release.getName(), release.getVersion());
     }
 
+    public RequestStatus updateReleasesWithSvmTrackingFeedback() {
+        try {
+            Map<String, Integer> componentMappings = getSvmConnector().fetchComponentMappings();
+            List<Release> releases = releaseRepository.getReleasesIgnoringNotFound(componentMappings.keySet());
+            releases.forEach(r -> {
+                Map<String, String> externalIds = r.isSetExternalIds() ? r.getExternalIds() : new HashMap<>();
+                externalIds.put(SW360Constants.SIEMENS_SVM_COMPONENT_ID, componentMappings.get(r.getId()).toString());
+                r.setExternalIds(externalIds);
+            });
+            final List<DocumentOperationResult> documentOperationResults = releaseRepository.executeBulk(releases);
+            if (documentOperationResults.isEmpty()) {
+                log.info(String.format("SVMTF: updated %d releases", releases.size()));
+            } else {
+                log.error("SVMTF: Failed saving releases: " + documentOperationResults);
+                return RequestStatus.FAILURE;
+            }
+        } catch (IOException | SW360Exception e) {
+            log.error(e);
+            return RequestStatus.FAILURE;
+        }
+
+        return RequestStatus.SUCCESS;
+    }
+
+    @NotNull
+    private SvmConnector getSvmConnector() {
+        if (svmConnector == null) {
+            svmConnector = new SvmConnector();
+        }
+        return svmConnector;
+    }
+
+    public ComponentDatabaseHandler setSvmConnector(SvmConnector svmConnector) {
+        this.svmConnector = svmConnector;
+        return this;
+    }
 }

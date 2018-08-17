@@ -16,17 +16,6 @@ import com.liferay.portal.kernel.json.JSONArray;
 import com.liferay.portal.kernel.json.JSONFactoryUtil;
 import com.liferay.portal.kernel.json.JSONObject;
 import org.apache.commons.lang.StringUtils;
-import org.apache.http.StatusLine;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.apache.http.conn.ssl.SSLContexts;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.mime.MultipartEntityBuilder;
-import org.apache.http.entity.mime.content.ByteArrayBody;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicHeader;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.components.summary.SummaryType;
@@ -52,11 +41,8 @@ import org.eclipse.sw360.mail.MailUtil;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
-import javax.net.ssl.SSLContext;
 import java.io.*;
 import java.net.MalformedURLException;
-import java.security.*;
-import java.security.cert.CertificateException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -93,10 +79,6 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final AttachmentConnector attachmentConnector;
     private final ComponentDatabaseHandler componentDatabaseHandler;
     private static final User EMPTY_USER = new User().setId("").setEmail("").setExternalid("").setDepartment("").setLastname("").setGivenname("");
-    private static final String KEY_STORE_PASSPHRASE;
-    private static final String KEY_STORE_FILENAME;
-    private static final String PROPERTIES_FILE_PATH = "/sw360.properties";
-    private static final String MONITORING_LIST_API_URL;
 
     private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
     private final MailUtil mailUtil = new MailUtil();
@@ -807,8 +789,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             JSONObject json = JSONFactoryUtil.createJSONObject();
             Map<String, String> externalIds = CommonUtils.nullToEmptyMap(r.getExternalIds());
             json.put("external_component_id", r.getId());
-            putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get("siemens-svm-id-component"));
-            putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get("siemens-mainline-id-component"));
+            putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get(SW360Constants.SIEMENS_SVM_COMPONENT_ID));
+            putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get(SW360Constants.SIEMENS_MAINLINE_COMPONENT_ID));
             json.put("vendor", Optional.ofNullable(r.getVendor()).map(Vendor::getShortname).orElse(""));
             json.put("name", r.getName());
             json.put("version", r.getVersion());
@@ -869,17 +851,11 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         log.info("SVMML: projects serialized to JSON string. String length: " + jsonString.length());
         log.info("SVMML: JSON starts with: " + StringUtils.abbreviate(jsonString, SVMML_JSON_LOG_CUTOFF_LENGTH));
 
-//        try (PrintWriter pw = new PrintWriter("/vagrant_shared/projectsexport.json")){
-//            pw.println(jsonString);
-//        } catch (FileNotFoundException e) {
-//            log.error("Couldn't write file projectsexport.json");
-//        }
-
         // send json to svm
         try {
-            sendToSvm(jsonString);
+            new SvmConnector().sendProjectExportForMonitoringLists(jsonString);
             log.info("SVMML: sent JSON to SVM");
-        } catch (IOException e) {
+        } catch (IOException | SW360Exception e) {
             log.error(e);
             return RequestStatus.FAILURE;
         }
@@ -962,74 +938,4 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 .filter(User::isSetExternalid)
                 .collect(Collectors.toMap(User::getEmail, User::getExternalid, (s1, s2) -> s1));
     }
-
-    private void sendToSvm(String jsonString) throws IOException {
-        CloseableHttpClient httpClient = HttpClients
-                .custom()
-                .setSSLSocketFactory(createSslSocketFactoryForSVM())
-                .build();
-
-        HttpPut httpPut = new HttpPut(MONITORING_LIST_API_URL);
-        httpPut.addHeader(new BasicHeader("Expect", "100-continue")); // prevents error 413 when sending large files
-
-        MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create();
-        entityBuilder.addPart("data", new ByteArrayBody(jsonString.getBytes(), ContentType.APPLICATION_JSON, "projects.json"));
-        httpPut.setEntity(entityBuilder.build());
-
-        CloseableHttpResponse httpResponse = httpClient.execute(httpPut);
-
-        StatusLine statusLine = httpResponse.getStatusLine();
-        if (statusLine.getStatusCode() != 200) {
-            String errorMessage = "SVMML: Failed to send monitoring lists to SVM: HTTP error code : " + statusLine.getStatusCode();
-            throw new IOException(errorMessage);
-        }
-
-        String response = statusLine.toString();
-        log.info("SVMML SVM Server replied:\n" + response);
-    }
-
-    private SSLConnectionSocketFactory createSslSocketFactoryForSVM() throws IOException {
-        try {
-
-            KeyStore trustStore = KeyStore.getInstance("JKS");
-            String javaKeystoreFilename = System
-                    .getProperties()
-                    .getProperty("java.home") + File.separator + "lib" + File.separator + "security" + File.separator + "cacerts";
-            trustStore.load(new FileInputStream(javaKeystoreFilename), "changeit"
-                    .toCharArray());
-
-            // Loading KeyStore, i.e., PKCS #12 bundle
-            KeyStore keyStore = KeyStore.getInstance("PKCS12");
-            Optional<InputStream> certStreamOptional = CommonUtils
-                    .loadResource(this.getClass(), KEY_STORE_FILENAME)
-                    .map(ByteArrayInputStream::new);
-            if (!certStreamOptional.isPresent()) {
-                throw new IOException("Cannot read SVM client certificate");
-            }
-            keyStore.load(certStreamOptional.get(), KEY_STORE_PASSPHRASE.toCharArray());
-
-            SSLContext sslcontext = SSLContexts
-                    .custom()
-                    .useProtocol("TLSv1.2")
-                    .loadTrustMaterial(trustStore)
-                    .loadKeyMaterial(keyStore, KEY_STORE_PASSPHRASE.toCharArray())
-                    .build();
-
-            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslcontext, new String[]{"TLSv1.2"}, null, SSLConnectionSocketFactory.STRICT_HOSTNAME_VERIFIER);
-            return sslsf;
-
-        } catch (KeyStoreException | NoSuchAlgorithmException | KeyManagementException | CertificateException | UnrecoverableKeyException e) {
-            throw new IOException(e);
-        }
-
-    }
-
-    static {
-        Properties props = CommonUtils.loadProperties(ProjectDatabaseHandler.class, PROPERTIES_FILE_PATH);
-
-        MONITORING_LIST_API_URL  = props.getProperty("svm.sw360.api.url", "https://svm.cert.siemens.com/portal/api/custom/sw360/applications.json");
-        KEY_STORE_FILENAME  = props.getProperty("svm.sw360.certificate.filename", "not-configured");
-        KEY_STORE_PASSPHRASE = props.getProperty("svm.sw360.certificate.passphrase", "");
-    }
-
 }

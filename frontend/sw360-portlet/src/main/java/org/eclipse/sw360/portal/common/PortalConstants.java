@@ -235,6 +235,10 @@ public class PortalConstants {
     public static final String SVM_LIST_UPDATE_OFFSET = "svmListUpdateOffset";
     public static final String SVM_LIST_UPDATE_INTERVAL = "svmListUpdateInterval";
     public static final String SVM_LIST_UPDATE_NEXT_SYNC = "svmListUpdateNextSync";
+    public static final String SVM_TRACKING_FEEDBACK_IS_SCHEDULED = "trackingFeedbackIsScheduled";
+    public static final String SVM_TRACKING_FEEDBACK_OFFSET = "trackingFeedbackOffset";
+    public static final String SVM_TRACKING_FEEDBACK_INTERVAL = "trackingFeedbackInterval";
+    public static final String SVM_TRACKING_FEEDBACK_NEXT_SYNC = "trackingFeedbackNextSync";
 
     //! Specialized keys for licenseInfo
     public static final String LICENSE_INFO_OUTPUT_FORMATS = "licenseInfoOutputFormats";
