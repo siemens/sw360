@@ -15,13 +15,16 @@ package org.eclipse.sw360.rest.resourceserver.release;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
+import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
@@ -42,15 +45,18 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
 @BasePathAwareController
-@Slf4j
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ReleaseController implements ResourceProcessor<RepositoryLinksResource> {
     public static final String RELEASES_URL = "/releases";
+    private static final Logger log = Logger.getLogger(ReleaseController.class);
 
     @NonNull
     private Sw360ReleaseService releaseService;
@@ -59,11 +65,12 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
     private Sw360AttachmentService attachmentService;
 
     @NonNull
-    private final RestControllerHelper restControllerHelper;
+    private RestControllerHelper restControllerHelper;
 
     @RequestMapping(value = RELEASES_URL, method = RequestMethod.GET)
     public ResponseEntity<Resources<Resource>> getReleasesForUser(
             @RequestParam(value = "sha1", required = false) String sha1,
+            @RequestParam(value = "fields", required = false) List<String> fields,
             OAuth2Authentication oAuth2Authentication) throws TException {
 
         User sw360User = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
@@ -77,7 +84,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
 
         List<Resource> releaseResources = new ArrayList<>();
         for (Release sw360Release : sw360Releases) {
-            Release embeddedRelease = restControllerHelper.convertToEmbeddedRelease(sw360Release);
+            Release embeddedRelease = restControllerHelper.convertToEmbeddedRelease(sw360Release, fields);
             Resource<Release> releaseResource = new Resource<>(embeddedRelease);
             releaseResources.add(releaseResource);
         }
@@ -87,8 +94,8 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
     }
 
     private Release searchReleaseBySha1(String sha1, User sw360User) throws TException {
-        AttachmentInfo sw360AttachmentInfo = attachmentService.getAttachmentBySha1ForUser(sha1, sw360User);
-        return sw360AttachmentInfo.getRelease();
+        AttachmentInfo sw360AttachmentInfo = attachmentService.getAttachmentBySha1(sha1);
+        return releaseService.getReleaseForUserById(sw360AttachmentInfo.getOwner().getReleaseId(), sw360User);
     }
 
     @RequestMapping(value = RELEASES_URL + "/{id}", method = RequestMethod.GET)
@@ -97,6 +104,39 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         User sw360User = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
         Release sw360Release = releaseService.getReleaseForUserById(id, sw360User);
         HalResource halRelease = restControllerHelper.createHalReleaseResource(sw360Release, true);
+        return new ResponseEntity<>(halRelease, HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = RELEASES_URL + "/{ids}", method = RequestMethod.DELETE)
+    public ResponseEntity<List<MultiStatus>> deleteReleases(
+            @PathVariable("ids") List<String> idsToDelete, OAuth2Authentication oAuth2Authentication) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
+        List<MultiStatus> results = new ArrayList<>();
+        for(String id:idsToDelete) {
+            RequestStatus requestStatus = releaseService.deleteRelease(id, user);
+            if(requestStatus == RequestStatus.SUCCESS) {
+                results.add(new MultiStatus(id, HttpStatus.OK));
+            } else if(requestStatus == RequestStatus.IN_USE) {
+                results.add(new MultiStatus(id, HttpStatus.CONFLICT));
+            } else {
+                results.add(new MultiStatus(id, HttpStatus.INTERNAL_SERVER_ERROR));
+            }
+        }
+        return new ResponseEntity<>(results, HttpStatus.MULTI_STATUS);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = RELEASES_URL + "/{id}", method = RequestMethod.PATCH)
+    public ResponseEntity<Resource<Release>> patchComponent(
+            @PathVariable("id") String id,
+            @RequestBody Release updateRelease,
+            OAuth2Authentication oAuth2Authentication) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
+        Release sw360Release = releaseService.getReleaseForUserById(id, user);
+        sw360Release = this.restControllerHelper.updateRelease(sw360Release, updateRelease);
+        releaseService.updateRelease(sw360Release, user);
+        HalResource<Release> halRelease = restControllerHelper.createHalReleaseResource(sw360Release, true);
         return new ResponseEntity<>(halRelease, HttpStatus.OK);
     }
 
@@ -140,6 +180,16 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
                 .buildAndExpand(sw360Release.getId()).toUri();
 
         return ResponseEntity.created(location).body(halResource);
+    }
+
+    @RequestMapping(value = RELEASES_URL + "/{id}/attachments", method = RequestMethod.GET)
+    public ResponseEntity<Resources<Resource<Attachment>>> getReleaseAttachments(
+            @PathVariable("id") String id,
+            OAuth2Authentication oAuth2Authentication) throws TException {
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication(oAuth2Authentication);
+        final Release sw360Release = releaseService.getReleaseForUserById(id, sw360User);
+        final Resources<Resource<Attachment>> resources = attachmentService.getResourcesFromList(sw360Release.getAttachments());
+        return new ResponseEntity<>(resources, HttpStatus.OK);
     }
 
     @RequestMapping(value = RELEASES_URL + "/{releaseId}/attachments", method = RequestMethod.POST, consumes = {"multipart/mixed", "multipart/form-data"})

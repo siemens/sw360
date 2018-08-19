@@ -463,7 +463,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(COMPONENT, component);
                 request.setAttribute(DOCUMENT_ID, id);
 
-                setAttachmentsInRequest(request, component.getAttachments());
+                setAttachmentsInRequest(request, component);
                 Map<RequestedAction, Boolean> permissions = component.getPermissions();
                 DocumentState documentState = component.getDocumentState();
 
@@ -479,7 +479,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 Component component = new Component();
                 request.setAttribute(COMPONENT, component);
                 setUsingDocs(request, user, null, component.getReleaseIds());
-                setAttachmentsInRequest(request, component.getAttachments());
+                setAttachmentsInRequest(request, component);
                 SessionMessages.add(request, "request_processed", "New Component");
             }
         }
@@ -504,7 +504,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 release = client.getReleaseByIdForEdit(releaseId, user);
                 request.setAttribute(RELEASE, release);
                 request.setAttribute(DOCUMENT_ID, releaseId);
-                setAttachmentsInRequest(request, release.getAttachments());
+                setAttachmentsInRequest(request, release);
 
                 putDirectlyLinkedReleaseRelationsInRequest(request, release);
                 Map<RequestedAction, Boolean> permissions = release.getPermissions();
@@ -524,7 +524,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     release.setClearingState(ClearingState.NEW_CLEARING);
                     request.setAttribute(RELEASE, release);
                     putDirectlyLinkedReleaseRelationsInRequest(request, release);
-                    setAttachmentsInRequest(request, release.getAttachments());
+                    setAttachmentsInRequest(request, release);
                     setUsingDocs(request, null, user, client);
                     SessionMessages.add(request, "request_processed", "New Release");
                 }
@@ -732,7 +732,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(COMPONENT, component);
                 request.setAttribute(DOCUMENT_ID, id);
                 request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
-                setAttachmentsInRequest(request, component.getAttachments());
+                setAttachmentsInRequest(request, component);
                 Set<String> releaseIds = SW360Utils.getReleaseIds(component.getReleases());
 
                 setUsingDocs(request, user, client, releaseIds);
@@ -793,7 +793,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(RELEASE, release);
                 request.setAttribute(DOCUMENT_ID, releaseId);
                 request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
-                setAttachmentsInRequest(request, release.getAttachments());
+                setAttachmentsInRequest(request, release);
 
                 setUsingDocs(request, releaseId, user, client);
                 putDirectlyLinkedReleaseRelationsInRequest(request, release);
@@ -1059,7 +1059,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void prepareRequestForEditAfterDuplicateError(ActionRequest request, Component component) throws TException {
         request.setAttribute(COMPONENT, component);
-        setAttachmentsInRequest(request, component.getAttachments());
+        setAttachmentsInRequest(request, component);
         request.setAttribute(USING_PROJECTS, Collections.emptySet());
         request.setAttribute(USING_COMPONENTS, Collections.emptySet());
         request.setAttribute(ALL_USING_PROJECTS_COUNT, 0);
@@ -1126,7 +1126,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void prepareRequestForReleaseEditAfterDuplicateError(ActionRequest request, Release release) throws TException {
         fillVendor(release);
         request.setAttribute(RELEASE, release);
-        setAttachmentsInRequest(request, release.getAttachments());
+        setAttachmentsInRequest(request, release);
         putDirectlyLinkedReleaseRelationsInRequest(request, release);
         request.setAttribute(USING_PROJECTS, Collections.emptySet());
         request.setAttribute(USING_COMPONENTS, Collections.emptySet());

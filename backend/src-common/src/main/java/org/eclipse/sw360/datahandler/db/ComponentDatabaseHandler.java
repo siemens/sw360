@@ -97,6 +97,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final MailUtil mailUtil = new MailUtil();
 
     public ComponentDatabaseHandler(Supplier<HttpClient> httpClient, String dbName, String attachmentDbName, ComponentModerator moderator, ReleaseModerator releaseModerator) throws MalformedURLException {
+        super(httpClient, dbName, attachmentDbName);
         DatabaseConnector db = new DatabaseConnector(httpClient, dbName);
 
         // Create the repositories
@@ -408,7 +409,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             }
 
             copyFields(actual, component, ThriftUtils.IMMUTABLE_OF_COMPONENT);
-            component.setAttachments(getAllAttachmentsToKeep(actual.getAttachments(), component.getAttachments()));
+            component.setAttachments(getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), component.getAttachments()));
             updateComponentInternal(component, actual, user);
 
         } else {
@@ -627,7 +628,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (hasChangesInEccFields) {
                 autosetEccUpdaterInfo(release, user);
             }
-            release.setAttachments( getAllAttachmentsToKeep(actual.getAttachments(), release.getAttachments()) );
+            release.setAttachments( getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), release.getAttachments()) );
+            deleteAttachmentUsagesOfUnlinkedReleases(release, actual);
             releaseRepository.update(release);
             updateReleaseDependentFieldsForComponentId(release.getComponentId());
             //clean up attachments in database
@@ -642,6 +644,13 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
 
         return RequestStatus.SUCCESS;
+    }
+
+    private void deleteAttachmentUsagesOfUnlinkedReleases(Release updated, Release actual) throws SW360Exception {
+        Source usedBy = Source.releaseId(updated.getId());
+        Set<String> updatedLinkedReleaseIds = nullToEmptyMap(updated.getReleaseIdToRelationship()).keySet();
+        Set<String> actualLinkedReleaseIds = nullToEmptyMap(actual.getReleaseIdToRelationship()).keySet();
+        deleteAttachmentUsagesOfUnlinkedReleases(usedBy, updatedLinkedReleaseIds, actualLinkedReleaseIds);
     }
 
     public boolean hasChangesInEccFields(Release release, Release actual) {
@@ -798,6 +807,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
             // Remove the component with attachments
             attachmentConnector.deleteAttachments(component.getAttachments());
+            attachmentDatabaseHandler.deleteUsagesBy(Source.componentId(id));
             componentRepository.remove(component);
             moderator.notifyModeratorOnDelete(id);
             return RequestStatus.SUCCESS;
@@ -838,8 +848,9 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return (usingProjects.size() > 0);
     }
 
-    private Component removeReleaseAndCleanUp(Release release) {
+    private Component removeReleaseAndCleanUp(Release release) throws SW360Exception {
         attachmentConnector.deleteAttachments(release.getAttachments());
+        attachmentDatabaseHandler.deleteUsagesBy(Source.releaseId(release.getId()));
 
         Component component = updateReleaseDependentFieldsForComponentId(release.getComponentId());
 
