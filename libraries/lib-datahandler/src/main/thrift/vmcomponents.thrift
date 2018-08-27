@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2016. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2016-2018. Part of the SW360 Portal Project.
  *
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU General Public License Version 2.0 as published by the
@@ -34,6 +34,7 @@ enum VMMatchState {
 
 enum VMMatchType {
     CPE = 1,
+    SVM_ID = 2,
     NAME_CR = 10,
     NAME_RC = 11,
     VENDOR_CR = 20,
@@ -142,7 +143,7 @@ struct VMMatch{
 
     // matching information
     31: required set<VMMatchType> matchTypes,
-    32: optional string matchTypesUI;
+        32: optional string matchTypesUI;
     33: required VMMatchState state,
 }
 

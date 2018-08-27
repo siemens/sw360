@@ -75,7 +75,7 @@ public class VMProcessHandler {
     }
 
     public static <T extends TBase> void getVulnerabilitiesByComponentIds(Collection<String> componentIds, String url, boolean triggerVulMasterData){
-        if (componentIds != null && componentIds.size()>0){
+        if (componentIds != null && !componentIds.isEmpty()){
             for (String componentId : componentIds) {
                 try {
                     queueing(VMComponent.class, componentId, VMProcessType.VULNERABILITIES, url, triggerVulMasterData);
@@ -162,7 +162,7 @@ public class VMProcessHandler {
     }
 
     private static synchronized <T extends TBase> void queueing(Class<T> elementType, String input, VMProcessType task, String url, boolean triggerNextStep) throws SW360Exception {
-        queueing(elementType, input == null ? Collections.EMPTY_LIST : Arrays.asList(input), task, url, triggerNextStep);
+        queueing(elementType, input == null ? Collections.emptyList() : Collections.singletonList(input), task, url, triggerNextStep);
     }
 
     private static synchronized <T extends TBase> void queueing(Class<T> elementType, List<String> input, VMProcessType task, String url, boolean triggerNextStep) throws SW360Exception {

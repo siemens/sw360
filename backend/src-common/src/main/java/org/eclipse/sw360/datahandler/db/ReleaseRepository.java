@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2013-2017. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -12,6 +12,7 @@ package org.eclipse.sw360.datahandler.db;
 
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.SummaryAwareRepository;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -82,6 +83,16 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
             "function(doc) {" +
                     "  if (doc.type == 'release' && doc.cpeid != null) {" +
                     "    emit(doc.cpeid.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String RELEASES_BY_SVM_ID_RELEASE_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.externalIds) {" +
+                    "    var svmId = doc.externalIds['" + SW360Constants.SIEMENS_SVM_COMPONENT_ID + "'];" +
+                    "    if (svmId != null) {" +
+                    "      emit(svmId, doc._id);" +
+                    "    }" +
                     "  } " +
                     "}";
 
@@ -161,6 +172,11 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
 
         return queryView("releaseIdsByLicenseId", licenseId);
+    }
+
+    @View(name = "releaseBySvmId", map = RELEASES_BY_SVM_ID_RELEASE_VIEW)
+    public Set<String> getReleaseIdsBySvmId(String svmId) {
+        return queryForIdsAsValue("releaseBySvmId", svmId != null ? svmId.toLowerCase() : svmId);
     }
 
     @View(name = "releaseByCpeId", map = BY_LOWERCASE_RELEASE_CPE_VIEW)

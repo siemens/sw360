@@ -1021,6 +1021,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return releaseRepository.getReleaseIdsFromVendorIds(vendorIds);
     }
 
+    public Set<String> getReleaseIdsBySvmId(String svmId){
+        return releaseRepository.getReleaseIdsBySvmId(svmId);
+    }
+
     public Set<String> getReleaseIdsByCpeCaseInsensitive(String cpeId){
         return releaseRepository.getReleaseByLowercaseCpe(cpeId);
     }
