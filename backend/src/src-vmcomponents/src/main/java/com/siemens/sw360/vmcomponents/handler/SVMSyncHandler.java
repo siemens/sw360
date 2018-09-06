@@ -19,6 +19,7 @@ package com.siemens.sw360.vmcomponents.handler;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.siemens.sw360.vmcomponents.process.VMProcessHandler;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
@@ -48,6 +49,7 @@ import org.json.simple.parser.JSONParser;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
+import java.util.function.Supplier;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
@@ -303,10 +305,8 @@ public class SVMSyncHandler<T extends TBase> {
             // null is nonsense and if it is ACCEPTED, don't forget it
             return;
         }
-        Set<VMMatchType> matchTypes = match.getMatchTypes();
-        if (matchTypes == null){
-            matchTypes = new HashSet<>(1);
-        }
+        Set<VMMatchType> matchTypes = match.isSetMatchTypes() ? match.getMatchTypes() : new HashSet<>();
+
         if (matchTypes.contains(VMMatchType.CPE)
                 || matchTypes.contains(VMMatchType.SVM_ID)
                 || matchTypes.contains(newMatchType)){
@@ -320,7 +320,7 @@ public class SVMSyncHandler<T extends TBase> {
 
         // clarify state
         if (matchTypes.contains(VMMatchType.CPE) || matchTypes.contains(VMMatchType.SVM_ID)){
-            // finish with ACCEPTED because CPE match is strong enough
+            // finish with ACCEPTED because CPE or SVM_ID match is strong enough
             match.setState(VMMatchState.ACCEPTED);
             return;
         }
@@ -355,7 +355,7 @@ public class SVMSyncHandler<T extends TBase> {
         if (!StringUtils.isEmpty(releaseId) && !StringUtils.isEmpty(componentId)){
             VMMatch match = knownMatches.getOrDefault(getMatchKey(componentId, releaseId), dbHandler.getMatchByIds(releaseId, componentId));
             if (match == null){
-                match = new VMMatch(componentId, releaseId, new HashSet<>(), VMMatchState.MATCHING_LEVEL_1);
+                match = new VMMatch(componentId, releaseId, new HashSet<>(), null);
             }
             evaluateMatchState(match, matchType);
             knownMatches.put(getMatchKey(match.getVmComponentId(), match.getReleaseId()), match);
@@ -556,36 +556,53 @@ public class SVMSyncHandler<T extends TBase> {
             return;
         }
         for (VMMatch match: matches) {
-
-            VMComponent vmComponent = null;
-            if (!StringUtils.isEmpty(match.getVmComponentId())){
-                vmComponent = dbHandler.getById(VMComponent.class, match.getVmComponentId());
-            }
-            Release release = null;
-            if (!StringUtils.isEmpty(match.getReleaseId())){
-                try {
-                    release = compDB.getRelease(match.getReleaseId(), null);
-                } catch (SW360Exception e) {
-                    // no exception logging necessary because the release will later be shown as "NOT FOUND"
-                }
-            }
-            Component component = null;
-            if (release != null && !StringUtils.isEmpty(release.getComponentId())){
-                try {
-                    component = compDB.getComponent(release.getComponentId(), null);
-                } catch (SW360Exception e) {
-                    // no exception logging necessary because the component will later be shown as "NOT FOUND"
-                }
-            }
-            SVMMapper.updateMatch(match, vmComponent, release, component);
             if (isWorthSaving(match)){
+                VMComponent vmComponent = null;
+                if (!StringUtils.isEmpty(match.getVmComponentId())){
+                    vmComponent = dbHandler.getById(VMComponent.class, match.getVmComponentId());
+                }
+                if (!StringUtils.isEmpty(match.getReleaseId())){
+                    final Release release = loadRelease(match);
+                    Supplier<Component> componentSupplier = getComponentSupplier(release);
+                    SVMMapper.updateMatch(match, vmComponent, release, componentSupplier);
+                } else {
+                    SVMMapper.updateMatch(match, vmComponent, null, () -> null);
+                }
+                log.info(String.format("Saving match %s", match.toString()));
                 if (StringUtils.isEmpty(match.getId())){
                     dbHandler.add(match);
                 } else {
                     dbHandler.update(match);
                 }
+            } else {
+                log.info(String.format("Match %s not worth saving", match.toString()));
             }
         }
+    }
+
+    @NotNull
+    private Supplier<Component> getComponentSupplier(Release release) {
+        return () -> {
+                        Component component = null;
+                        if (release != null && !StringUtils.isEmpty(release.getComponentId())) {
+                            try {
+                                component = compDB.getComponent(release.getComponentId(), null);
+                            } catch (SW360Exception e) {
+                                // no exception logging necessary because the component will later be shown as "NOT FOUND"
+                            }
+                        }
+                        return component;
+                    };
+    }
+
+    private Release loadRelease(VMMatch match) {
+        Release release = null;
+        try {
+            release = compDB.getRelease(match.getReleaseId(), null, VMProcessHandler.getVendorCache());
+        } catch (SW360Exception e) {
+            // no exception logging necessary because the release will later be shown as "NOT FOUND"
+        }
+        return release;
     }
 
     private boolean isWorthSaving(VMMatch match) {

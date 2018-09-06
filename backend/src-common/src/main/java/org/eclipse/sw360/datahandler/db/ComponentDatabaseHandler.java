@@ -232,13 +232,16 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public Release getRelease(String id, User user) throws SW360Exception {
+        return getRelease(id, user, null);
+    }
+    public Release getRelease(String id, User user, Map<String, Vendor> vendorCache) throws SW360Exception {
         Release release = releaseRepository.get(id);
 
         if (release == null) {
             throw fail("Could not fetch release from database! id=" + id);
         }
 
-        vendorRepository.fillVendor(release);
+        vendorRepository.fillVendor(release, vendorCache);
         // Set permissions
         if (user != null) {
             makePermission(release, user).fillPermissions();
@@ -906,6 +909,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public List<Release> getAllReleases() {
         return releaseRepository.getAll();
+    }
+
+    public List<Vendor> getAllVendors() {
+        return vendorRepository.getAll();
     }
 
     public Map<String, Release> getAllReleasesIdMap() {

@@ -34,9 +34,7 @@ import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.log4j.Logger.getLogger;
 
@@ -48,11 +46,11 @@ import static org.apache.log4j.Logger.getLogger;
  */
 public class VMComponentHandler implements VMComponentService.Iface {
 
-    private final static Logger log = getLogger(VMComponentHandler.class);
-
+    private static final Logger log = getLogger(VMComponentHandler.class);
 
     private final VMDatabaseHandler dbHandler;
     private final ComponentDatabaseHandler compHandler;
+
 
     public VMComponentHandler() throws IOException, SW360Exception {
         dbHandler = new VMDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_VM);
@@ -80,6 +78,8 @@ public class VMComponentHandler implements VMComponentService.Iface {
 //        if (!PermissionUtils.isAdmin(user)){
 //            return new RequestSummary(RequestStatus.FAILURE);
 //        }
+
+        VMProcessHandler.cacheVendors(compHandler);
 
         // synchronize VMAction
         String actionStart = SW360Utils.getCreatedOnTime();

@@ -24,8 +24,11 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
+import org.eclipse.sw360.datahandler.thrift.ThriftUtils;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 
 import java.net.MalformedURLException;
 import java.util.*;
@@ -58,6 +61,7 @@ public class VMProcessHandler {
      */
     private static final ConcurrentHashMap<Class<?>, List<SVMSyncHandler>> syncHandlersFree = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, SVMSyncHandler> syncHandlersBusy = new ConcurrentHashMap<>(SVMConstants.PROCESSING_CORE_POOL_SIZE);
+    private static final Map<String, Vendor> vendorCache = new HashMap<>();
 
 //    private static final ConcurrentHashMap<Reporting, Integer> processReporting = new ConcurrentHashMap<>();
 //    private static Date processStart;
@@ -198,6 +202,19 @@ public class VMProcessHandler {
 
     public static <T extends TBase> SVMSyncHandler getSyncHandler(Class<T> elementType) throws MalformedURLException, SW360Exception {
         return handleSyncHandler(elementType, null, ProcessTask.START);
+    }
+
+    public static void cacheVendors(ComponentDatabaseHandler componentHandler) {
+        List<Vendor> allVendors = componentHandler.getAllVendors();
+        synchronized (vendorCache) {
+            vendorCache.clear();
+            vendorCache.putAll(ThriftUtils.getIdMap(allVendors));
+            log.info(String.format("Cached %d vendors", vendorCache.size()));
+        }
+    }
+
+    public static Map<String, Vendor> getVendorCache() {
+        return vendorCache;
     }
 
     private enum ProcessTask{
