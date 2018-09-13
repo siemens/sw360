@@ -148,7 +148,9 @@ class JacksonCustomizations {
                 "setLicenseInfoHeaderText",
                 "setProjectOwner",
                 "enableSvm",
-                "setEnableSvm"
+                "setEnableSvm",
+                "enableVulnerabilitiesDisplay",
+                "setEnableVulnerabilitiesDisplay"
         })
         static abstract class ProjectMixin extends Project {
 
@@ -173,6 +175,7 @@ class JacksonCustomizations {
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonIgnoreProperties({
+                "id",
                 "revision",
                 "externalid",
                 "wantsMailNotification",
