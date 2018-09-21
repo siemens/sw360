@@ -1,14 +1,22 @@
 image: maven:latest
 
-types:
+stages:
   - build
   - deploy
 
 services:
   - couchdb:1.7.1
 
+variables:
+  PACKAGE_STORE_PATH: "/home/${SSH_PACKAGE_USER}/cipackages/${CI_COMMIT_REF_SLUG}"
+  DEPLOY_STORE_PATH:  "/home/${SSH_TEST_DEPLOY_USER}/deppackage"
+
 build_sw360:
-  type : build
+  stage: build
+  cache:
+    key: sw360-build-cache
+    paths:
+    - .m2/repository/
   script:
   - mkdir -p /vagrant_shared/packages/
   - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.9.3.tar.gz -O /vagrant_shared/packages/thrift-0.9.3.tar.gz
@@ -16,7 +24,7 @@ build_sw360:
   - export https_proxy=http://194.138.0.3:9400
   - export no_proxy='couchdb'
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
-  - apt-get -qq update && apt-get -qq -y install build-essential
+  - apt-get -qq update && apt-get -qq -y install build-essential rsync
   - ./scripts/install-thrift.sh
   - mkdir -p /etc/sw360/
   - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb.properties
@@ -24,33 +32,61 @@ build_sw360:
   - echo 'couch_db_url = http://couchdb:5984' > /databasetest.properties
   - echo 'couch_db_database = datahandlertestdb' >> /databasetest.properties
   - cp -f /databasetest.properties libraries/lib-datahandler/src/test/resources/databasetest.properties
-  - mvn install
+  - workdir=$(pwd)
+  - mkdir -p packages/deploy
+  - mkdir -p packages/webapps
+  - mvn install -Pdeploy -Ddeploy.dir=${workdir}/packages/deploy -Dwebapps.dir=${workdir}/packages/webapps -Dmaven.repo.local=.m2/repository
+  - tar -czvf packages.tar.gz packages
+  - mkdir -p ~/.ssh
+  - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
+  - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
+  - chmod 600 ~/packagekey
+  - eval $(ssh-agent -s)
+  - ssh-add ~/packagekey && ssh-add -L
+  - ssh ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER} "mkdir -p ${PACKAGE_STORE_PATH}/"
+  - rsync -htzv -e "ssh" packages.tar.gz ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/
+#  artifacts:
+#    expire_in: 2 days
+#    paths:
+#     - packages
 
 deploy_sw360:
-  type : deploy
+  tags:
+    - VLAN
+  allow_failure: true
+  stage: deploy
+  environment:
+    name: BLR-test
+    url: "http://${SSH_TEST_DEPLOY_SERVER}"
+  when: manual
+#  dependencies:
+#    - build_sw360
+  before_script:
+    - echo "Running deploy_sw360"
   script:
-  - mkdir -p /vagrant_shared/packages/
-  - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.9.3.tar.gz -O /vagrant_shared/packages/thrift-0.9.3.tar.gz
-  - export http_proxy=http://194.138.0.3:9400
-  - export https_proxy=http://194.138.0.3:9400
-  - export no_proxy='couchdb'
-  - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
-  - apt-get -qq update && apt-get -qq -y install build-essential
-  - ./scripts/install-thrift.sh
-  - mvn package -DskipTests
-  - find . -name *.war
-  - mkdir -p packages
-  - find . -name *.war -exec cp {} packages/ \;
-  - du -sh packages
-  - mkdir ~/.ssh
-  - ssh-keyscan -H $SSH_DEPLOY_SERVER > ~/.ssh/known_hosts
-  - eval $(ssh-agent -s)
-  - ssh-add <(echo "$SSH_DEPLOY_KEY")
-  - scp -B -r packages $SSH_DEPLOY_USER@$SSH_DEPLOY_SERVER:~/
-#  only:
-#    - master
+    # adding host key to list of known hosts
+    - mkdir -p ~/.ssh
+    - ssh-keyscan -H ${SSH_TEST_DEPLOY_SERVER} >> ~/.ssh/known_hosts
+    - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
+    - echo "${SSH_DEPLOY_KEY}" > ~/deploykey
+    - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
+    - chmod 600 ~/deploykey && chmod 600 ~/packagekey
+    - eval $(ssh-agent -s)
+    - ssh-add ~/deploykey
+    - ssh-add ~/packagekey
+    - ssh-add -L
+    - echo "Acquire::http::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
+    - echo "Acquire::https::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
+    - apt-get -qq update && apt-get -qq install -y rsync
+    # copying the packages
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "mkdir -p ${DEPLOY_STORE_PATH}/"
+    - rsync -htzv -e "ssh" ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/packages.tar.gz .
+    - rsync -htzv -e "ssh" ./packages.tar.gz ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER}:${DEPLOY_STORE_PATH}/packages.tar.gz
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "tar -xzvf ${DEPLOY_STORE_PATH}/packages.tar.gz -C ${DEPLOY_STORE_PATH}"
+    # logging in, install the wars and restart tomcat
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/*.war ${SSH_LIFERAY_DEPLOY_PATH}"
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/*.war ${SSH_LIFERAY_WEBAPP_PATH}"
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "rm -rf ${DEPLOY_STORE_PATH}/packages/"
+    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh"
+    - (sleep 1m && ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/startup.sh")
 
-#  artifacts:
-#    expire_in: 1 day
-#    paths:
-#      - packages
