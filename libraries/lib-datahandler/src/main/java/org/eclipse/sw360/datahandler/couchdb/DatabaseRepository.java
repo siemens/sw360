@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2014-2017. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2014-2018. Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -13,10 +13,7 @@ package org.eclipse.sw360.datahandler.couchdb;
 import org.ektorp.*;
 import org.ektorp.support.CouchDbRepositorySupport;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -103,6 +100,18 @@ public class DatabaseRepository<T> extends CouchDbRepositorySupport<T> {
     public Set<String> queryForIdsAsComplexValue(String queryName, String... keys) {
         ViewQuery query = createQuery(queryName).key(ComplexKey.of(keys));
         return queryForIds(query);
+    }
+
+    public Set<String> queryForIdsAsComplexValues(String queryName, Map<String, Set<String>> keys) {
+        Set<ComplexKey> complexKeys = keys.entrySet().stream()
+                .map(DatabaseRepository::createComplexKeys)
+                .flatMap(Collection::stream).collect(Collectors.toSet());
+        ViewQuery query = createQuery(queryName).keys(complexKeys);
+        return queryForIds(query);
+    }
+
+    private static Set<ComplexKey> createComplexKeys(Map.Entry<String, Set<String>> key) {
+        return key.getValue().stream().map(v -> ComplexKey.of(key.getKey(), v)).collect(Collectors.toSet());
     }
 
     public Set<String> queryForIdsAsValue(String queryName, Set<String> keys) {

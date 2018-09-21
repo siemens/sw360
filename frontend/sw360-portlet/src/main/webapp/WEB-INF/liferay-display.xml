@@ -38,5 +38,6 @@
 		<portlet id="vulnerabilities"/>
 		<portlet id="vulnerabilityManagement"/>
 		<portlet id="ecc"/>
+		<portlet id="WsImport"/>
 	</category>
 </display>

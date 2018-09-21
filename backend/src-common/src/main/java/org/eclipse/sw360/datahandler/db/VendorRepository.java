@@ -22,8 +22,13 @@ import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.ektorp.support.View;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyMap;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -56,12 +61,16 @@ public class VendorRepository extends DatabaseRepository<Vendor> {
     }
 
     public void fillVendor(Release release) {
+        fillVendor(release, null);
+    }
+    public void fillVendor(Release release, Map<String, Vendor> vendorCache) {
         if (release.isSetVendorId()) {
             final String vendorId = release.getVendorId();
             if (!isNullOrEmpty(vendorId)) {
-                final Vendor vendor = get(vendorId);
-                if (vendor != null)
+                final Vendor vendor = vendorCache == null ? get(vendorId) : vendorCache.computeIfAbsent(vendorId, this::get);
+                if (vendor != null) {
                     release.setVendor(vendor);
+                }
             }
             release.unsetVendorId();
         }

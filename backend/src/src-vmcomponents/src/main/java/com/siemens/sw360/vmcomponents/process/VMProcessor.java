@@ -96,118 +96,110 @@ public class VMProcessor<T extends TBase> implements Runnable, Comparable<VMProc
 
             switch (task){
 
-                case GET_IDS: {
-                        // get element ids
-                        VMResult idsResult = syncHandler.getSMVElementIds(this.url);
-                        // trigger cleanup of missing elements and storing new elements
-                        if (triggerNextStep
-                                && idsResult != null
-                                && RequestStatus.SUCCESS.equals(idsResult.requestSummary.requestStatus)
-                                && idsResult.elements != null
-                                && idsResult.elements.size() > 0) {
-                            // clean up old
-                            VMProcessHandler.cleanupMissingElements(this.elementType, idsResult.elements);
-                            // store new
-                            VMProcessHandler.storeElements(this.elementType, idsResult.elements, this.url, triggerNextStep);
+                case GET_IDS:
+                    // get element ids
+                    VMResult idsResult = syncHandler.getSMVElementIds(this.url);
+                    // trigger cleanup of missing elements and storing new elements
+                    if (triggerNextStep
+                            && idsResult != null
+                            && RequestStatus.SUCCESS.equals(idsResult.requestSummary.requestStatus)
+                            && idsResult.elements != null
+                            && !idsResult.elements.isEmpty()) {
+                        // clean up old
+                        VMProcessHandler.cleanupMissingElements(this.elementType, idsResult.elements);
+                        // store new
+                        VMProcessHandler.storeElements(this.elementType, idsResult.elements, this.url, triggerNextStep);
+                    }
+                    break;
+
+                case CLEAN_UP:
+                    // delete VM elements which are not in the new vmid list anymore
+                    VMResult deletionResult = syncHandler.deleteMissingElements(this.input);
+                    // delete corresponding matches out of db
+                    if (deletionResult != null
+                            && RequestStatus.SUCCESS.equals(deletionResult.requestSummary.requestStatus)
+                            && deletionResult.elements != null
+                            && !deletionResult.elements.isEmpty()){
+                        syncHandler.cleanUpMatches(deletionResult.elements);
+                    }
+                    break;
+
+                case STORE_NEW:
+                    // save element into DB
+                    VMResult storeResult = syncHandler.storeNewElement(this.input.get(0));
+                    // re-queue element for getting Master Data
+                    if (triggerNextStep
+                            && storeResult != null
+                            && RequestStatus.SUCCESS.equals(storeResult.requestSummary.requestStatus)
+                            && storeResult.elements != null
+                            && !storeResult.elements.isEmpty()){
+                        VMProcessHandler.getMasterData(this.elementType, SVMUtils.getId(elementType.cast(storeResult.elements.get(0))), url, triggerNextStep);
+                    }
+                    break;
+
+                case MASTER_DATA:
+                    // get master data from SVM
+                    VMResult getResult = syncHandler.getSMVElementMasterDataById(this.input.get(0), this.url);
+                    // update local element in db
+                    if (getResult != null
+                            && RequestStatus.SUCCESS.equals(getResult.requestSummary.requestStatus)
+                            && getResult.elements != null
+                            && !getResult.elements.isEmpty()){
+                        syncHandler.syncDatabase(elementType.cast(getResult.elements.get(0)));
+
+                        // trigger Match CPE for VMComponent elements
+                        if(triggerNextStep
+                                && getResult.requestSummary.totalAffectedElements > 0
+                                && VMComponent.class.isAssignableFrom(this.elementType)){
+                            VMProcessHandler.findComponentMatch(this.input.get(0), triggerNextStep);
                         }
                     }
                     break;
 
-                case CLEAN_UP: {
-                        // delete VM elements which are not in the new vmid list anymore
-                        VMResult deletionResult = syncHandler.deleteMissingElements(this.input);
-                        // delete corresponding matches out of db
-                        if (deletionResult != null
-                                && RequestStatus.SUCCESS.equals(deletionResult.requestSummary.requestStatus)
-                                && deletionResult.elements != null
-                                && deletionResult.elements.size() > 0){
-                            syncHandler.cleanUpMatches(deletionResult.elements);
-                        }
+                case MATCH_SVM: 
+                    // try to find a match via cpe and text
+                    VMResult<VMMatch> componentMatchResult = syncHandler.findMatchByComponent(this.input.get(0));
+                    if (triggerNextStep
+                            && componentMatchResult != null
+                            && RequestStatus.SUCCESS.equals(componentMatchResult.requestSummary.requestStatus)
+                            && componentMatchResult.elements != null
+                            && !componentMatchResult.elements.isEmpty()
+                            && componentMatchResult.requestSummary.totalAffectedElements > 0){
+                        // re-queue for get Vulnerabilities
+                        VMProcessHandler.getVulnerabilitiesByComponentId(this.input.get(0), SVMConstants.VULNERABILITIES_PER_COMPONENT_URL, triggerNextStep);
                     }
                     break;
 
-                case STORE_NEW: {
-                        // save element into DB
-                        VMResult storeResult = syncHandler.storeNewElement(this.input.get(0));
-                        // re-queue element for getting Master Data
-                        if (triggerNextStep
-                                && storeResult != null
-                                && RequestStatus.SUCCESS.equals(storeResult.requestSummary.requestStatus)
-                                && storeResult.elements != null
-                                && storeResult.elements.size() > 0){
-                            VMProcessHandler.getMasterData(this.elementType, SVMUtils.getId(elementType.cast(storeResult.elements.get(0))), url, triggerNextStep);
-                        }
+                case MATCH_SW360:
+                    // try to find a match via cpe and text
+                    VMResult<String> releaseMatchResult = syncHandler.findMatchByRelease(this.input.get(0));
+                    if (triggerNextStep
+                            && releaseMatchResult != null
+                            && RequestStatus.SUCCESS.equals(releaseMatchResult.requestSummary.requestStatus)
+                            && releaseMatchResult.elements != null
+                            && !releaseMatchResult.elements.isEmpty()
+                            && releaseMatchResult.requestSummary.totalAffectedElements > 0){
+                        // re-queue for get Vulnerabilities
+                        VMProcessHandler.getVulnerabilitiesByComponentIds(releaseMatchResult.elements, SVMConstants.VULNERABILITIES_PER_COMPONENT_URL, triggerNextStep);
                     }
                     break;
 
-                case MASTER_DATA: {
-                        // get master data from SVM
-                        VMResult getResult = syncHandler.getSMVElementMasterDataById(this.input.get(0), this.url);
-                        // update local element in db
-                        if (getResult != null
-                                && RequestStatus.SUCCESS.equals(getResult.requestSummary.requestStatus)
-                                && getResult.elements != null
-                                && getResult.elements.size() > 0){
-                            VMResult syncResult = syncHandler.syncDatabase(elementType.cast(getResult.elements.get(0)));
-
-                            // trigger Match CPE for VMComponent elements
-                            if(triggerNextStep
-                                    && getResult.requestSummary.totalAffectedElements > 0
-                                    && VMComponent.class.isAssignableFrom(this.elementType)){
-                                VMProcessHandler.findComponentMatch(this.input.get(0), triggerNextStep);
-                            }
-                        }
+                case VULNERABILITIES:
+                    VMResult vulResult = syncHandler.getVulnerabilitiesByComponentId(this.input.get(0), this.url);
+                    if (triggerNextStep
+                            && vulResult != null
+                            && RequestStatus.SUCCESS.equals(vulResult.requestSummary.requestStatus)
+                            && vulResult.elements != null
+                            && !vulResult.elements.isEmpty()
+                            && vulResult.requestSummary.totalAffectedElements > 0){
+                        // get master data of the vulnerabilities
+                        VMProcessHandler.getMasterData(Vulnerability.class, vulResult.elements, SVMConstants.VULNERABILITIES_URL, true);
                     }
                     break;
 
-                case MATCH_SVM: {
-                        // try to find a match via cpe and text
-                        VMResult<VMMatch> matchResult = syncHandler.findMatchByComponent(this.input.get(0));
-                        if (triggerNextStep
-                                && matchResult != null
-                                && RequestStatus.SUCCESS.equals(matchResult.requestSummary.requestStatus)
-                                && matchResult.elements != null
-                                && matchResult.elements.size() > 0
-                                && matchResult.requestSummary.totalAffectedElements > 0){
-                            // re-queue for get Vulnerabilities
-                            VMProcessHandler.getVulnerabilitiesByComponentId(this.input.get(0), SVMConstants.VULNERABILITIES_PER_COMPONENT_URL, triggerNextStep);
-                        }
-                    }
-                    break;
-
-                case MATCH_SW360: {
-                        // try to find a match via cpe and text
-                        VMResult<String> matchResult = syncHandler.findMatchByRelease(this.input.get(0));
-                        if (triggerNextStep
-                                && matchResult != null
-                                && RequestStatus.SUCCESS.equals(matchResult.requestSummary.requestStatus)
-                                && matchResult.elements != null
-                                && matchResult.elements.size() > 0
-                                && matchResult.requestSummary.totalAffectedElements > 0){
-                            // re-queue for get Vulnerabilities
-                            VMProcessHandler.getVulnerabilitiesByComponentIds(matchResult.elements, SVMConstants.VULNERABILITIES_PER_COMPONENT_URL, triggerNextStep);
-                        }
-                    }
-                    break;
-
-                case VULNERABILITIES: {
-                        VMResult vulResult = syncHandler.getVulnerabilitiesByComponentId(this.input.get(0), this.url);
-                        if (triggerNextStep
-                                && vulResult != null
-                                && RequestStatus.SUCCESS.equals(vulResult.requestSummary.requestStatus)
-                                && vulResult.elements != null
-                                && vulResult.elements.size() > 0
-                                && vulResult.requestSummary.totalAffectedElements > 0){
-                            // get master data of the vulnerabilities
-                            VMProcessHandler.getMasterData(Vulnerability.class, vulResult.elements, SVMConstants.VULNERABILITIES_URL, false);
-                        }
-                    }
-                    break;
-
-                case FINISH: {
-                        // finishing reporting
-                        VMResult result = syncHandler.finishReport(this.input.get(0));
-                    }
+                case FINISH:
+                    // finishing reporting
+                    syncHandler.finishReport(this.input.get(0));
                     break;
 
                 default: throw new IllegalArgumentException("unknown task '"+task+"'. do not know what to do :( "+this.toString());

@@ -48,10 +48,11 @@ import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.net.URLEncoder;
-import java.util.*;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.util.*;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
@@ -156,10 +157,16 @@ public class RestControllerHelper {
     }
 
     public void addEmbeddedModerators(HalResource halResource, Set<String> moderators) {
+        User sw360User;
         for (String moderatorEmail : moderators) {
-            User user = new User();
-            user.setEmail(moderatorEmail);
-            addEmbeddedUser(halResource, user, "sw360:moderators");
+            try {
+                sw360User = userService.getUserByEmail(moderatorEmail);
+            } catch (RuntimeException e) {
+                sw360User = new User();
+                sw360User.setId(moderatorEmail).setEmail(moderatorEmail);
+                LOGGER.debug("Could not get user object from backend with email: " + moderatorEmail);
+            }
+            addEmbeddedUser(halResource, sw360User, "sw360:moderators");
         }
     }
 
@@ -188,11 +195,10 @@ public class RestControllerHelper {
         try {
             Link userLink = linkTo(UserController.class).slash("api/users/" + URLEncoder.encode(user.getId(), "UTF-8")).withSelfRel();
             embeddedUserResource.add(userLink);
-        } catch (Exception e) {
-            LOGGER.error("cannot create embedded user with email: " + user.getEmail());
+            halResource.addEmbeddedResource(relation, embeddedUserResource);
+        } catch (UnsupportedEncodingException e) {
+            LOGGER.error("cannot create embedded user with email: " + user.getEmail(), e);
         }
-
-        halResource.addEmbeddedResource(relation, embeddedUserResource);
     }
 
     public void addEmbeddedVendors(HalResource<Component> halComponent, Set<String> vendors) {
@@ -202,7 +208,7 @@ public class RestControllerHelper {
         }
     }
 
-    private HalResource<Vendor> addEmbeddedVendor(String vendorFullName) {
+    public HalResource<Vendor> addEmbeddedVendor(String vendorFullName) {
         Vendor embeddedVendor = convertToEmbeddedVendor(vendorFullName);
         HalResource<Vendor> halVendor = new HalResource<>(embeddedVendor);
         try {
@@ -241,33 +247,6 @@ public class RestControllerHelper {
         return null;
     }
 
-    public HalResource<Release> createHalReleaseResource(Release release, boolean verbose) {
-        HalResource<Release> halRelease = new HalResource<>(release);
-        Link componentLink = linkTo(ReleaseController.class)
-                .slash("api" + ComponentController.COMPONENTS_URL + "/" + release.getComponentId()).withRel("component");
-        halRelease.add(componentLink);
-        release.setComponentId(null);
-
-        if (verbose) {
-            if (release.getModerators() != null) {
-                Set<String> moderators = release.getModerators();
-                this.addEmbeddedModerators(halRelease, moderators);
-                release.setModerators(null);
-            }
-            if (release.getVendor() != null) {
-                Vendor vendor = release.getVendor();
-                HalResource<Vendor> vendorHalResource = this.addEmbeddedVendor(vendor.getFullname());
-                halRelease.addEmbeddedResource("sw360:vendors", vendorHalResource);
-                release.setVendor(null);
-            }
-            if (release.getMainLicenseIds() != null) {
-                this.addEmbeddedLicenses(halRelease, release.getMainLicenseIds());
-                release.setMainLicenseIds(null);
-            }
-        }
-        return halRelease;
-    }
-
     public void addEmbeddedRelease(HalResource halResource, Release release) {
         Release embeddedRelease = convertToEmbeddedRelease(release);
         HalResource<Release> halRelease = new HalResource<>(embeddedRelease);
@@ -277,7 +256,7 @@ public class RestControllerHelper {
         halResource.addEmbeddedResource("sw360:releases", halRelease);
     }
 
-    private void addEmbeddedAttachments(
+    public void addEmbeddedAttachments(
             HalResource halResource,
             Set<Attachment> attachments) {
         for (Attachment attachment : attachments) {

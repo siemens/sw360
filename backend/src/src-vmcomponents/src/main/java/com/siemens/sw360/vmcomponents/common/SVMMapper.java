@@ -21,6 +21,7 @@ import com.google.common.base.Joiner;
 import com.siemens.sw360.datahandler.thrift.vmcomponents.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -33,10 +34,12 @@ import org.json.simple.JSONObject;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.log4j.Logger.getLogger;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyCollection;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyMap;
 
 /**
  * maps the updates of a new element to an existing one
@@ -240,7 +243,7 @@ public class SVMMapper {
         return set;
     }
 
-    public static VMMatch updateMatch(VMMatch match, VMComponent vmComponent, Release release, Component component){
+    public static VMMatch updateMatch(VMMatch match, VMComponent vmComponent, Release release, Supplier<Component> componentSupplier){
         if (match == null){
             return null;
         }
@@ -263,14 +266,18 @@ public class SVMMapper {
             match.setReleaseCpe(NOT_FOUND)
                     .setComponentName(NOT_FOUND)
                     .setVendorName(NOT_FOUND)
-                    .setReleaseVersion(NOT_FOUND);
+                    .setReleaseVersion(NOT_FOUND)
+                    .setReleaseSvmId(NOT_FOUND);
         } else {
             match.setReleaseId(release.getId())
                     .setReleaseCpe(release.getCpeid())
-                    .setReleaseVersion(release.getVersion());
+                    .setReleaseVersion(release.getVersion())
+                    .setReleaseSvmId(nullToEmptyMap(release.getExternalIds())
+                            .getOrDefault(SW360Constants.SIEMENS_SVM_COMPONENT_ID, ""));
 
             String compName = release.getName();
             if (StringUtils.isEmpty(compName)){
+                Component component = componentSupplier.get();
                 if (component == null){
                     compName = NOT_FOUND;
                 } else {
@@ -286,7 +293,7 @@ public class SVMMapper {
             }
 
             List<String> matchTypeNames = nullToEmptyCollection(match.getMatchTypes()).stream().map(VMMatchType::name).collect(Collectors.toList());
-            String matchTypesUI = Joiner.on(",").join(matchTypeNames);
+            String matchTypesUI = Joiner.on(", ").join(matchTypeNames);
             match.setMatchTypesUI(matchTypesUI);
         }
         return match;
