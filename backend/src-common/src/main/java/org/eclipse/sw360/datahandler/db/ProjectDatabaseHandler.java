@@ -950,10 +950,16 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private Map<String, String> getGidsByEmail() throws TException {
         ThriftClients thriftClients = new ThriftClients();
         UserService.Iface userClient = thriftClients.makeUserClient();
-        return userClient
+        Map<String, String> gidByEmail = new HashMap<>();
+        userClient
                 .getAllUsers()
                 .stream()
                 .filter(User::isSetExternalid)
-                .collect(Collectors.toMap(User::getEmail, User::getExternalid, (s1, s2) -> s1));
+                .forEach(user -> {
+                    gidByEmail.put(user.getEmail(), user.getExternalid());
+                    nullToEmptySet(user.getFormerEmailAddresses())
+                            .forEach(email -> gidByEmail.put(email, user.getExternalid()));
+                });
+        return gidByEmail;
     }
 }
