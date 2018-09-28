@@ -160,12 +160,16 @@ public class VulnerabilitiesPortlet extends Sw360Portlet {
 
                 if (vulnerabilityWithReleaseRelations != null) {
                     Vulnerability vulnerability = vulnerabilityWithReleaseRelations.getVulnerability();
-                    List<Release> releases = getReleasesFromRelations(user, vulnerabilityWithReleaseRelations);
 
                     request.setAttribute(VULNERABILITY, vulnerability);
                     request.setAttribute(DOCUMENT_ID, externalId);
-                    request.setAttribute(USING_RELEASES, releases);
-
+                    try {
+                        List<Release> releases = getReleasesFromRelations(user, vulnerabilityWithReleaseRelations);
+                        request.setAttribute(USING_RELEASES, releases);
+                    } catch (TException e) {
+                        log.error("Error fetching releases from backend!", e);
+                        request.setAttribute(USING_RELEASES, Collections.emptyList());
+                    }
                     addVulnerabilityBreadcrumb(request, response, vulnerability);
                 }
 
@@ -175,21 +179,16 @@ public class VulnerabilitiesPortlet extends Sw360Portlet {
         }
     }
 
-    private List<Release> getReleasesFromRelations(User user, VulnerabilityWithReleaseRelations vulnerabilityWithReleaseRelations) {
+    private List<Release> getReleasesFromRelations(User user, VulnerabilityWithReleaseRelations vulnerabilityWithReleaseRelations) throws TException {
         if (vulnerabilityWithReleaseRelations != null) {
             List<ReleaseVulnerabilityRelation> relations = vulnerabilityWithReleaseRelations.getReleaseRelation();
 
             Set<String> ids = relations.stream()
                     .map(ReleaseVulnerabilityRelation::getReleaseId)
                     .collect(Collectors.toSet());
-
-            try {
-                ComponentService.Iface client = thriftClients.makeComponentClient();
-                return client.getReleasesById(ids, user);
-            } catch (TException e) {
-                log.error("Error fetching releases from backend!", e);
-            }
+            ComponentService.Iface client = thriftClients.makeComponentClient();
+            return client.getReleasesById(ids, user);
         }
-        return ImmutableList.of();
+        return Collections.emptyList();
     }
 }
