@@ -105,6 +105,16 @@ public class ScheduleAdminPortlet extends Sw360Portlet {
     }
 
     @UsedAsLiferayAction
+    public void triggerSvmSync(ActionRequest request, ActionResponse response) throws PortletException, IOException {
+        try {
+            RequestStatus requestStatus = new ThriftClients().makeVMClient().synchronizeComponents().getRequestStatus();
+            setSessionMessage(request, requestStatus, "Task", "perform");
+        } catch (TException e) {
+            log.error(e);
+        }
+    }
+
+    @UsedAsLiferayAction
     public void scheduleSvmMatch(ActionRequest request, ActionResponse response) throws PortletException, IOException {
         scheduleService(ThriftClients.SVMMATCH_SERVICE, request);
     }
@@ -112,6 +122,16 @@ public class ScheduleAdminPortlet extends Sw360Portlet {
     @UsedAsLiferayAction
     public void unscheduleSvmMatch(ActionRequest request, ActionResponse response) throws PortletException, IOException {
         unscheduleService(ThriftClients.SVMMATCH_SERVICE, request);
+    }
+
+    @UsedAsLiferayAction
+    public void triggerSvmMatch(ActionRequest request, ActionResponse response) throws PortletException, IOException {
+        try {
+            RequestStatus requestStatus = new ThriftClients().makeVMClient().triggerReverseMatch().getRequestStatus();
+            setSessionMessage(request, requestStatus, "Task", "perform");
+        } catch (TException e) {
+            log.error(e);
+        }
     }
 
     @UsedAsLiferayAction

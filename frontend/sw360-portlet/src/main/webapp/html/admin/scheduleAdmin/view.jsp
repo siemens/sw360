@@ -52,10 +52,16 @@
 <portlet:actionURL var="unscheduleSvmSyncURL" name="unscheduleSvmSync">
 </portlet:actionURL>
 
+<portlet:actionURL var="triggerSvmSyncURL" name="triggerSvmSync">
+</portlet:actionURL>
+
 <portlet:actionURL var="scheduleSvmMatchURL" name="scheduleSvmMatch">
 </portlet:actionURL>
 
 <portlet:actionURL var="unscheduleSvmMatchURL" name="unscheduleSvmMatch">
+</portlet:actionURL>
+
+<portlet:actionURL var="triggerSvmMatchURL" name="triggerSvmMatch">
 </portlet:actionURL>
 
 <portlet:actionURL var="scheduleSvmListUpdateURL" name="scheduleSvmListUpdate">
@@ -175,5 +181,7 @@ Next Synchronization: ${trackingFeedbackNextSync}<br/>
        value="Cancel All Scheduled Tasks"/>
 
 <h4 class="withTopMargin">Manual triggering of scheduled services</h4>
-<input type="button" class="addButton" onclick="window.location.href='<%=triggerSvmListUpdateURL%>'" value="Trigger SVM Monitoring List Update"/>
-<input type="button" class="addButton" onclick="window.location.href='<%=triggerTrackingFeedbackURL%>'" value="Trigger SVM Release Tracking Feedback"/>
+<input type="button" class="addButton" onclick="window.location.href='<%=triggerSvmSyncURL%>'" value="SVM Vulnerabilities Sync"/>
+<input type="button" class="addButton" onclick="window.location.href='<%=triggerSvmMatchURL%>'" value="SVM Vulnerabilities Reverse Match"/>
+<input type="button" class="addButton" onclick="window.location.href='<%=triggerSvmListUpdateURL%>'" value="SVM Monitoring List Update"/>
+<input type="button" class="addButton" onclick="window.location.href='<%=triggerTrackingFeedbackURL%>'" value="SVM Release Tracking Feedback"/>
