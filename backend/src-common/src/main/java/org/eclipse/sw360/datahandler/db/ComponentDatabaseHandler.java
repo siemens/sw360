@@ -44,6 +44,7 @@ import org.ektorp.DocumentOperationResult;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -85,6 +86,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final UserRepository userRepository;
 
     private final AttachmentConnector attachmentConnector;
+    private SvmConnector svmConnector;
     /**
      * Access to moderation
      */
@@ -230,13 +232,16 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public Release getRelease(String id, User user) throws SW360Exception {
+        return getRelease(id, user, null);
+    }
+    public Release getRelease(String id, User user, Map<String, Vendor> vendorCache) throws SW360Exception {
         Release release = releaseRepository.get(id);
 
         if (release == null) {
             throw fail("Could not fetch release from database! id=" + id);
         }
 
-        vendorRepository.fillVendor(release);
+        vendorRepository.fillVendor(release, vendorCache);
         // Set permissions
         if (user != null) {
             makePermission(release, user).fillPermissions();
@@ -906,9 +911,22 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return releaseRepository.getAll();
     }
 
+    public List<Vendor> getAllVendors() {
+        return vendorRepository.getAll();
+    }
+
     public Map<String, Release> getAllReleasesIdMap() {
         final List<Release> releases = getAllReleases();
         return ThriftUtils.getIdMap(releases);
+    }
+
+    void fillVendors(Collection<Release> releases){
+        releases.forEach(vendorRepository::fillVendor);
+    }
+
+    public Map<String, Component> getAllComponentsIdMap() {
+        final List<Component> components = componentRepository.getAll();
+        return ThriftUtils.getIdMap(components);
     }
 
     @NotNull
@@ -1004,6 +1022,41 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public List<Release> getFullReleases(Set<String> ids) {
         return releaseRepository.makeSummary(SummaryType.SUMMARY, ids);
+    }
+
+    public Set<String> getReleaseIdsByVendorIds(Set<String> vendorIds){
+        return releaseRepository.getReleaseIdsFromVendorIds(vendorIds);
+    }
+
+    public Set<String> getReleaseIdsBySvmId(String svmId){
+        return releaseRepository.getReleaseIdsBySvmId(svmId);
+    }
+
+    public Set<String> getReleaseIdsByCpeCaseInsensitive(String cpeId){
+        return releaseRepository.getReleaseByLowercaseCpe(cpeId);
+    }
+
+    public Set<String> getReleaseIdsByNamePrefixCaseInsensitive(String namePrefix){
+        return releaseRepository.getReleaseByLowercaseNamePrefix(namePrefix);
+    }
+
+    public Set<String> getReleaseIdsByVersionPrefixCaseInsensitive(String versionPrefix){
+        return releaseRepository.getReleaseByLowercaseVersionPrefix(versionPrefix);
+    }
+
+    public Set<String> getAllReleaseIds(){
+        return releaseRepository.getAllIds();
+    }
+
+    public Set<String> getVendorIdsByNamePrefixCaseInsensitive(String namePrefix){
+        Set<String> fullnameList = vendorRepository.getVendorByLowercaseFullnamePrefix(namePrefix);
+        Set<String> shortnameList = vendorRepository.getVendorByLowercaseShortnamePrefix(namePrefix);
+
+        if (fullnameList == null) return shortnameList;
+        if (shortnameList == null) return fullnameList;
+        // both lists available
+        fullnameList.addAll(shortnameList);
+        return fullnameList;
     }
 
     public List<Release> getReleasesWithPermissions(Set<String> ids, User user) {
@@ -1311,4 +1364,40 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 release.getName(), release.getVersion());
     }
 
+    public RequestStatus updateReleasesWithSvmTrackingFeedback() {
+        try {
+            Map<String, Integer> componentMappings = getSvmConnector().fetchComponentMappings();
+            List<Release> releases = releaseRepository.getReleasesIgnoringNotFound(componentMappings.keySet());
+            releases.forEach(r -> {
+                Map<String, String> externalIds = r.isSetExternalIds() ? r.getExternalIds() : new HashMap<>();
+                externalIds.put(SW360Constants.SIEMENS_SVM_COMPONENT_ID, componentMappings.get(r.getId()).toString());
+                r.setExternalIds(externalIds);
+            });
+            final List<DocumentOperationResult> documentOperationResults = releaseRepository.executeBulk(releases);
+            if (documentOperationResults.isEmpty()) {
+                log.info(String.format("SVMTF: updated %d releases", releases.size()));
+            } else {
+                log.error("SVMTF: Failed saving releases: " + documentOperationResults);
+                return RequestStatus.FAILURE;
+            }
+        } catch (IOException | SW360Exception e) {
+            log.error(e);
+            return RequestStatus.FAILURE;
+        }
+
+        return RequestStatus.SUCCESS;
+    }
+
+    @NotNull
+    private SvmConnector getSvmConnector() {
+        if (svmConnector == null) {
+            svmConnector = new SvmConnector();
+        }
+        return svmConnector;
+    }
+
+    public ComponentDatabaseHandler setSvmConnector(SvmConnector svmConnector) {
+        this.svmConnector = svmConnector;
+        return this;
+    }
 }
