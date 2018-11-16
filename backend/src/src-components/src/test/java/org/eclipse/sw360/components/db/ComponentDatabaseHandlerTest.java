@@ -15,8 +15,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
+import org.eclipse.sw360.datahandler.db.SvmConnector;
 import org.eclipse.sw360.datahandler.entitlement.ComponentModerator;
 import org.eclipse.sw360.datahandler.entitlement.ReleaseModerator;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
@@ -78,6 +80,9 @@ public class ComponentDatabaseHandlerTest {
     ComponentModerator moderator;
     @Mock
     ReleaseModerator releaseModerator;
+
+    @Mock
+    SvmConnector svmConnector;
 
     @Before
     public void setUp() throws Exception {
@@ -142,11 +147,24 @@ public class ComponentDatabaseHandlerTest {
 
         // Prepare the handler
         handler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbName, attachmentsDbName, moderator, releaseModerator);
+        handler.setSvmConnector(svmConnector);
     }
 
     @After
     public void tearDown() throws Exception {
         TestUtils.deleteDatabase(DatabaseSettings.getConfiguredHttpClient(), dbName);
+    }
+
+    @Test
+    public void testUpdateReleasesWithSvmTrackingFeedback() throws Exception {
+        when(svmConnector.fetchComponentMappings()).thenReturn(ImmutableMap.of("R1A", 123, "R2B", 456));
+        RequestStatus requestStatus = handler.updateReleasesWithSvmTrackingFeedback();
+
+        assertThat(requestStatus, is(RequestStatus.SUCCESS));
+        Release r1A = handler.getRelease("R1A", user1);
+        assertThat(r1A.getExternalIds().get(SW360Constants.SIEMENS_SVM_COMPONENT_ID), is("123"));
+        Release r2B = handler.getRelease("R2B", user1);
+        assertThat(r2B.getExternalIds().get(SW360Constants.SIEMENS_SVM_COMPONENT_ID), is("456"));
     }
 
     @Test
