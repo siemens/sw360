@@ -22,8 +22,8 @@ import com.siemens.sw360.datahandler.thrift.vmcomponents.VMMatch;
 import org.apache.thrift.TEnum;
 import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.exporter.ExcelExporter;
-import org.eclipse.sw360.exporter.ExporterHelper;
-import org.eclipse.sw360.exporter.SubTable;
+import org.eclipse.sw360.exporter.helper.ExporterHelper;
+import org.eclipse.sw360.exporter.utils.SubTable;
 
 import java.util.ArrayList;
 import java.util.List;
