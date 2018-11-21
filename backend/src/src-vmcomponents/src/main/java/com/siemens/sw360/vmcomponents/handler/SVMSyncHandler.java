@@ -19,7 +19,16 @@ package com.siemens.sw360.vmcomponents.handler;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.siemens.sw360.datahandler.thrift.vmcomponents.*;
+import com.siemens.sw360.vmcomponents.common.SVMConstants;
+import com.siemens.sw360.vmcomponents.common.SVMMapper;
+import com.siemens.sw360.vmcomponents.common.SVMUtils;
+import com.siemens.sw360.vmcomponents.common.VMResult;
+import com.siemens.sw360.vmcomponents.db.VMDatabaseHandler;
 import com.siemens.sw360.vmcomponents.process.VMProcessHandler;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.thrift.TBase;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
@@ -28,18 +37,9 @@ import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
-import com.siemens.sw360.datahandler.thrift.vmcomponents.*;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
-import com.siemens.sw360.vmcomponents.common.SVMConstants;
-import com.siemens.sw360.vmcomponents.common.SVMMapper;
-import com.siemens.sw360.vmcomponents.common.SVMUtils;
-import com.siemens.sw360.vmcomponents.common.VMResult;
-import com.siemens.sw360.vmcomponents.db.VMDatabaseHandler;
 import org.eclipse.sw360.vulnerabilities.common.VulnerabilityMapper;
-import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
-import org.apache.thrift.TBase;
 import org.jetbrains.annotations.NotNull;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -51,9 +51,9 @@ import java.net.MalformedURLException;
 import java.util.*;
 import java.util.function.Supplier;
 
+import static org.apache.log4j.Logger.getLogger;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
-import static org.apache.log4j.Logger.getLogger;
 
 /**
  * mapping handler for JSON response from SVM service to pojos
@@ -139,6 +139,7 @@ public class SVMSyncHandler<T extends TBase> {
             return new VMResult<>(SVMUtils.newRequestSummary(RequestStatus.SUCCESS, 0, 0, null));
         }
 
+        T elementToUpdate;
         String vmid = SVMUtils.getVmid(newElement);
         T oldElement = dbHandler.getByVmId((Class<T>) newElement.getClass(), vmid);
         if (oldElement == null){
@@ -148,20 +149,25 @@ public class SVMSyncHandler<T extends TBase> {
         }
 
         // TODO: find a better way to implement it than "if... else ", maybe this helps: http://onoffswitch.net/simplifying-class-matching-java-8/
-        if (VMComponent.class.isAssignableFrom(newElement.getClass()))
-            oldElement = (T) SVMMapper.updateComponent((VMComponent) oldElement, (VMComponent) newElement);
-        else if (VMAction.class.isAssignableFrom(newElement.getClass()))
-            oldElement = (T) SVMMapper.updateAction((VMAction) oldElement, (VMAction) newElement);
-        else if (VMPriority.class.isAssignableFrom(newElement.getClass()))
-            oldElement = (T) SVMMapper.updatePriority((VMPriority) oldElement, (VMPriority) newElement);
-        else if (Vulnerability.class.isAssignableFrom(newElement.getClass()))
-            oldElement = (T) VulnerabilityMapper.updateVulnerability((Vulnerability) oldElement, (Vulnerability) newElement);
-        else
-            throw new IllegalArgumentException("unknown type "+ newElement.getClass().getSimpleName());
+        if (VMComponent.class.isAssignableFrom(newElement.getClass())) {
+            elementToUpdate = (T) SVMMapper.updateComponent((VMComponent) oldElement, (VMComponent) newElement);
+        } else if (VMAction.class.isAssignableFrom(newElement.getClass())) {
+            elementToUpdate = (T) SVMMapper.updateAction((VMAction) oldElement, (VMAction) newElement);
+        } else if (VMPriority.class.isAssignableFrom(newElement.getClass())) {
+            elementToUpdate = (T) SVMMapper.updatePriority((VMPriority) oldElement, (VMPriority) newElement);
+        } else if (Vulnerability.class.isAssignableFrom(newElement.getClass())) {
+            elementToUpdate = (T) VulnerabilityMapper.updateVulnerability((Vulnerability) oldElement, (Vulnerability) newElement);
+        } else {
+            throw new IllegalArgumentException("unknown type " + newElement.getClass().getSimpleName());
+        }
 
-        RequestStatus requestStatus = dbHandler.update(oldElement);
-        String message = RequestStatus.FAILURE == requestStatus ? "failed to save updated element ("+oldElement.getClass()+")":null;
-        return new VMResult<>(SVMUtils.newRequestSummary(requestStatus, 1, 1, message));
+        if (!elementToUpdate.equals(oldElement)) {
+            RequestStatus requestStatus = dbHandler.update(elementToUpdate);
+            String message = RequestStatus.FAILURE == requestStatus ? "failed to save updated element ("+elementToUpdate.getClass()+")":null;
+            return new VMResult<>(SVMUtils.newRequestSummary(requestStatus, 1, 1, message));
+        }
+
+        return new VMResult<>(SVMUtils.newRequestSummary(RequestStatus.SUCCESS, 0, 0, null));
     }
 
     public VMResult<T> storeNewElement(String vmid){

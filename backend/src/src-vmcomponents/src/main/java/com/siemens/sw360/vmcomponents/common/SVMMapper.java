@@ -65,7 +65,7 @@ public class SVMMapper {
 
     public static VMAction updateAction(VMAction oldElement, VMAction update){
         if (oldElement != null && update != null){
-            return oldElement
+            return new VMAction(oldElement)
                     .setText(update.getText());
         }
         return oldElement;
@@ -75,7 +75,7 @@ public class SVMMapper {
         if (oldElement != null && json != null){
             String text = (String) json.get(SVMConstants.ACTION_TEXT);
 
-            return oldElement
+            return new VMAction(oldElement)
                     .setText(text);
         }
         return oldElement;
@@ -90,7 +90,7 @@ public class SVMMapper {
 
     public static VMPriority updatePriority(VMPriority oldElement, VMPriority update){
         if (oldElement != null && update != null){
-            return oldElement
+            return new VMPriority(oldElement)
                     .setLongText(update.getLongText())
                     .setShortText(update.getShortText());
         }
@@ -102,7 +102,7 @@ public class SVMMapper {
             String shortText = (String) json.get(SVMConstants.PRIORITY_SHORT);
             String longText = (String) json.get(SVMConstants.PRIORITY_LONG);
 
-            return oldElement
+            return new VMPriority(oldElement)
                     .setShortText(shortText)
                     .setLongText(longText);
         }
@@ -118,7 +118,7 @@ public class SVMMapper {
 
     public static VMComponent updateComponent(VMComponent oldElement, VMComponent update){
         if (oldElement != null && update != null){
-            return oldElement
+            return new VMComponent(oldElement)
                     .setName(update.getName())
                     .setCpe(update.getCpe())
                     .setEolReached(update.isEolReached())
@@ -143,7 +143,7 @@ public class SVMMapper {
             boolean eolReached = eol != null && eol;
             String cpe = (String) json.get(SVMConstants.COMPONENT_CPE);
 
-            return oldElement
+            return new VMComponent(oldElement)
                     .setVendor(vendor)
                     .setName(name)
                     .setVersion(version)
@@ -163,7 +163,6 @@ public class SVMMapper {
             String lastUpdate = mapSVMDate((String) json.get(SVMConstants.VULNERABILITY_LAST_UPDATE));
             Long priority = (Long) json.get(SVMConstants.VULNERABILITY_PRIORITY);
             Long action = (Long) json.get(SVMConstants.VULNERABILITY_ACTION);
-            String impact = (String) json.get(SVMConstants.VULNERABILITY_IMPACT);
             Set<String> compVmids = mapJSONStringArray((JSONArray) json.get(SVMConstants.VULNERABILITY_COMPONENTS));
             Set<VendorAdvisory> vas = mapJSONVendorAdvisories((JSONArray) json.get(SVMConstants.VULNERABILITY_VENDOR_ADVISORIES));
             String legalNotice = (String) json.get(SVMConstants.VULNERABILITY_LEGAL_NOTICE);
@@ -171,14 +170,13 @@ public class SVMMapper {
             Set<CVEReference> cveReferences = mapJSONCVEReferences((JSONArray) json.get(SVMConstants.VULNERABILITY_CVE_REFERENCES));
             Set<String> references = mapJSONStringArray((JSONArray) json.get(SVMConstants.VULNERABILITY_REFERENCES));
 
-            return oldElement
+            return new Vulnerability(oldElement)
                     .setTitle(title)
                     .setDescription(description)
                     .setPublishDate(publishDate)
-                    .setLastUpdateDate(lastUpdate)
+                    .setLastExternalUpdate(lastUpdate == null ? publishDate : lastUpdate)
                     .setPriority(priority==null?null:priority.toString())
                     .setAction(action==null?null:action.toString())
-//                    .setImpact(impact)
                     .setAssignedExtComponentIds(compVmids)
                     .setVendorAdvisories(vas)
                     .setLegalNotice(legalNotice)
