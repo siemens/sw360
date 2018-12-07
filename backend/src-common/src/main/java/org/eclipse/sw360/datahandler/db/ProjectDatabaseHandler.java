@@ -13,7 +13,12 @@ package org.eclipse.sw360.datahandler.db;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.*;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
+import org.apache.thrift.TException;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.businessrules.ReleaseClearingStateSummaryComputer;
 import org.eclipse.sw360.datahandler.common.*;
@@ -29,19 +34,25 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectWithReleaseRelationTuple;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserService;
+import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ProjectVulnerabilityRating;
 import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
 import org.ektorp.http.HttpClient;
+import org.jetbrains.annotations.NotNull;
 
+import java.io.*;
 import java.net.MalformedURLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.*;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.fail;
@@ -62,12 +73,16 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final Logger log = Logger.getLogger(ProjectDatabaseHandler.class);
     private static final int DELETION_SANITY_CHECK_THRESHOLD = 5;
     private static final String DUMMY_NEW_PROJECT_ID = "newproject";
+    public static final int SVMML_JSON_LOG_CUTOFF_LENGTH = 3000;
 
     private final ProjectRepository repository;
     private final ProjectVulnerabilityRatingRepository pvrRepository;
     private final ProjectModerator moderator;
     private final AttachmentConnector attachmentConnector;
     private final ComponentDatabaseHandler componentDatabaseHandler;
+    private static final User EMPTY_USER = new User().setId("").setEmail("").setExternalid("").setDepartment("").setLastname("").setGivenname("");
+
+    private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
     private final MailUtil mailUtil = new MailUtil();
 
     // this caching structure is only used for filling clearing state summaries and
@@ -511,7 +526,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     public List<ReleaseClearingStatusData> getReleaseClearingStatuses(String projectId, User user) throws SW360Exception {
         Project project = getProjectById(projectId, user);
         SetMultimap<String, ProjectWithReleaseRelationTuple> releaseIdsToProject = releaseIdToProjects(project, user);
-        List<Release> releasesById = componentDatabaseHandler.getFullReleases(releaseIdsToProject.keySet());
+        List<Release> releasesById = componentDatabaseHandler.getReleasesForClearingStateSummary(releaseIdsToProject.keySet());
         Map<String, Component> componentsById = ThriftUtils.getIdMap(
                 componentDatabaseHandler.getComponentsShort(
                         releasesById.stream().map(Release::getComponentId).collect(Collectors.toSet())));
@@ -743,5 +758,214 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 MailConstants.TEXT_FOR_UPDATE_PROJECT,
                 SW360Constants.NOTIFICATION_CLASS_PROJECT, Project._Fields.ROLES.toString(),
                 project.getName(), project.getVersion());
+    }
+
+
+    /**
+     * CAUTION!
+     * You should most probably use {@link #getAccessibleProjects(User)} instead of this method.
+     * This method reads all the projects without checking for visibility constraints. It is intended to provide
+     * all projects for export from a scheduled service, where a valid sw360 user is not available.
+     * This is a less than optimal situation, but that's the way it is at the moment.
+     * @return list of all projects in the database
+     */
+    private List<Project> getAllProjects() {
+        return nullToEmptyList(repository.getAll());
+    }
+
+    @NotNull
+    private JSONArray serializeProjectsToJson(List<Project> projects) {
+        JSONArray serializedProjects = JSONFactoryUtil.createJSONArray();
+        Map<String, Release> releaseMap = componentDatabaseHandler.getAllReleasesIdMap();
+        componentDatabaseHandler.fillVendors(releaseMap.values());
+        Map<String, Component> componentMap = componentDatabaseHandler.getAllComponentsIdMap();
+        for (Project p : projects) {
+            JSONObject json = JSONFactoryUtil.createJSONObject();
+            json.put("application_id", p.getId());
+            json.put("application_name", p.getName());
+            json.put("application_version", p.getVersion());
+            json.put("business_unit", p.getBusinessUnit());
+            json.put("user_gids", stringCollectionToJsonArray(nullToEmptySet(p.getSecurityResponsibles())));
+            json.put("children_application_ids", stringCollectionToJsonArray(nullToEmptyMap(p.getLinkedProjects()).keySet()));
+            json.put("components", serializeReleasesToJson(
+                    nullToEmptyMap(p.getReleaseIdToUsage())
+                    .keySet()
+                    .stream()
+                    .map(releaseMap::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()), componentMap));
+
+            serializedProjects.put(json);
+        }
+        return serializedProjects;
+    }
+
+    private JSONArray stringCollectionToJsonArray(Collection<String> strings) {
+        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+        strings.forEach(jsonArray::put);
+        return jsonArray;
+    }
+
+    private JSONArray serializeReleasesToJson(List<Release> releases, Map<String, Component> componentMap) {
+        JSONArray serializedReleases = JSONFactoryUtil.createJSONArray();
+        for (Release r: releases){
+            Component c = componentMap.get(r.getComponentId());
+            JSONObject json = JSONFactoryUtil.createJSONObject();
+            Map<String, String> externalIds = CommonUtils.nullToEmptyMap(r.getExternalIds());
+            json.put("external_component_id", r.getId());
+            putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get(SW360Constants.SIEMENS_SVM_COMPONENT_ID));
+            putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get(SW360Constants.SIEMENS_MAINLINE_COMPONENT_ID));
+            json.put("vendor", Optional.ofNullable(r.getVendor()).map(Vendor::getShortname).orElse(""));
+            json.put("name", r.getName());
+            json.put("version", r.getVersion());
+            if (c == null) {
+                log.warn(String.format("Parent component of release %s (%s) with id %s was not found", r.getName(), r.getId(), r.getComponentId()));
+            } else {
+                json.put("urls", getUrlsJson(r, c));
+                json.put("description", c.getDescription());
+            }
+            json.put("cpe_items", getReleaseCpeIdsJson(r));
+            serializedReleases.put(json);
+        }
+        return serializedReleases;
+    }
+
+    private void putExternalIdToJsonAsInteger(JSONObject json, String jsonKey, String extId){
+        if (extId == null){
+            json.put(jsonKey, (JSONObject) null);
+        }
+        try {
+            json.put(jsonKey, Integer.parseInt(extId));
+        } catch (NumberFormatException e){
+            json.put(jsonKey, (JSONObject) null);
+        }
+    }
+
+    private JSONArray putIfNotEmpty(JSONArray array, String value){
+        if (!isNullOrEmpty(value)){
+            array.put(value);
+        }
+        return array;
+    }
+    private JSONArray getReleaseCpeIdsJson(Release r) {
+        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+        putIfNotEmpty(jsonArray, r.getCpeid());
+        return jsonArray;
+    }
+
+    private JSONArray getUrlsJson(Release r, Component c) {
+        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+        putIfNotEmpty(jsonArray, c.getHomepage());
+        putIfNotEmpty(jsonArray, c.getBlog());
+        putIfNotEmpty(jsonArray, c.getWiki());
+        putIfNotEmpty(jsonArray, r.getDownloadurl());
+        return jsonArray;
+    }
+
+    public RequestStatus exportForMonitoringList() throws TException {
+        // load all projects
+        log.info("SVMML: Starting export of projects to SVM monitoring lists");
+        List<Project> allProjects = getAllProjects();
+        log.info("SVMML: successfully loaded " + allProjects.size() + " projects");
+        List<Project> projects = prepareProjectsForSVM(allProjects);
+        log.info("SVMML: after filtering out projects with missing security responsibles, " + projects.size() + " projects are left");
+        // serialize projects to json
+        JSONArray jsonResult = serializeProjectsToJson(projects);
+        String jsonString = jsonResult.toString();
+        log.info("SVMML: projects serialized to JSON string. String length: " + jsonString.length());
+        log.info("SVMML: JSON starts with: " + StringUtils.abbreviate(jsonString, SVMML_JSON_LOG_CUTOFF_LENGTH));
+
+        // send json to svm
+        try {
+            new SvmConnector().sendProjectExportForMonitoringLists(jsonString);
+            log.info("SVMML: sent JSON to SVM");
+        } catch (IOException | SW360Exception e) {
+            log.error(e);
+            return RequestStatus.FAILURE;
+        }
+
+        return RequestStatus.SUCCESS;
+    }
+
+    private List<Project> prepareProjectsForSVM(List<Project> projects) throws TException {
+        Map<String, String> gidsByEmail = getGidsByEmail();
+
+        // convert all security responsibles to gids
+        projects.forEach(p -> {
+            Set<String> emails = nullToEmptySet(p.getSecurityResponsibles());
+            Set<String> gids = emails
+                    .stream()
+                    .map(gidsByEmail::get)
+                    .filter(Objects::nonNull)
+                    .filter(s -> PLAUSIBLE_GID_REGEXP.matcher(s).matches())
+                    .collect(Collectors.toSet());
+            if (emails.size() != gids.size()){
+                log.warn("SVMML: couldn't find gids for some of the emails from project " + SW360Utils.printName(p) + " " + p.getId());
+            }
+            p.setSecurityResponsibles(gids);
+
+            // Here comes the tricky part.
+            // If SVM is disabled, clear security responsibles, but enable SVM.
+            // This way, the project will be sent to SVM only if it gets some propagated secreps
+            // from parent projects and only the propagated secreps will get the notifications.
+            // At the same time, only projects that had enableSVM from the start or subprojects of such projects
+            // will be sent to SVM.
+            if (!p.isEnableSvm()){
+                p.setSecurityResponsibles(Collections.emptySet());
+                p.setEnableSvm(true);
+            }
+        });
+
+        // create copies for propagating responsibles to
+        // propagating directly to originals will cause unnecessary propagation when the iteration comes to
+        // the subprojects
+        List<Project> projectCopies = projects.stream().map(Project::new).collect(Collectors.toList());
+        Map<String, Project> projectsById = ThriftUtils.getIdMap(projectCopies);
+
+        // propagate security responsibles' gids to subprojects
+        // take the responsibles from the original projects, not the copies
+        projects.forEach(p -> {
+            Set<String> responsibles = nullToEmptySet(p.getSecurityResponsibles());
+            Set<String> linkedProjectIds = nullToEmptyMap(p.getLinkedProjects()).keySet();
+            if (!responsibles.isEmpty() && !linkedProjectIds.isEmpty()) {
+                propagateSecurityResponsiblesToLinkedProjects(responsibles, linkedProjectIds, projectsById, new HashSet<>());
+            }
+        });
+
+        // return the copies, not the originals
+        return projects
+                .stream()
+                .map(p -> projectsById.get(p.getId()))
+                .filter(p -> p.isSetSecurityResponsibles() && !p.getSecurityResponsibles().isEmpty())
+                .filter(Project::isEnableSvm)
+                .collect(Collectors.toList());
+    }
+
+    private void propagateSecurityResponsiblesToLinkedProjects(Set<String> responsibles, Set<String> linkedProjectIds, Map<String, Project> projectsById, HashSet<String> visitedIds) {
+        linkedProjectIds.stream().map(projectsById::get).filter(Objects::nonNull).forEach(p -> {
+            if (!visitedIds.contains(p.getId())) {
+                Set<String> currentResponsibles = nullToEmptySet(p.getSecurityResponsibles());
+                currentResponsibles.addAll(responsibles);
+                p.setSecurityResponsibles(currentResponsibles);
+                visitedIds.add(p.getId());
+                propagateSecurityResponsiblesToLinkedProjects(responsibles, nullToEmptyMap(p.getLinkedProjects()).keySet(), projectsById, visitedIds);
+            }
+        });
+    }
+
+    private Map<String, String> getGidsByEmail() throws TException {
+        ThriftClients thriftClients = new ThriftClients();
+        UserService.Iface userClient = thriftClients.makeUserClient();
+        Map<String, String> gidByEmail = new HashMap<>();
+        userClient
+                .getAllUsers()
+                .stream()
+                .filter(User::isSetExternalid)
+                .forEach(user -> {
+                    gidByEmail.put(user.getEmail(), user.getExternalid());
+                    nullToEmptySet(user.getFormerEmailAddresses())
+                            .forEach(email -> gidByEmail.put(email, user.getExternalid()));
+                });
+        return gidByEmail;
     }
 }

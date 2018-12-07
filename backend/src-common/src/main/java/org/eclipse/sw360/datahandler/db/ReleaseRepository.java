@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2013-2017. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -12,19 +12,16 @@ package org.eclipse.sw360.datahandler.db;
 
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.SummaryAwareRepository;
-import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.ektorp.ViewQuery;
 import org.ektorp.support.View;
 import org.ektorp.support.Views;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -34,6 +31,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
  *
  * @author cedric.bodet@tngtech.com
  * @author Johannes.Najjar@tngtech.com
+ * @author stefan.jaeger@evosoft.com
  */
 @Views({
         @View(name = "all",
@@ -62,6 +60,12 @@ import static com.google.common.base.Strings.isNullOrEmpty;
                     "      emit(doc.componentId, doc);" +
                     "  }" +
                     "}"),
+        @View(name = "releaseIdsByVendorId",
+                map = "function(doc) {" +
+                        " if (doc.type == 'release'){" +
+                        "      emit(doc.vendorId, doc._id);" +
+                        "  }" +
+                        "}"),
         @View(name = "releaseIdsByLicenseId",
                 map = "function(doc) {" +
                       "  if (doc.type == 'release'){" +
@@ -81,6 +85,37 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 
 })
 public class ReleaseRepository extends SummaryAwareRepository<Release> {
+
+    private static final String BY_LOWERCASE_RELEASE_CPE_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.cpeid != null) {" +
+                    "    emit(doc.cpeid.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String RELEASES_BY_SVM_ID_RELEASE_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.externalIds) {" +
+                    "    var svmId = doc.externalIds['" + SW360Constants.SIEMENS_SVM_COMPONENT_ID + "'];" +
+                    "    if (svmId != null) {" +
+                    "      emit(svmId, doc._id);" +
+                    "    }" +
+                    "  } " +
+                    "}";
+
+    private static final String BY_LOWERCASE_RELEASE_NAME_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.name != null) {" +
+                    "    emit(doc.name.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
+
+    private static final String BY_LOWERCASE_RELEASE_VERSION_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'release' && doc.version != null) {" +
+                    "    emit(doc.version.toLowerCase(), doc._id);" +
+                    "  } " +
+                    "}";
 
     public ReleaseRepository(DatabaseConnector db, VendorRepository vendorRepository) {
         super(Release.class, db, new ReleaseSummary(vendorRepository));
@@ -128,14 +163,42 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, queryView("releasesByComponentId", id), user);
     }
 
+    public List<Release> getReleasesIgnoringNotFound(Collection<String> ids) {
+        return getConnector().get(Release.class, ids, true);
+    }
+
     public List<Release> getReleasesFromVendorIds(Set<String> ids) {
 
         return makeSummaryFromFullDocs(SummaryType.SHORT, queryByIds("releaseIdByVendorId", ids));
     }
 
+    public Set<String> getReleaseIdsFromVendorIds(Set<String> ids) {
+        return queryForIds("releaseIdsByVendorId", ids);
+    }
+
     public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
 
         return queryView("releaseIdsByLicenseId", licenseId);
+    }
+
+    @View(name = "releaseBySvmId", map = RELEASES_BY_SVM_ID_RELEASE_VIEW)
+    public Set<String> getReleaseIdsBySvmId(String svmId) {
+        return queryForIdsAsValue("releaseBySvmId", svmId != null ? svmId.toLowerCase() : svmId);
+    }
+
+    @View(name = "releaseByCpeId", map = BY_LOWERCASE_RELEASE_CPE_VIEW)
+    public Set<String> getReleaseByLowercaseCpe(String cpeid) {
+        return queryForIdsAsValue("releaseByCpeId", cpeid != null ? cpeid.toLowerCase() : cpeid);
+    }
+
+    @View(name = "releaseByName", map = BY_LOWERCASE_RELEASE_NAME_VIEW)
+    public Set<String> getReleaseByLowercaseNamePrefix(String namePrefix) {
+        return queryForIdsByPrefix("releaseByName", namePrefix != null ? namePrefix.toLowerCase() : namePrefix);
+    }
+
+    @View(name = "releaseByVersion", map = BY_LOWERCASE_RELEASE_VERSION_VIEW)
+    public Set<String> getReleaseByLowercaseVersionPrefix(String versionPrefix) {
+        return queryForIdsByPrefix("releaseByVersion", versionPrefix != null ? versionPrefix.toLowerCase() : versionPrefix);
     }
 
     public Set<Release> searchByExternalIds(Map<String, Set<String>> externalIds) {
