@@ -21,9 +21,7 @@ import org.ektorp.ViewQuery;
 import org.ektorp.support.View;
 import org.ektorp.support.Views;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -75,7 +73,16 @@ import static com.google.common.base.Strings.isNullOrEmpty;
                       "      emit(doc.mainLicenseIds[i], doc);" +
                       "    }" +
                       "  }" +
-                      "}")
+                        "}"),
+        @View(name = "byExternalIds",
+                map = "function(doc) {" +
+                        "  if (doc.type == 'release') {" +
+                        "    for (var externalId in doc.externalIds) {" +
+                        "       emit( [externalId, doc.externalIds[externalId]] , doc._id);" +
+                        "    }" +
+                        "  }" +
+                        "}")
+
 })
 public class ReleaseRepository extends SummaryAwareRepository<Release> {
 
@@ -156,7 +163,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, queryView("releasesByComponentId", id), user);
     }
 
-    public List<Release> getReleasesIgnoringNotFound(Collection<String> ids){
+    public List<Release> getReleasesIgnoringNotFound(Collection<String> ids) {
         return getConnector().get(Release.class, ids, true);
     }
 
@@ -165,7 +172,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return makeSummaryFromFullDocs(SummaryType.SHORT, queryByIds("releaseIdByVendorId", ids));
     }
 
-   public Set<String> getReleaseIdsFromVendorIds(Set<String> ids) {
+    public Set<String> getReleaseIdsFromVendorIds(Set<String> ids) {
         return queryForIds("releaseIdsByVendorId", ids);
     }
 
@@ -192,5 +199,10 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     @View(name = "releaseByVersion", map = BY_LOWERCASE_RELEASE_VERSION_VIEW)
     public Set<String> getReleaseByLowercaseVersionPrefix(String versionPrefix) {
         return queryForIdsByPrefix("releaseByVersion", versionPrefix != null ? versionPrefix.toLowerCase() : versionPrefix);
+    }
+
+    public Set<Release> searchByExternalIds(Map<String, Set<String>> externalIds) {
+        Set<String> ids = queryForIdsAsComplexValues("byExternalIds", externalIds);
+        return new HashSet<>(get(ids));
     }
 }
