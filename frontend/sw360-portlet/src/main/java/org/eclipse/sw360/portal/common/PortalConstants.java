@@ -206,6 +206,13 @@ public class PortalConstants {
     public static final String VULNERABILITY_VERIFICATION_TOOLTIPS = "vulnerabilityVerificationTooltips";
     public static final String VULNERABILITY_VERIFICATIONS = "vulnerabilityVerifications";
     public static final String VULNERABILITY_MATCHED_BY_HISTOGRAM = "vulnerabilityMatchedByHistogram";
+    public static final String VM_MESSAGE = "vmMessage";
+    public static final String VM_PROCESS = "vmProcess";
+    public static final String VM_PROCESS_ID = "vmProcessId";
+    public static final String VM_PROCESS_LIST = "vmProcessList";
+    public static final String VM_MATCH_ID = "vmMatchId";
+    public static final String VM_MATCH_STATE = "vmMatchState";
+    public static final String VM_MATCH_LIST = "vmMatchList";
 
     //! Specialized keys for account sign-up
     public static final String PASSWORD = "password";
@@ -226,6 +233,23 @@ public class PortalConstants {
     public static final String CVESEARCH_OFFSET = "cvesearchOffset";
     public static final String CVESEARCH_INTERVAL = "cvesearchInterval";
     public static final String CVESEARCH_NEXT_SYNC = "cvesearchNextSync";
+
+    public static final String SVMSYNC_IS_SCHEDULED = "svmSyncIsScheduled";
+    public static final String SVMSYNC_OFFSET = "svmSyncOffset";
+    public static final String SVMSYNC_INTERVAL = "svmSyncInterval";
+    public static final String SVMSYNC_NEXT_SYNC = "svmSyncNextSync";
+    public static final String SVMMATCH_IS_SCHEDULED = "svmMatchIsScheduled";
+    public static final String SVMMATCH_OFFSET = "svmMatchOffset";
+    public static final String SVMMATCH_INTERVAL = "svmMatchInterval";
+    public static final String SVMMATCH_NEXT_SYNC = "svmMatchNextSync";
+    public static final String SVM_LIST_UPDATE_IS_SCHEDULED = "svmListUpdateIsScheduled";
+    public static final String SVM_LIST_UPDATE_OFFSET = "svmListUpdateOffset";
+    public static final String SVM_LIST_UPDATE_INTERVAL = "svmListUpdateInterval";
+    public static final String SVM_LIST_UPDATE_NEXT_SYNC = "svmListUpdateNextSync";
+    public static final String SVM_TRACKING_FEEDBACK_IS_SCHEDULED = "trackingFeedbackIsScheduled";
+    public static final String SVM_TRACKING_FEEDBACK_OFFSET = "trackingFeedbackOffset";
+    public static final String SVM_TRACKING_FEEDBACK_INTERVAL = "trackingFeedbackInterval";
+    public static final String SVM_TRACKING_FEEDBACK_NEXT_SYNC = "trackingFeedbackNextSync";
 
     //! Specialized keys for licenseInfo
     public static final String LICENSE_INFO_OUTPUT_FORMATS = "licenseInfoOutputFormats";
@@ -353,6 +377,13 @@ public class PortalConstants {
     public static final String UPDATE_VULNERABILITIES__FAILED_IDS = "updateVulnerabilities_failedIds";
     public static final String UPDATE_VULNERABILITIES__NEW_IDS = "updateVulnerabilities_newIds";
     public static final String UPDATE_VULNERABILITIES__UPDATED_IDS = "updateVulnerabilities_updatedIds";
+
+    // vulnerability management actions
+    public static final String VM_SYNC_COMPONENTS = "synchronizeComponents";
+    public static final String VM_REVERSE_MATCH = "reverseMatch";
+    public static final String VM_MATCH_ACCEPT = "acceptMatch";
+    public static final String VM_MATCH_DECLINE = "declineMatch";
+    public static final String VM_MATCH_GET_LIST = "getMatches";
 
     // Excel export
     public static final String EXPORT_TO_EXCEL = "export_to_excel";
