@@ -202,7 +202,8 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public Set<Release> searchByExternalIds(Map<String, Set<String>> externalIds) {
-        Set<String> ids = queryForIdsAsComplexValues("byExternalIds", externalIds);
-        return new HashSet<>(get(ids));
+        RepositoryUtils repositoryUtils = new RepositoryUtils();
+        Set<String> searchIds = repositoryUtils.searchByExternalIds(this, "byExternalIds", externalIds);
+        return new HashSet<>(get(searchIds));
     }
 }

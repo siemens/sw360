@@ -18,6 +18,7 @@ import java.util.Set;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.Visibility;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ECCStatus;
@@ -125,6 +126,13 @@ class JacksonCustomizations {
                 "setClearingTeam",
                 "setPreevaluationDeadline",
                 "setSystemTestStart",
+                "setClearingSummary",
+                "setObligationsText",
+                "setSpecialRisksOSS",
+                "setGeneralRisks3rdParty",
+                "setSpecialRisks3rdParty",
+                "setDeliveryChannels",
+                "setRemarksAdditionalRequirements",
                 "setSystemTestEnd",
                 "setDeliveryStart",
                 "setPhaseOutSince",
@@ -167,6 +175,10 @@ class JacksonCustomizations {
             @JsonSerialize(using = JsonReleaseRelationSerializer.class)
             @JsonProperty("linkedReleases")
             abstract public Map<String, ProjectReleaseRelationship> getReleaseIdToUsage();
+
+            @Override
+            @JsonProperty("visibility")
+            abstract public Visibility getVisbility();
 
             @Override
             @JsonProperty("id")
@@ -485,6 +497,7 @@ class JacksonCustomizations {
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonIgnoreProperties({
+                "id",
                 "revision",
                 "type",
                 "externalId",
@@ -514,6 +527,8 @@ class JacksonCustomizations {
                 "referencesSize",
                 "setPriorityToolTip",
                 "setCveReferences",
+                "assignedExtComponentIdsIterator",
+                "vendorAdvisoriesIterator",
                 "setIntReleaseId",
                 "cveReferencesSize",
                 "setDescription",
@@ -548,6 +563,7 @@ class JacksonCustomizations {
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonIgnoreProperties({
+                "id",
                 "revision",
                 "type",
                 "publishDate",
@@ -605,6 +621,8 @@ class JacksonCustomizations {
                 "setExtendedDescription",
                 "vulnerableConfigurationSize",
                 "assignedExtComponentIdsSize",
+                "assignedExtComponentIdsIterator",
+                "vendorAdvisoriesIterator",
                 "vendorAdvisoriesSize",
                 "setVendorAdvisories",
                 "cveFurtherMetaDataPerSourceSize",
