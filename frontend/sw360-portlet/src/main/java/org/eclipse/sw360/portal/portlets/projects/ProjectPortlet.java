@@ -26,7 +26,10 @@ import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
 import org.apache.thrift.protocol.TSimpleJSONProtocol;
-import org.eclipse.sw360.datahandler.common.*;
+import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
@@ -63,7 +66,10 @@ import java.io.PrintWriter;
 import java.net.URLConnection;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -809,9 +815,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Map<String, Set<String>> filterMap = new HashMap<>();
         for (Project._Fields filteredField : projectFilteredFields) {
             String parameter = request.getParameter(filteredField.toString());
-            if (!isNullOrEmpty(parameter)) {
+            if (!isNullOrEmpty(parameter) && !((filteredField.equals(Project._Fields.PROJECT_TYPE) || filteredField.equals(Project._Fields.STATE))
+                    && parameter.equals(PortalConstants.NO_FILTER))) {
                 Set<String> values = CommonUtils.splitToSet(parameter);
-                if (filteredField.equals(Project._Fields.NAME)) {
+                if (filteredField.equals(Project._Fields.NAME) || filteredField.equals(Project._Fields.VERSION)) {
                     values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
                 }
                 filterMap.put(filteredField.getFieldName(), values);
@@ -836,6 +843,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
         request.setAttribute(DOCUMENT_ID, id);
         request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
+        request.setAttribute(DEFAULT_OBLIGATIONS_TEXT, getProjectDefaultObligationsText());
         if (id != null) {
             try {
                 ProjectService.Iface client = thriftClients.makeProjectClient();
@@ -1057,6 +1065,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Set<Project> usingProjects;
         int allUsingProjectCount = 0;
         request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
+        request.setAttribute(DEFAULT_OBLIGATIONS_TEXT, getProjectDefaultObligationsText());
 
         if (id != null) {
 
@@ -1256,6 +1265,17 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         try {
             String defaultLicenseInfoHeaderText = licenseInfoClient.getDefaultLicenseInfoHeaderText();
             return defaultLicenseInfoHeaderText;
+        } catch (TException e) {
+            log.error("Could not load default license info header text from backend.", e);
+            return "";
+        }
+    }
+
+    private String getProjectDefaultObligationsText() {
+        final LicenseInfoService.Iface licenseInfoClient = thriftClients.makeLicenseInfoClient();
+        try {
+            String defaultObligationsText = licenseInfoClient.getDefaultObligationsText();
+            return defaultObligationsText;
         } catch (TException e) {
             log.error("Could not load default license info header text from backend.", e);
             return "";

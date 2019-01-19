@@ -1,5 +1,6 @@
 /*
  * Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
+ * With contributions by Siemens Healthcare Diagnostics Inc, 2018.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -23,6 +24,8 @@ import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.ThriftClients;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 
 import java.io.IOException;
@@ -40,6 +43,7 @@ import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
  * @author Johannes.Najjar@tngtech.com
  * @author alex.borodin@evosoft.com
  * @author thomas.maier@evosoft.com
+ * @author ksoranko@verifa.io
  */
 public class ProjectHandler implements ProjectService.Iface {
 
@@ -69,7 +73,7 @@ public class ProjectHandler implements ProjectService.Iface {
     public List<Project> getMyProjects(String user) throws TException {
         assertNotEmpty(user);
 
-        return handler.getMyProjectsSummary(user);
+        return handler.getMyProjectsFull(user);
     }
 
     @Override

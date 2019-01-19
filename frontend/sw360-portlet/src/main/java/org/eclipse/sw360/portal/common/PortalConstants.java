@@ -12,6 +12,7 @@
 package org.eclipse.sw360.portal.common;
 
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 
 import java.util.Properties;
 import java.util.Set;
@@ -157,7 +158,9 @@ public class PortalConstants {
     public static final String PAGENAME_SOURCE_CODE_BUNDLE = "generateSourceCodeBundle";
     public static final String PROJECT_ROLES;
     public static final String DEFAULT_LICENSE_INFO_HEADER_TEXT = "defaultLicenseInfoHeaderText";
+    public static final String DEFAULT_OBLIGATIONS_TEXT = "defaultObligationsText";
     public static final String DEFAULT_LICENSE_INFO_HEADER_TEXT_FOR_DISPALY = "--default text--";
+    public static final String DEFAULT_OBLIGATIONS_TEXT_FOR_DISPALY = "--default text--";
     public static final Set<String> PROJECT_EXTERNAL_ID_KEYS;
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES = "selectedAttachmentUsages";
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES_SHADOWS = "selectedAttachmentUsagesShadows";
@@ -381,6 +384,14 @@ public class PortalConstants {
     //
     public static String PROJECTIMPORT_HOSTS;
 
+    // Rest API constants
+    public static final UserGroup API_WRITE_ACCESS_USERGROUP;
+    public static final Boolean API_TOKEN_ENABLE_GENERATOR;
+    public static final String API_TOKEN_MAX_VALIDITY_READ_IN_DAYS;
+    public static final String API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS;
+    public static final String API_TOKEN_HASH_SALT;
+    public static final String API_TOKEN_ID = "tokenId";
+
     // CodeScoop integration
     public static final String CODESCOOP_URL;
     public static final String CODESCOOP_TOKEN;
@@ -406,6 +417,14 @@ public class PortalConstants {
         PROJECTIMPORT_HOSTS = props.getProperty("projectimport.hosts", "");
         PREFERRED_COUNTRY_CODES = props.getProperty("preferred.country.codes", "DE,AT,CH,US");
 
+        // SW360 REST API Constants
+        API_TOKEN_ENABLE_GENERATOR = Boolean.parseBoolean(props.getProperty("rest.apitoken.generator.enable", "false"));
+        API_TOKEN_MAX_VALIDITY_READ_IN_DAYS = props.getProperty("rest.apitoken.read.validity.days", "90");
+        API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS = props.getProperty("rest.apitoken.write.validity.days", "30");
+        API_TOKEN_HASH_SALT = props.getProperty("rest.apitoken.hash.salt", "$2a$04$Software360RestApiSalt");
+        API_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", UserGroup.ADMIN.name()));
+
+        // CodesScoop Constants
         CODESCOOP_URL = props.getProperty("codescoop.url", "");
         CODESCOOP_TOKEN = props.getProperty("codescoop.token", "");
     }

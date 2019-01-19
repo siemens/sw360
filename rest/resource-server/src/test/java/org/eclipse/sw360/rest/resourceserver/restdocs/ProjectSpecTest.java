@@ -72,7 +72,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     private Project project;
     private Attachment attachment;
-    private Map<String, Set<String>> externalIds;
+
 
     @Before
     public void before() throws TException {
@@ -90,7 +90,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         Map<String, ProjectRelationship> linkedProjects = new HashMap<>();
         ProjectReleaseRelationship projectReleaseRelationship = new ProjectReleaseRelationship(CONTAINED, MAINLINE);
 
-        externalIds = new HashMap<>();
+        Map<String, Set<String>> externalIds = new HashMap<>();
         externalIds.put("portal-id", new HashSet<>(Arrays.asList("13319-XX3")));
         externalIds.put("project-ext", new HashSet<>(Arrays.asList("515432", "7657")));
 
@@ -115,6 +115,13 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project.setPreevaluationDeadline("2018-07-17");
         project.setSystemTestStart("2017-01-01");
         project.setSystemTestEnd("2018-03-01");
+        project.setObligationsText("Lorem Ipsum");
+        project.setClearingSummary("Lorem Ipsum");
+        project.setSpecialRisksOSS("Lorem Ipsum");
+        project.setGeneralRisks3rdParty("Lorem Ipsum");
+        project.setSpecialRisks3rdParty("Lorem Ipsum");
+        project.setDeliveryChannels("Lorem Ipsum");
+        project.setRemarksAdditionalRequirements("Lorem Ipsum");
         linkedReleases.put("3765276512", projectReleaseRelationship);
         project.setReleaseIdToUsage(linkedReleases);
         linkedProjects.put("376576", ProjectRelationship.CONTAINED);
@@ -122,6 +129,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         projectList.add(project);
         projectListByName.add(project);
         project.setAttachments(attachmentList);
+
 
         Project project2 = new Project();
         project2.setId("376570");
@@ -140,6 +148,13 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project2.setPreevaluationDeadline("2018-07-17");
         project2.setSystemTestStart("2017-01-01");
         project2.setSystemTestEnd("2018-03-01");
+        project2.setObligationsText("Lorem Ipsum");
+        project2.setClearingSummary("Lorem Ipsum");
+        project2.setSpecialRisksOSS("Lorem Ipsum");
+        project2.setGeneralRisks3rdParty("Lorem Ipsum");
+        project2.setSpecialRisks3rdParty("Lorem Ipsum");
+        project2.setDeliveryChannels("Lorem Ipsum");
+        project2.setRemarksAdditionalRequirements("Lorem Ipsum");
         Map<String, String> projExtKeys = new HashMap();
         projExtKeys.put("mainline-id-project", "7657");
         projExtKeys.put("portal-id", "13319-XX3");
@@ -158,6 +173,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.projectServiceMock.searchProjectByName(eq(project.getName()), anyObject())).willReturn(projectListByName);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), anyObject(), eq("false"))).willReturn(releaseIds);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), anyObject(), eq("true"))).willReturn(releaseIdsTransitive);
+        given(this.projectServiceMock.convertToEmbeddedWithExternalIds(eq(project))).willReturn(project);
+        given(this.projectServiceMock.convertToEmbeddedWithExternalIds(eq(project2))).willReturn(project2);
 
         Release release = new Release();
         release.setId("3765276512");
@@ -241,6 +258,13 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("ownerAccountingUnit").description("The owner accounting unit of the project"),
                                 fieldWithPath("ownerGroup").description("The owner group of the project"),
                                 fieldWithPath("ownerCountry").description("The owner country of the project"),
+                                fieldWithPath("obligationsText").description("The obligations text of the project"),
+                                fieldWithPath("clearingSummary").description("The clearing summary text of the project"),
+                                fieldWithPath("specialRisksOSS").description("The special risks OSS text of the project"),
+                                fieldWithPath("generalRisks3rdParty").description("The general risks 3rd party text of the project"),
+                                fieldWithPath("specialRisks3rdParty").description("The special risks 3rd party text of the project"),
+                                fieldWithPath("deliveryChannels").description("The sales and delivery channels text of the project"),
+                                fieldWithPath("remarksAdditionalRequirements").description("The remark additional requirements text of the project"),
                                 fieldWithPath("tag").description("The project tag"),
                                 fieldWithPath("deliveryStart").description("The project delivery start date"),
                                 fieldWithPath("preevaluationDeadline").description("The project preevaluation deadline"),

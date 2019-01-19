@@ -1,6 +1,7 @@
 <!--
   ~ Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
   ~ With contributions by Bosch Software Innovations GmbH, 2016.
+  ~ With contributions by Siemens Healthcare Diagnostics Inc, 2018.
   ~
   ~ SPDX-License-Identifier: EPL-1.0
   ~
@@ -988,6 +989,18 @@
     </tag>
 
     <tag>
+        <name>DisplayApiTokenExpireDate</name>
+        <tag-class>org.eclipse.sw360.portal.tags.DisplayApiTokenExpireDate</tag-class>
+        <body-content>empty</body-content>
+        <attribute>
+            <name>token</name>
+            <required>true</required>
+            <type>org.eclipse.sw360.datahandler.thrift.users.RestApiToken</type>
+            <rtexprvalue>true</rtexprvalue>
+        </attribute>
+    </tag>
+
+    <tag>
         <name>DisplayDownloadAttachmentBundle</name>
         <tag-class>org.eclipse.sw360.portal.tags.links.DisplayDownloadAttachmentBundle</tag-class>
         <body-content>empty</body-content>
@@ -1061,12 +1074,9 @@
     </tag>
 
     <tag>
-        <name>DisplayReleaseClearingStateSummary</name>
-        <tag-class>org.eclipse.sw360.portal.tags.DisplayReleaseClearingStateSummary</tag-class>
+        <name>DisplayAcceptedReleases</name>
+        <tag-class>org.eclipse.sw360.portal.tags.DisplayAcceptedReleases</tag-class>
         <body-content>empty</body-content>
-        <description>
-            wraps ReleaseClearingStateSummary
-        </description>
         <attribute>
             <name>releaseClearingStateSummary</name>
             <required>true</required>
@@ -1112,6 +1122,23 @@
     <tag>
         <name>DisplayLicenseInfoHeader</name>
         <tag-class>org.eclipse.sw360.portal.tags.DisplayLicenseInfoHeader</tag-class>
+        <body-content>empty</body-content>
+        <attribute>
+            <name>project</name>
+            <required>true</required>
+            <type>org.eclipse.sw360.datahandler.thrift.projects.Project</type>
+            <rtexprvalue>true</rtexprvalue>
+        </attribute>
+        <attribute>
+            <name>defaultText</name>
+            <required>true</required>
+            <type>java.lang.String</type>
+            <rtexprvalue>true</rtexprvalue>
+        </attribute>
+    </tag>
+        <tag>
+        <name>DisplayObligations</name>
+        <tag-class>org.eclipse.sw360.portal.tags.DisplayObligations</tag-class>
         <body-content>empty</body-content>
         <attribute>
             <name>project</name>

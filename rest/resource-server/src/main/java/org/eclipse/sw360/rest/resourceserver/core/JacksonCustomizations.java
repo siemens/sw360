@@ -125,6 +125,13 @@ class JacksonCustomizations {
                 "setClearingTeam",
                 "setPreevaluationDeadline",
                 "setSystemTestStart",
+                "setClearingSummary",
+                "setObligationsText",
+                "setSpecialRisksOSS",
+                "setGeneralRisks3rdParty",
+                "setSpecialRisks3rdParty",
+                "setDeliveryChannels",
+                "setRemarksAdditionalRequirements",
                 "setSystemTestEnd",
                 "setDeliveryStart",
                 "setPhaseOutSince",
@@ -195,7 +202,11 @@ class JacksonCustomizations {
                 "formerEmailAddressesSize",
                 "formerEmailAddressesIterator",
                 "setFormerEmailAddresses",
-                "setCommentMadeDuringModerationRequest"
+                "setCommentMadeDuringModerationRequest",
+                "restApiTokens",
+                "restApiTokensSize",
+                "setRestApiTokens",
+                "restApiTokensIterator"
         })
         static abstract class UserMixin extends User {
             @Override
