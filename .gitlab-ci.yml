@@ -1,11 +1,11 @@
 image: maven:latest
 
 stages:
-  - build
-  - deploy
+- build
+- deploy
 
 services:
-  - couchdb:1.7.1
+- couchdb:1.7.1
 
 variables:
   PACKAGE_STORE_PATH: "/home/${SSH_PACKAGE_USER}/cipackages/${CI_COMMIT_REF_SLUG}"
@@ -19,7 +19,7 @@ build_sw360:
     - .m2/repository/
   script:
   - mkdir -p /vagrant_shared/packages/
-  - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.9.3.tar.gz -O /vagrant_shared/packages/thrift-0.9.3.tar.gz
+  - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.11.0.tar.gz -O /vagrant_shared/packages/thrift-0.11.0.tar.gz
   - export http_proxy=http://194.138.0.3:9400
   - export https_proxy=http://194.138.0.3:9400
   - export no_proxy='couchdb'
@@ -52,41 +52,40 @@ build_sw360:
 
 deploy_sw360:
   tags:
-    - VLAN
+  - VLAN
   allow_failure: true
   stage: deploy
   environment:
     name: BLR-test
     url: "http://${SSH_TEST_DEPLOY_SERVER}"
   when: manual
-#  dependencies:
-#    - build_sw360
+  #  dependencies:
+  #    - build_sw360
   before_script:
-    - echo "Running deploy_sw360"
+  - echo "Running deploy_sw360"
   script:
-    # adding host key to list of known hosts
-    - mkdir -p ~/.ssh
-    - ssh-keyscan -H ${SSH_TEST_DEPLOY_SERVER} >> ~/.ssh/known_hosts
-    - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
-    - echo "${SSH_DEPLOY_KEY}" > ~/deploykey
-    - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
-    - chmod 600 ~/deploykey && chmod 600 ~/packagekey
-    - eval $(ssh-agent -s)
-    - ssh-add ~/deploykey
-    - ssh-add ~/packagekey
-    - ssh-add -L
-    - echo "Acquire::http::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
-    - echo "Acquire::https::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
-    - apt-get -qq update && apt-get -qq install -y rsync
-    # copying the packages
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "mkdir -p ${DEPLOY_STORE_PATH}/"
-    - rsync -htzv -e "ssh" ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/packages.tar.gz .
-    - rsync -htzv -e "ssh" ./packages.tar.gz ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER}:${DEPLOY_STORE_PATH}/packages.tar.gz
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "tar -xzvf ${DEPLOY_STORE_PATH}/packages.tar.gz -C ${DEPLOY_STORE_PATH}"
-    # logging in, install the wars and restart tomcat
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/*.war ${SSH_LIFERAY_DEPLOY_PATH}"
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/*.war ${SSH_LIFERAY_WEBAPP_PATH}"
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "rm -rf ${DEPLOY_STORE_PATH}/packages/"
-    - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh"
-    - (sleep 1m && ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/startup.sh")
-
+  # adding host key to list of known hosts
+  - mkdir -p ~/.ssh
+  - ssh-keyscan -H ${SSH_TEST_DEPLOY_SERVER} >> ~/.ssh/known_hosts
+  - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
+  - echo "${SSH_DEPLOY_KEY}" > ~/deploykey
+  - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
+  - chmod 600 ~/deploykey && chmod 600 ~/packagekey
+  - eval $(ssh-agent -s)
+  - ssh-add ~/deploykey
+  - ssh-add ~/packagekey
+  - ssh-add -L
+  - echo "Acquire::http::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
+  - echo "Acquire::https::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
+  - apt-get -qq update && apt-get -qq install -y rsync
+  # copying the packages
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "mkdir -p ${DEPLOY_STORE_PATH}/"
+  - rsync -htzv -e "ssh" ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/packages.tar.gz .
+  - rsync -htzv -e "ssh" ./packages.tar.gz ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER}:${DEPLOY_STORE_PATH}/packages.tar.gz
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "tar -xzvf ${DEPLOY_STORE_PATH}/packages.tar.gz -C ${DEPLOY_STORE_PATH}"
+  # logging in, install the wars and restart tomcat
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/*.war ${SSH_LIFERAY_DEPLOY_PATH}"
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/*.war ${SSH_LIFERAY_WEBAPP_PATH}"
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "rm -rf ${DEPLOY_STORE_PATH}/packages/"
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh"
+  - (sleep 1m && ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/startup.sh")
