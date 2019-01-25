@@ -312,7 +312,7 @@
         <instanceable>false</instanceable>
         <header-portlet-css>/css/main.css</header-portlet-css>
         <header-portlet-javascript>/js/main.js</header-portlet-javascript>
-        <header-portlet-javascript>/webjars/jquery/1.12.4/jquery.min.js</header-portlet-javascript>
+        <header-portlet-javascript>/webjars/jquery/dist/jquery.min.js</header-portlet-javascript>
     </portlet>
 
     <portlet>
