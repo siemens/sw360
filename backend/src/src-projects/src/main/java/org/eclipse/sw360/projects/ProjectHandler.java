@@ -29,10 +29,7 @@ import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
 
@@ -256,6 +253,11 @@ public class ProjectHandler implements ProjectService.Iface {
     @Override
     public List<ReleaseClearingStatusData> getReleaseClearingStatuses(String projectId, User user) throws TException {
         return handler.getReleaseClearingStatuses(projectId, user);
+    }
+
+    @Override
+    public RequestStatus exportForMonitoringList() throws TException {
+        return handler.exportForMonitoringList();
     }
 
     @Override

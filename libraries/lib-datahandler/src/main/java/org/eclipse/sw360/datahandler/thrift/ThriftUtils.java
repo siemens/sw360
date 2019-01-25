@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.siemens.sw360.datahandler.thrift.vmcomponents.*;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TFieldIdEnum;
@@ -61,6 +62,8 @@ public class ThriftUtils {
             .add(ModerationRequest.class) // Moderation service‚
             .add(FossologyHostFingerPrint.class) // Fossology service
             .add(Vulnerability.class, ReleaseVulnerabilityRelation.class, ProjectVulnerabilityRating.class) // Vulnerability Service
+//            .add(Vulnerability.class, ReleaseVulnerabilityRelation.class) // Vulnerability Service
+            .add(VMPriority.class, VMAction.class, VMComponent.class, VMProcessReporting.class, VMMatch.class) // Vulnerability Monitoring service
             .build();
 
     public static final List<Class<?>> THRIFT_NESTED_CLASSES = ImmutableList.<Class<?>>builder()
@@ -74,6 +77,8 @@ public class ThriftUtils {
             .add(ClearingInformation.class) // Component service
             .add(CVEReference.class, VendorAdvisory.class, VulnerabilityCheckStatus.class) // Vulnerability Service
             .add(VerificationStateInfo.class)
+//            .add(CVEReference.class, VendorAdvisory.class) // Vulnerability Service
+            .add(VMMinPatchLevel.class)  // Vulnerability Monitoring service
             .build();
 
     public static final Map<Class<?>, JsonDeserializer<?>> CUSTOM_DESERIALIZER = ImmutableMap.of(
