@@ -1,4 +1,4 @@
-image: maven:latest
+image: maven:3-jdk-8
 
 stages:
 - build
@@ -35,7 +35,7 @@ build_sw360:
   - workdir=$(pwd)
   - mkdir -p packages/deploy
   - mkdir -p packages/webapps
-  - mvn install -Pdeploy -Ddeploy.dir=${workdir}/packages/deploy -Dwebapps.dir=${workdir}/packages/webapps -Dmaven.repo.local=.m2/repository
+  - mvn --batch-mode install -Pdeploy -Ddeploy.dir=${workdir}/packages/deploy -Dwebapps.dir=${workdir}/packages/webapps -Dmaven.repo.local=.m2/repository
   - tar -czvf packages.tar.gz packages
   - mkdir -p ~/.ssh
   - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
