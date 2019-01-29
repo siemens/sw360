@@ -63,11 +63,6 @@ public class VMProcessHandler {
     private static final ConcurrentHashMap<String, SVMSyncHandler> syncHandlersBusy = new ConcurrentHashMap<>(SVMConstants.PROCESSING_CORE_POOL_SIZE);
     private static final Map<String, Vendor> vendorCache = new HashMap<>();
 
-//    private static final ConcurrentHashMap<Reporting, Integer> processReporting = new ConcurrentHashMap<>();
-//    private static Date processStart;
-//    private static Date processEnd;
-//    private static long processingTime;
-
     private VMProcessHandler(){}
 
     public static <T extends TBase> void getVulnerabilitiesByComponentId(String componentId, String url, boolean triggerVulMasterData){
@@ -272,96 +267,4 @@ public class VMProcessHandler {
             default: throw new IllegalArgumentException("unknown task '"+task+"'. do not know what to do :( ");
         }
     }
-
-//    private static synchronized void reporting(ProcessTask task, Reporting reporting) throws SW360Exception {
-//        assertNotNull(task);
-//        switch(task){
-//            case START:
-//                processReporting.clear();
-//                processStart = new Date();
-//                processEnd = null;
-//                processingTime = 0L;
-//                break;
-//            case FINISH:
-//                assertNotNull(reporting);
-//                Integer count = processReporting.get(reporting);
-//                if (count == null){
-//                    count = 0;
-//                }
-//                count++;
-////                pro
-//                break;
-//
-//        }
-//    }
-
-    // Reporting:   GetIds: #totalGet #error
-    //              StoreNew: #totalNew #new #error
-    //              Cleanup: #deleted #error
-    //              MD: #totalMD #updated #error
-    //              Match: #totalMatch #MatchCPE #MatchL3/L2/L1 #error
-    //              Vul: #total #newvul #updated #deleted #error
-//    private enum ReportingType{
-//        TOTAL,
-//        ERROR,
-//        NEW,
-//        DELETED,
-//        UPDATED,
-//        IN_PROGRESS
-//    }
-
-//    private class Reporting{
-//        public Reporting(Class<?> elementType, VMMatchType matchType) {
-//            this.elementType = elementType;
-//            this.matchType = matchType;
-//        }
-//
-//        public Reporting(Class<?> elementType, ReportingType reportingType, VMProcessType processType) {
-//
-//            this.elementType = elementType;
-//            this.reportingType = reportingType;
-//            this.processType = processType;
-//        }
-//
-//        Class<?> elementType = null;
-//        ReportingType reportingType = null;
-//        VMProcessType processType = null;
-//        VMMatchType matchType = null;
-//
-//        @Override
-//        public boolean equals(Object o) {
-//            if (this == o) return true;
-//            if (o == null || getClass() != o.getClass()) return false;
-//
-//            Reporting reporting = (Reporting) o;
-//
-//            if (elementType != null ? !elementType.equals(reporting.elementType) : reporting.elementType != null)
-//                return false;
-//            if (reportingType != reporting.reportingType) return false;
-//            if (processType != reporting.processType) return false;
-//            return matchType == reporting.matchType;
-//
-//        }
-//
-//        @Override
-//        public int hashCode() {
-//            int result = elementType != null ? elementType.hashCode() : 0;
-//            result = 31 * result + (reportingType != null ? reportingType.hashCode() : 0);
-//            result = 31 * result + (processType != null ? processType.hashCode() : 0);
-//            result = 31 * result + (matchType != null ? matchType.hashCode() : 0);
-//            return result;
-//        }
-//
-//        @Override
-//        public String toString() {
-//            final StringBuffer sb = new StringBuffer("Reporting{");
-//            sb.append("elementType=").append(elementType);
-//            sb.append(", reportingType=").append(reportingType);
-//            sb.append(", processType=").append(processType);
-//            sb.append(", matchType=").append(matchType);
-//            sb.append('}');
-//            return sb.toString();
-//        }
-//    }
-
 }

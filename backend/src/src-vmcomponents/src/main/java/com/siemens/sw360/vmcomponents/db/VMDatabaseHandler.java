@@ -189,15 +189,15 @@ public class VMDatabaseHandler extends VulnerabilityDatabaseHandler {
             return null;
         }
         if (VMComponent.class.isAssignableFrom(type))
-            return (Set<String>) compRepo.getAllIds();
+            return compRepo.getAllIds();
         else if (VMAction.class.isAssignableFrom(type))
-            return (Set<String>) actionRepo.getAllIds();
+            return actionRepo.getAllIds();
         else if (VMPriority.class.isAssignableFrom(type))
-            return (Set<String>) prioRepo.getAllIds();
+            return prioRepo.getAllIds();
         else if (VMProcessReporting.class.isAssignableFrom(type))
-            return (Set<String>) processRepo.getAllIds();
+            return processRepo.getAllIds();
         else if (VMMatch.class.isAssignableFrom(type))
-            return (Set<String>) matchRepo.getAllIds();
+            return matchRepo.getAllIds();
         else
             return super.getAllIds(type);
     }
@@ -227,11 +227,11 @@ public class VMDatabaseHandler extends VulnerabilityDatabaseHandler {
             return null;
         }
         if (VMComponent.class.isAssignableFrom(type))
-            return (Set<String>) compRepo.getAllVmids();
+            return compRepo.getAllVmids();
         else if (VMAction.class.isAssignableFrom(type))
-            return (Set<String>) actionRepo.getAllVmids();
+            return actionRepo.getAllVmids();
         else if (VMPriority.class.isAssignableFrom(type))
-            return (Set<String>) prioRepo.getAllVmids();
+            return prioRepo.getAllVmids();
         else
             return super.getAllExternalIds(type);
     }

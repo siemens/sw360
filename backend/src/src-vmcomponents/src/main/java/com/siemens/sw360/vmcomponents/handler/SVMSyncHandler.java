@@ -65,6 +65,7 @@ public class SVMSyncHandler<T extends TBase> {
     private static final Logger log = getLogger(SVMSyncHandler.class);
     private static final String MATCH_KEY_SEPARATOR = "___";
     private static final ImmutableSet<VMMatchState> MATCH_STATES_WORTH_SAVING = ImmutableSet.of(VMMatchState.ACCEPTED, VMMatchState.DECLINED, VMMatchState.MATCHING_LEVEL_3);
+    private static final ImmutableSet<VMMatchType> MATCH_TYPES_NAME_VERSION_VENDOR = ImmutableSet.of(VMMatchType.NAME_CR, VMMatchType.VERSION_CR, VMMatchType.VENDOR_CR);
 
     private final VMDatabaseHandler dbHandler;
     private ComponentDatabaseHandler compDB = null;
@@ -306,8 +307,8 @@ public class SVMSyncHandler<T extends TBase> {
         return vul;
     }
 
-    private void evaluateMatchState(VMMatch match, VMMatchType newMatchType){
-        if (newMatchType == null || VMMatchState.ACCEPTED.equals(match.getState())){
+    private void evaluateMatchState(VMMatch match, Set<VMMatchType> newMatchTypes) {
+        if (newMatchTypes == null || VMMatchState.ACCEPTED.equals(match.getState())) {
             // null is nonsense and if it is ACCEPTED, don't forget it
             return;
         }
@@ -315,13 +316,13 @@ public class SVMSyncHandler<T extends TBase> {
 
         if (matchTypes.contains(VMMatchType.CPE)
                 || matchTypes.contains(VMMatchType.SVM_ID)
-                || matchTypes.contains(newMatchType)){
+                || matchTypes.containsAll(newMatchTypes)) {
             // no changes required, because no new information are available
             return;
         }
 
         // add new info
-        matchTypes.add(newMatchType);
+        matchTypes.addAll(newMatchTypes);
         match.setMatchTypes(matchTypes);
 
         // clarify state
@@ -357,13 +358,13 @@ public class SVMSyncHandler<T extends TBase> {
         }
     }
 
-    private void evaluateDBMatches(String componentId, String releaseId, VMMatchType matchType, HashMap<String, VMMatch> knownMatches){
+    private void evaluateDBMatches(String componentId, String releaseId, Set<VMMatchType> matchTypes, HashMap<String, VMMatch> knownMatches) {
         if (!StringUtils.isEmpty(releaseId) && !StringUtils.isEmpty(componentId)){
             VMMatch match = knownMatches.getOrDefault(getMatchKey(componentId, releaseId), dbHandler.getMatchByIds(releaseId, componentId));
             if (match == null){
                 match = new VMMatch(componentId, releaseId, new HashSet<>(), null);
             }
-            evaluateMatchState(match, matchType);
+            evaluateMatchState(match, matchTypes);
             knownMatches.put(getMatchKey(match.getVmComponentId(), match.getReleaseId()), match);
         }
     }
@@ -373,18 +374,18 @@ public class SVMSyncHandler<T extends TBase> {
         return componentId + MATCH_KEY_SEPARATOR + releaseId;
     }
 
-    private void evaluateDBMatches(VMComponent component, Set<String> releaseIds, VMMatchType matchType, HashMap<String, VMMatch> knownMatches){
+    private void evaluateDBMatches(VMComponent component, Set<String> releaseIds, Set<VMMatchType> matchTypes, HashMap<String, VMMatch> knownMatches) {
         if (releaseIds != null){
             for (String releaseId:releaseIds) {
-                evaluateDBMatches(component.getId(), releaseId, matchType, knownMatches);
+                evaluateDBMatches(component.getId(), releaseId, matchTypes, knownMatches);
             }
         }
     }
 
-    private void evaluateDBMatches(Release release, Set<String> componentIds, VMMatchType matchType, HashMap<String, VMMatch> knownMatches){
+    private void evaluateDBMatches(Release release, Set<String> componentIds, Set<VMMatchType> matchTypes, HashMap<String, VMMatch> knownMatches) {
         if (componentIds != null){
             for (String componentId:componentIds) {
-                evaluateDBMatches(componentId, release.getId(), matchType, knownMatches);
+                evaluateDBMatches(componentId, release.getId(), matchTypes, knownMatches);
             }
         }
     }
@@ -419,7 +420,7 @@ public class SVMSyncHandler<T extends TBase> {
         String svmCpe = component.getCpe();
         if (!StringUtils.isEmpty(svmCpe)) {
             Set<String> releaseIds = compDB.getReleaseIdsByCpeCaseInsensitive(svmCpe);
-            evaluateDBMatches(component, releaseIds, VMMatchType.CPE, knownMatches);
+            evaluateDBMatches(component, releaseIds, Collections.singleton(VMMatchType.CPE), knownMatches);
         }
         // stop matching if the CPE matches
         if (knownMatches.size() > 0){
@@ -429,36 +430,37 @@ public class SVMSyncHandler<T extends TBase> {
         String svmId = component.getVmid();
         if (!StringUtils.isEmpty(svmId)) {
             Set<String> releaseIds = compDB.getReleaseIdsBySvmId(svmId);
-            evaluateDBMatches(component, releaseIds, VMMatchType.SVM_ID, knownMatches);
+            evaluateDBMatches(component, releaseIds, Collections.singleton(VMMatchType.SVM_ID), knownMatches);
         }
         // stop matching if the SVM id matches
         if (knownMatches.size() > 0){
             return finalizeAndSuccess(component, knownMatches);
         }
 
-        // match by name from svm component to sw360 release
+        // match by name, version and vendor from svm component to sw360 release
+        Set<String> matchedByName = Collections.emptySet();
         String svmName = component.getName();
         if (!StringUtils.isEmpty(svmName)) {
-            Set<String> releaseIds = compDB.getReleaseIdsByNamePrefixCaseInsensitive(svmName);
-            evaluateDBMatches(component, releaseIds, VMMatchType.NAME_CR, knownMatches);
+            matchedByName = compDB.getReleaseIdsByNamePrefixCaseInsensitive(svmName);
         }
 
-        // match by version from svm component to sw360 release
+        Set<String> matchedByVersion = Collections.emptySet();
         String svmVersion = component.getVersion();
         if (!StringUtils.isEmpty(svmVersion)) {
-            Set<String> releaseIds = compDB.getReleaseIdsByVersionPrefixCaseInsensitive(svmVersion);
-            evaluateDBMatches(component, releaseIds, VMMatchType.VERSION_CR, knownMatches);
+            matchedByVersion = compDB.getReleaseIdsByVersionPrefixCaseInsensitive(svmVersion);
         }
 
-        // match by vendor from svm component to sw360 release
+        Set<String> matchedByVendor = Collections.emptySet();
         String svmVendor = component.getVendor();
         if (!StringUtils.isEmpty(svmVendor)) {
             Set<String> vendorIds = compDB.getVendorIdsByNamePrefixCaseInsensitive(svmVendor);
-            if (vendorIds != null && !vendorIds.isEmpty()){
-                Set<String> releaseIds = compDB.getReleaseIdsByVendorIds(vendorIds);
-                evaluateDBMatches(component, releaseIds, VMMatchType.VENDOR_CR, knownMatches);
+            if (vendorIds != null && !vendorIds.isEmpty()) {
+                matchedByVendor = compDB.getReleaseIdsByVendorIds(vendorIds);
             }
         }
+
+        Set<String> matchedReleaseIds = Sets.intersection(Sets.intersection(matchedByName, matchedByVersion), matchedByVendor);
+        evaluateDBMatches(component, matchedReleaseIds, MATCH_TYPES_NAME_VERSION_VENDOR, knownMatches);
         return finalizeAndSuccess(component, knownMatches);
     }
 
@@ -495,47 +497,35 @@ public class SVMSyncHandler<T extends TBase> {
                 // CPE Match is not necessary for the reverse match because it is an exact match and is done via VMComponent match
 
                 // match by name from sw360 release to svm component (reverse)
+                Set<String> matchedByName = Collections.emptySet();
                 String name = release.getName();
-                if (StringUtils.isEmpty(name) && !StringUtils.isEmpty(release.getComponentId())) {
-                    try {
-                        Component component = compDB.getComponent(release.getComponentId(), null);
-                        if (component != null) {
-                            name = component.getName();
-                        }
-                    } catch (SW360Exception e) {
-                        // nothing to do
-                        log.error(e.getMessage(), e);
-                    }
-                }
                 if (!StringUtils.isEmpty(name)) {
-                    Set<String> componentIds = dbHandler.getComponentIdsByNamePrefixCaseInsensitive(name);
-                    evaluateDBMatches(release, componentIds, VMMatchType.NAME_RC, knownMatches);
+                    matchedByName = dbHandler.getComponentIdsByNamePrefixCaseInsensitive(name);
                 }
 
                 // match by version from sw360 release to svm component (reverse)
+                Set<String> matchedByVersion = Collections.emptySet();
                 String version = release.getVersion();
                 if (!StringUtils.isEmpty(version)) {
-                    Set<String> componentIds = dbHandler.getComponentIdsByVersionPrefixCaseInsensitive(version);
-                    evaluateDBMatches(release, componentIds, VMMatchType.VERSION_RC, knownMatches);
+                    matchedByVersion = dbHandler.getComponentIdsByVersionPrefixCaseInsensitive(version);
                 }
 
                 // match by vendor from sw360 release to svm component (reverse)
-                String vendorName = null;
+                Set<String> matchedByVendor = Collections.emptySet();
                 Vendor vendor = release.getVendor();
                 if (vendor != null) {
-                    vendorName = vendor.getShortname();
-                }
-                if (!StringUtils.isEmpty(vendorName)) {
-                    Set<String> componentIds = dbHandler.getComponentIdsByVendorPrefixCaseInsensitive(vendorName);
-                    evaluateDBMatches(release, componentIds, VMMatchType.VENDOR_RC, knownMatches);
-                }
-                if (vendor != null) {
+                    String vendorName = vendor.getShortname();
+                    if (!StringUtils.isEmpty(vendorName)) {
+                        matchedByVendor = dbHandler.getComponentIdsByVendorPrefixCaseInsensitive(vendorName);
+                    }
                     vendorName = vendor.getFullname();
+                    if (!StringUtils.isEmpty(vendorName)) {
+                        matchedByVendor.addAll(dbHandler.getComponentIdsByVendorPrefixCaseInsensitive(vendorName));
+                    }
                 }
-                if (!StringUtils.isEmpty(vendorName)) {
-                    Set<String> componentIds = dbHandler.getComponentIdsByVendorPrefixCaseInsensitive(vendorName);
-                    evaluateDBMatches(release, componentIds, VMMatchType.VENDOR_RC, knownMatches);
-                }
+
+                Set<String> matchedComponentIds = Sets.intersection(Sets.intersection(matchedByName, matchedByVersion), matchedByVendor);
+                evaluateDBMatches(release, matchedComponentIds, MATCH_TYPES_NAME_VERSION_VENDOR, knownMatches);
             }
             finalizeMatches(knownMatches.values());
             List<String> componentIds = getComponentIdsOfMatches(knownMatches.values());
@@ -684,5 +674,4 @@ public class SVMSyncHandler<T extends TBase> {
         }
         return Collections.emptySet();
     }
-
 }
