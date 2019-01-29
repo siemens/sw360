@@ -547,6 +547,9 @@ hr, .separator {
 	display: inline;
 	border-bottom: none;
 }
+.pageHeaderRedSpan {
+	color: red;
+}
 
 div.content1 {
 	padding: 0px;

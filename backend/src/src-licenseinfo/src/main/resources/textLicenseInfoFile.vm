@@ -9,7 +9,7 @@ Open Source Software
 ====================
 $licenseInfoHeader
 
-Open Source Software Contained in this Product/Device:
+Open Source Software and/or other third-party software contained in this Product:
 ======================================================
 #foreach($releaseName in $licenseInfoResults.keySet()) #set($errorResults=[])
 * $releaseName #foreach($errorResult in $licenseInfoErrorResults.get($releaseName))
@@ -18,11 +18,10 @@ Open Source Software Contained in this Product/Device:
 
 #end
 
-
 #if($licenseInfoResults.keySet().size() > 0)
 Details
 ========
-
+Please note the following license conditions and copyright notices applicable to Open Source Software and/or other components (or parts thereof):
 ##
 ##
 ## Copyrights
@@ -101,7 +100,7 @@ Open Source Software Licenses
 ##
 #set($licenseText = "<no license text available>")
 #if($license.licenseText)
-#set($licenseText = $license.licenseText)
+#set($licenseText = $esc.xml($license.licenseText))
 #end## if($license.licenseText)
 ##
 #set($licenseId = $licenseNameWithTextToReferenceId.get($license))
