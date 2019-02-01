@@ -278,6 +278,9 @@ abstract public class Sw360Portlet extends MVCPortlet {
             // just break to not throw an exception, error message has to be set by caller
             // because of type specific error messages
             break;
+        case DUPLICATE_ATTACHMENT:
+            setSW360SessionError(request, ErrorMessages.DUPLICATE_ATTACHMENT);
+            break;
         default:
             throw new PortletException("Unknown request status");
         }
