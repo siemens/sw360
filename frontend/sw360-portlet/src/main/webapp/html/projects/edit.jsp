@@ -51,6 +51,7 @@
     <jsp:useBean id="releaseList" type="java.util.List<org.eclipse.sw360.datahandler.thrift.components.ReleaseLink>"  scope="request"/>
     <jsp:useBean id="attachments" type="java.util.Set<org.eclipse.sw360.datahandler.thrift.attachments.Attachment>" scope="request"/>
     <jsp:useBean id="defaultLicenseInfoHeaderText" class="java.lang.String" scope="request" />
+    <jsp:useBean id="defaultObligationsText" class="java.lang.String" scope="request" />
 
     <core_rt:set  var="addMode"  value="${empty project.id}" />
 </c:catch>
@@ -61,8 +62,8 @@
 <c:set var="hasWritePermissions" value="${project.permissions[WRITE]}"/>
 
 <core_rt:if test="${empty attributeNotFoundException}">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/github-com-craftpip-jquery-confirm/3.0.1/jquery-confirm.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/themes/base/jquery-ui.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-confirm2/dist/jquery-confirm.min.css">
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/dataTable_Siemens.css">
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">
 
@@ -243,12 +244,19 @@ require(['jquery', 'modules/sw360Validate', 'modules/confirm' ], function($, sw3
 
     function submitForm() {
         disableLicenseInfoHeaderTextIfNecessary();
+        disableObligationsTextIfNecessary();
         $('#projectEditForm').submit();
     }
 
     function disableLicenseInfoHeaderTextIfNecessary() {
         if($('#licenseInfoHeaderText').val() == $('#licenseInfoHeaderText').data("defaulttext")) {
             $('#licenseInfoHeaderText').prop('disabled', true);
+        }
+    }
+
+    function disableObligationsTextIfNecessary() {
+        if($('#obligationsText').val() == $('#obligationsText').data("defaulttext")) {
+            $('#obligationsText').prop('disabled', true);
         }
     }
 });

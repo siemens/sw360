@@ -12,13 +12,11 @@ package org.eclipse.sw360.rest.resourceserver.core;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.log4j.Logger;
+import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.resourcelists.PaginationOptions;
-import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
-import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
-import org.eclipse.sw360.datahandler.resourcelists.ResourceComparatorGenerator;
+import org.apache.thrift.TFieldIdEnum;
+import org.eclipse.sw360.datahandler.resourcelists.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -26,6 +24,7 @@ import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentController;
 import org.eclipse.sw360.rest.resourceserver.component.ComponentController;
 import org.eclipse.sw360.rest.resourceserver.license.LicenseController;
@@ -44,10 +43,18 @@ import org.springframework.data.domain.Sort;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.PagedResources;
 import org.springframework.hateoas.Resource;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
+import org.springframework.hateoas.Resources;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.hateoas.core.EmbeddedWrapper;
+import org.springframework.hateoas.core.EmbeddedWrappers;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import javax.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -56,10 +63,10 @@ import java.util.*;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
-public class RestControllerHelper {
+public class RestControllerHelper<T> {
+
     @NonNull
     private final Sw360UserService userService;
 
@@ -70,7 +77,10 @@ public class RestControllerHelper {
     private final Sw360LicenseService licenseService;
 
     @NonNull
-    private final ResourceComparatorGenerator resourceComparatorGenerator = new ResourceComparatorGenerator();
+    private final ResourceComparatorGenerator<T> resourceComparatorGenerator = new ResourceComparatorGenerator<>();
+
+    @NonNull
+    private final ResourceListController<T> resourceListController = new ResourceListController<>();
 
     private static final Logger LOGGER = Logger.getLogger(RestControllerHelper.class);
 
@@ -81,20 +91,55 @@ public class RestControllerHelper {
     private static final String PAGINATION_PARAM_PAGE = "page";
     public static final String PAGINATION_PARAM_PAGE_ENTRIES = "page_entries";
 
-    public User getSw360UserFromAuthentication(OAuth2Authentication oAuth2Authentication) {
-        String userId = oAuth2Authentication.getName();
-        return userService.getUserByEmail(userId);
+    public User getSw360UserFromAuthentication() {
+        try {
+            String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            return userService.getUserByEmail(userId);
+        } catch (RuntimeException e) {
+            throw new AuthenticationServiceException("Could not load user from authentication.");
+        }
     }
 
-    public PagedResources generatePagesResource(PaginationResult paginationResult, List resources) throws URISyntaxException {
+    public PaginationResult<T> createPaginationResult(HttpServletRequest request, Pageable pageable, List<T> resources, String resourceType) throws ResourceClassNotFoundException, PaginationParameterException {
+        PaginationResult<T> paginationResult;
+        if (requestContainsPaging(request)) {
+            PaginationOptions<T> paginationOptions = paginationOptionsFromPageable(pageable, resourceType);
+            paginationResult = resourceListController.applyPagingToList(resources, paginationOptions);
+        } else {
+            paginationResult = new PaginationResult<>(resources);
+        }
+        return paginationResult;
+    }
+
+    private boolean requestContainsPaging(HttpServletRequest request) {
+        return request.getParameterMap().containsKey(PAGINATION_PARAM_PAGE) || request.getParameterMap().containsKey(PAGINATION_PARAM_PAGE_ENTRIES);
+    }
+
+    public <T extends TBase<?, ? extends TFieldIdEnum>> Resources<Resource<T>> generatePagesResource(PaginationResult paginationResult, List<Resource<T>> resources) throws URISyntaxException {
+        if (paginationResult.isPagingActive()) {
+            PagedResources.PageMetadata pageMetadata = createPageMetadata(paginationResult);
+            List<Link> pagingLinks = this.getPaginationLinks(paginationResult, this.getAPIBaseUrl());
+            return new PagedResources<>(resources, pageMetadata, pagingLinks);
+        } else {
+            return new Resources<>(resources);
+        }
+    }
+
+    public PagedResources emptyPageResource(Class resourceClass, PaginationResult paginationResult) {
+        EmbeddedWrappers embeddedWrappers = new EmbeddedWrappers(true);
+        EmbeddedWrapper embeddedWrapper = embeddedWrappers.emptyCollectionOf(resourceClass);
+        List<EmbeddedWrapper> list = Collections.singletonList(embeddedWrapper);
+        PagedResources.PageMetadata pageMetadata = createPageMetadata(paginationResult);
+        return new PagedResources<>(list, pageMetadata, new ArrayList<>());
+    }
+
+    private PagedResources.PageMetadata createPageMetadata(PaginationResult paginationResult) {
         PaginationOptions paginationOptions = paginationResult.getPaginationOptions();
-        List<Link> pagingLinks = this.getPaginationLinks(paginationResult, this.getAPIBaseUrl());
-        PagedResources.PageMetadata pageMetadata = new PagedResources.PageMetadata(
+        return new PagedResources.PageMetadata(
                 paginationOptions.getPageSize(),
                 paginationOptions.getPageNumber(),
                 paginationResult.getTotalCount(),
                 paginationResult.getTotalPageCount());
-        return new PagedResources<>(resources, pageMetadata, pagingLinks);
     }
 
     private List<Link> getPaginationLinks(PaginationResult paginationResult, String baseUrl) {
@@ -126,17 +171,17 @@ public class RestControllerHelper {
                 uri.getFragment()).toString();
     }
 
-    public PaginationOptions paginationOptionsFromPageable(Pageable pageable, String resourceClassName) throws ResourceClassNotFoundException {
-        Comparator comparator = this.comparatorFromPageable(pageable, resourceClassName);
-        return new PaginationOptions(pageable.getPageNumber(), pageable.getPageSize(), comparator);
+    private PaginationOptions<T> paginationOptionsFromPageable(Pageable pageable, String resourceClassName) throws ResourceClassNotFoundException {
+        Comparator<T> comparator = this.comparatorFromPageable(pageable, resourceClassName);
+        return new PaginationOptions<T>(pageable.getPageNumber(), pageable.getPageSize(), comparator);
     }
 
-    private Comparator comparatorFromPageable(Pageable pageable,  String resourceClassName) throws ResourceClassNotFoundException {
+    private Comparator<T> comparatorFromPageable(Pageable pageable,  String resourceClassName) throws ResourceClassNotFoundException {
         Sort.Order order = firstOrderFromPageable(pageable);
         if(order == null) {
             return resourceComparatorGenerator.generateComparator(resourceClassName);
         }
-        Comparator comparator = resourceComparatorGenerator.generateComparator(resourceClassName, order.getProperty());
+        Comparator<T> comparator = resourceComparatorGenerator.generateComparator(resourceClassName, order.getProperty());
         if(order.isDescending()) {
             comparator = comparator.reversed();
         }
@@ -392,6 +437,12 @@ public class RestControllerHelper {
         return embeddedUser;
     }
 
+    public Vendor convertToEmbeddedVendor(Vendor vendor) {
+        Vendor embeddedVendor = convertToEmbeddedVendor(vendor.getFullname());
+        embeddedVendor.setId(vendor.getId());
+        return embeddedVendor;
+    }
+
     public Vendor convertToEmbeddedVendor(String fullName) {
         Vendor embeddedVendor = new Vendor();
         embeddedVendor.setFullname(fullName);
@@ -410,5 +461,42 @@ public class RestControllerHelper {
         attachment.setCheckedComment(null);
         attachment.setCheckStatus(null);
         return attachment;
+    }
+
+    public Vulnerability convertToEmbeddedVulnerability(Vulnerability vulnerability) {
+        Vulnerability embeddedVulnerability = new Vulnerability(vulnerability.getExternalId());
+        embeddedVulnerability.setId(vulnerability.getId());
+        embeddedVulnerability.setTitle(vulnerability.getTitle());
+        return embeddedVulnerability;
+    }
+
+    /**
+     * Generic Entity response method to get externalIds (projects, components, releases)
+     */
+    public <T> ResponseEntity searchByExternalIds(MultiValueMap<String, String> externalIdsMultiMap,
+                                                  AwareOfRestServices<T> service,
+                                                  User user) throws TException {
+
+        Map<String, Set<String>> externalIds = getExternalIdsFromMultiMap(externalIdsMultiMap);
+        Set<T> sw360Objects = service.searchByExternalIds(externalIds, user);
+        List<Resource> resourceList = new ArrayList<>();
+
+        sw360Objects.forEach(sw360Object -> {
+            T embeddedResource = service.convertToEmbeddedWithExternalIds(sw360Object);
+            Resource<T> releaseResource = new Resource<>(embeddedResource);
+            resourceList.add(releaseResource);
+        });
+
+        Resources<Resource> resources = new Resources<>(resourceList);
+        return new ResponseEntity<>(resources, HttpStatus.OK);
+    }
+
+    private Map<String, Set<String>> getExternalIdsFromMultiMap(MultiValueMap<String, String> externalIdsMultiMap) {
+        Map<String, Set<String>> externalIds = new HashMap<>();
+        for (String externalIdKey : externalIdsMultiMap.keySet()) {
+            externalIds.put(externalIdKey, new HashSet<>(externalIdsMultiMap.get(externalIdKey)));
+        }
+
+        return externalIds;
     }
 }

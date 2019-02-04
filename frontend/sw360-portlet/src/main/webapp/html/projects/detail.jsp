@@ -29,6 +29,7 @@
     <jsp:useBean id="numberOfUncheckedVulnerabilities" type="java.lang.Integer" scope="request"/>
     <jsp:useBean id="numberOfVulnerabilities" type="java.lang.Integer" scope="request"/>
     <jsp:useBean id="defaultLicenseInfoHeaderText" class="java.lang.String" scope="request" />
+    <jsp:useBean id="defaultObligationsText" class="java.lang.String" scope="request" />
     <jsp:useBean id="licInfoAttUsages" type="java.util.Map<java.lang.String, org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage>" scope="request"/>
     <jsp:useBean id="sourceAttUsages" type="java.util.Map<java.lang.String, org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage>" scope="request"/>
     <jsp:useBean id="manualAttUsages" type="java.util.Map<java.lang.String, org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage>" scope="request"/>
@@ -37,7 +38,7 @@
 
 <core_rt:if test="${empty attributeNotFoundException}">
 
-    <link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.css">
+    <link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/themes/base/jquery-ui.min.css">
     <link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">
 
     <core_rt:set var="dontDisplayDeleteButton" value="true" scope="request"/>

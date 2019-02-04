@@ -21,19 +21,9 @@
     <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.DUPLICATES%>'/>
 </portlet:resourceURL>
 
-<portlet:resourceURL var="deleteAllLicenseInformationURL">
-    <portlet:param name="<%=PortalConstants.ACTION%>"
-                   value='<%=PortalConstants.ACTION_DELETE_ALL_LICENSE_INFORMATION%>'/>
-</portlet:resourceURL>
-
-<portlet:resourceURL var="importSpdxLicenseInformationURL">
-    <portlet:param name="<%=PortalConstants.ACTION%>"
-                   value='<%=PortalConstants.ACTION_IMPORT_SPDX_LICENSE_INFORMATION%>'/>
-</portlet:resourceURL>
-
-<script src="<%=request.getContextPath()%>/webjars/jquery/1.12.4/jquery.min.js"></script>
-<script src="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.min.js"></script>
-<script src="<%=request.getContextPath()%>/webjars/datatables/1.10.15/js/jquery.dataTables.min.js"></script>
+<script src="<%=request.getContextPath()%>/webjars/jquery/dist/jquery.min.js"></script>
+<script src="<%=request.getContextPath()%>/webjars/jquery-ui/jquery-ui.min.js"></script>
+<script src="<%=request.getContextPath()%>/webjars/datatables.net/js/jquery.dataTables.min.js"></script>
 
 <div id="header"></div>
 <p class="pageHeader"><span class="pageHeaderBigSpan">DB Administration</span></p>
@@ -52,18 +42,6 @@
                  width="25px" height="25px">
         </td>
     </tr>
-    <tr>
-        <td>Import all SPDX license information</td>
-        <td><a id="importSPDXLink" href="#">Import</a>
-        </td>
-    </tr>
-    <tr>
-        <td>Delete all license information</td>
-        <td><img src="<%=request.getContextPath()%>/images/Trash.png"
-                 alt="Delete all license information"
-                 onclick="deleteAllLicenseInformation()">
-        </td>
-    </tr>
     </tbody>
 </table>
 
@@ -71,8 +49,8 @@
 </div>
 
 <br/>
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/github-com-craftpip-jquery-confirm/3.0.1/jquery-confirm.min.css">
-<script src="<%=request.getContextPath()%>/webjars/github-com-craftpip-jquery-confirm/3.0.1/jquery-confirm.min.js" type="text/javascript"></script>
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-confirm2/dist/jquery-confirm.min.css">
+<script src="<%=request.getContextPath()%>/webjars/jquery-confirm2/dist/jquery-confirm.min.js" type="text/javascript"></script>
 <script>
     function findDuplicates() {
 
@@ -113,76 +91,7 @@
             });
         }
     }
-
-    function deleteAllLicenseInformation() {
-
-        function deleteAllLicenseInformationInternal() {
-            $.confirm({
-                title: "Delete",
-                content: function () {
-                    var self = this;
-                    return $.ajax({
-                        type: 'POST',
-                        url: '<%=deleteAllLicenseInformationURL%>',
-                        cache: false,
-                        dataType: 'json'
-                    }).done(function (data) {
-                        if (data.result == 'SUCCESS') {
-                            self.setTitle("Success");
-                            self.setContent("I deleted " + data.totalAffectedObjects + " of " + data.totalObjects + " total documents in the DB.");
-                        }else {
-                            self.setTitle("Failure");
-                            self.setContent("I could not delete the license information!");
-                        }
-                    }).fail(function(){
-                        self.setContent('Something went wrong.');
-                    });
-                }
-            });
-        }
-
-        var confirmMessage = "Do you really want to delete all licenses, license types, todos, obligations, risks, risk categories and todo custom properties from the db? " +
-                "\nN.B.: other documents might use the licenses." +
-                "\nThis function is meant to be followed by a new license import.";
-        deleteConfirmed(confirmMessage, deleteAllLicenseInformationInternal);
-    }
-
-    function importSpdxLicenseInformation() {
-
-        function importSpdxLicenseInformationInternal() {
-            $.confirm({
-                title: "Import",
-                content: function () {
-                    var self = this;
-                    return $.ajax({
-                        type: 'POST',
-                        url: '<%=importSpdxLicenseInformationURL%>',
-                        cache: false,
-                        dataType: 'json'
-                    }).done(function (data) {
-                        if (data.result == 'SUCCESS') {
-                            self.setTitle("Success");
-                            self.setContent("I imported " + data.totalAffectedObjects + " of " + data.totalObjects + " SPDX licenses. " + data.message);
-                        }else {
-                            self.setTitle("Failure");
-                            self.setContent("I could not import all SPDX license information!");
-                        }
-                    }).fail(function(){
-                        self.setContent('Something went wrong.');
-                    });
-                }
-            });
-        }
-
-        var confirmMessage = "Do you really want to import all SPDX licenses";
-        deleteConfirmed(confirmMessage, importSpdxLicenseInformationInternal);
-    }
-
-    window.onload = function() {
-        var a = document.getElementById("importSPDXLink");
-        a.onclick = importSpdxLicenseInformation;
-    }
 </script>
 
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/dataTable_Siemens.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/css/search.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">

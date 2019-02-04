@@ -17,21 +17,24 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.db.AttachmentDatabaseHandler;
+
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
+import org.eclipse.sw360.datahandler.db.AttachmentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
+import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
-import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.licenseinfo.outputGenerators.*;
 import org.eclipse.sw360.licenseinfo.parsers.*;
 import org.eclipse.sw360.licenseinfo.util.LicenseNameWithTextUtils;
+
+import org.apache.log4j.Logger;
+import org.apache.thrift.TException;
 
 import java.net.MalformedURLException;
 import java.util.*;
@@ -42,8 +45,8 @@ import java.util.stream.Collectors;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
-import static org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant.REPORT;
 import static org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant.DISCLOSURE;
+import static org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant.REPORT;
 
 /**
  * Implementation of the Thrift service
@@ -52,14 +55,17 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
     private static final Logger LOGGER = Logger.getLogger(LicenseInfoHandler.class);
     private static final int CACHE_TIMEOUT_MINUTES = 15;
     private static final int CACHE_MAX_ITEMS = 100;
-    private static final String DEFAULT_LICENSE_INFO_HEADER_FILE="/DefaultLicenseInfoHeader.txt";
-    private static final String DEFAULT_LICENSE_INFO_TEXT = loadDefaultLicenseInfoHeaderText();
+    private static final String DEFAULT_LICENSE_INFO_HEADER_FILE = "/DefaultLicenseInfoHeader.txt";
+    private static final String DEFAULT_LICENSE_INFO_TEXT = dropCommentedLine(DEFAULT_LICENSE_INFO_HEADER_FILE);
+    private static final String DEFAULT_OBLIGATIONS_FILE = "/DefaultObligations.txt";
+    private static final String DEFAULT_OBLIGATIONS_TEXT = dropCommentedLine(DEFAULT_OBLIGATIONS_FILE);
     public static final String MSG_NO_RELEASE_GIVEN = "No release given";
 
     protected List<LicenseInfoParser> parsers;
     protected List<OutputGenerator<?>> outputGenerators;
     protected ComponentDatabaseHandler componentDatabaseHandler;
     protected Cache<String, List<LicenseInfoParsingResult>> licenseInfoCache;
+    protected Cache<String, List<ObligationParsingResult>> obligationCache;
 
     public LicenseInfoHandler() throws MalformedURLException {
         this(new AttachmentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS),
@@ -71,6 +77,8 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
                               ComponentDatabaseHandler componentDatabaseHandler) throws MalformedURLException {
         this.componentDatabaseHandler = componentDatabaseHandler;
         this.licenseInfoCache = CacheBuilder.newBuilder().expireAfterWrite(CACHE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+                .maximumSize(CACHE_MAX_ITEMS).build();
+        this.obligationCache = CacheBuilder.newBuilder().expireAfterWrite(CACHE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                 .maximumSize(CACHE_MAX_ITEMS).build();
 
         AttachmentContentProvider contentProvider = attachment -> attachmentDatabaseHandler.getAttachmentContent(attachment.getAttachmentContentId());
@@ -104,6 +112,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         Map<Release, Set<String>> releaseToAttachmentId = mapKeysToReleases(releaseIdsToSelectedAttachmentIds, user);
         Collection<LicenseInfoParsingResult> projectLicenseInfoResults = getAllReleaseLicenseInfos(releaseToAttachmentId, user,
                 excludedLicensesPerAttachment);
+        Collection<ObligationParsingResult> obligationsResults = getAllReleaseObligations(releaseToAttachmentId, user);
 
         String[] outputGeneratorClassnameAndVariant = outputGenerator.split("::");
         if (outputGeneratorClassnameAndVariant.length != 2) {
@@ -116,8 +125,10 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         LicenseInfoFile licenseInfoFile = new LicenseInfoFile();
 
         licenseInfoFile.setOutputFormatInfo(generator.getOutputFormatInfo());
-        String licenseInfoHeaderText = (project.isSetLicenseInfoHeaderText()) ? project.getLicenseInfoHeaderText() : getDefaultLicenseInfoHeaderText();
-        Object output = generator.generateOutputFile(projectLicenseInfoResults, project.getName(), project.getVersion(), licenseInfoHeaderText);
+
+        fillDefaults(project);
+
+        Object output = generator.generateOutputFile(projectLicenseInfoResults, project, obligationsResults);
         if (output instanceof byte[]) {
             licenseInfoFile.setGeneratedOutput((byte[]) output);
         } else if (output instanceof String) {
@@ -127,6 +138,15 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         }
 
         return licenseInfoFile;
+    }
+
+    private void fillDefaults(Project project) {
+        if(!project.isSetLicenseInfoHeaderText()) {
+            project.setLicenseInfoHeaderText(getDefaultLicenseInfoHeaderText());
+        }
+        if(!project.isSetObligationsText()) {
+            project.setObligationsText(getDefaultObligationsText());
+        }
     }
 
     @Override
@@ -181,7 +201,55 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
             filterEmptyLicenses(results);
 
             results = assignReleaseToLicenseInfoParsingResults(results, release);
+            results = assignComponentToLicenseInfoParsingResults(results, release, user);
+
             licenseInfoCache.put(attachmentContentId, results);
+            return results;
+        } catch (WrappedTException exception) {
+            throw exception.getCause();
+        }
+    }
+
+    private List<ObligationParsingResult> getObligationsForAttachment(Release release, String attachmentContentId, User user)
+            throws TException {
+        if (release == null) {
+            return Collections.singletonList(new ObligationParsingResult()
+                                                    .setStatus(ObligationInfoRequestStatus.NO_APPLICABLE_SOURCE)
+                                                    .setMessage(MSG_NO_RELEASE_GIVEN));
+        }
+
+        List<ObligationParsingResult> cachedResults = obligationCache.getIfPresent(attachmentContentId);
+        if (cachedResults != null) {
+            return cachedResults;
+        }
+
+        Attachment attachment = nullToEmptySet(release.getAttachments()).stream()
+                .filter(a -> a.getAttachmentContentId().equals(attachmentContentId)).findFirst().orElseThrow(() -> {
+                    String message = String.format(
+                            "Attachment selected for obligations info generation is not found in release's attachments. Release id: %s. Attachment content id: %s",
+                            release.getId(), attachmentContentId);
+                    return new IllegalStateException(message);
+                });
+
+        try {
+
+            List<LicenseInfoParser> applicableParsers = parsers.stream()
+                    .filter(parser -> wrapTException(() -> parser.isApplicableTo(attachment, user, release))).collect(Collectors.toList());
+
+            if (applicableParsers.size() == 0) {
+                LOGGER.warn("No applicable parser has been found for the attachment selected for license information");
+                return Collections.singletonList(new ObligationParsingResult()
+                        .setStatus(ObligationInfoRequestStatus.NO_APPLICABLE_SOURCE)
+                        .setMessage("No applicable parser has been found for the attachment."));
+            } else if (applicableParsers.size() > 1) {
+                LOGGER.info("More than one parser claims to be able to parse attachment with contend id " + attachmentContentId);
+            }
+
+            List<ObligationParsingResult> results = applicableParsers.stream()
+                    .map(parser -> wrapTException(() -> parser.getObligations(attachment, user, release)))
+                    .collect(Collectors.toList());
+
+            obligationCache.put(attachmentContentId, results);
             return results;
         } catch (WrappedTException exception) {
             throw exception.getCause();
@@ -199,6 +267,11 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
     @Override
     public String getDefaultLicenseInfoHeaderText() {
         return DEFAULT_LICENSE_INFO_TEXT;
+    }
+
+    @Override
+    public String getDefaultObligationsText() {
+        return DEFAULT_OBLIGATIONS_TEXT;
     }
 
     protected Map<Release, Set<String>> mapKeysToReleases(Map<String, Set<String>> releaseIdsToAttachmentIds, User user) throws TException {
@@ -236,6 +309,21 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
 
                     results.addAll(
                             parsedLicenses.stream().map(result -> filterLicenses(result, licencesToExclude)).collect(Collectors.toList()));
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private Collection<ObligationParsingResult> getAllReleaseObligations(Map<Release, Set<String>> releaseToSelectedAttachmentIds, User user)
+            throws TException {
+        List<ObligationParsingResult> results = Lists.newArrayList();
+
+        for (Entry<Release, Set<String>> entry : releaseToSelectedAttachmentIds.entrySet()) {
+            for (String attachmentContentId : entry.getValue()) {
+                if (attachmentContentId != null) {
+                    results.addAll(getObligationsForAttachment(entry.getKey(), attachmentContentId, user));
                 }
             }
         }
@@ -285,6 +373,45 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         return parsingResults;
     }
 
+    protected List<LicenseInfoParsingResult> assignComponentToLicenseInfoParsingResults(List<LicenseInfoParsingResult> parsingResults, Release release, User user) throws TException {
+        final ComponentService.Iface componentClient = new ThriftClients().makeComponentClient();
+        final Component component = componentClient.getComponentById(release.getComponentId(), user);
+
+        parsingResults.forEach(result -> {
+            if( component != null) {
+                if (component.getComponentType() != null) {
+                    result.setComponentType(toString(component.getComponentType()));
+                } else {
+                    LOGGER.warn("Component with [" + component.getId() + ": " + component.getName() + "] has no type!");
+                    result.setComponentType("");
+                }
+            } else {
+                // just being extra defensive
+                result.setComponentType("Unknown component.");
+            }
+        });
+        return parsingResults;
+    }
+
+    protected String toString(ComponentType type) {
+        switch(type) {
+            case INTERNAL:
+                return "Internal";
+            case OSS:
+                return "OSS";
+            case COTS:
+                return "COTS";
+            case FREESOFTWARE:
+                return  "Free software";
+            case INNER_SOURCE:
+                return "Inner source";
+            case SERVICE:
+                return "Service";
+        }
+
+        return "";
+    }
+
     protected OutputGenerator<?> getOutputGeneratorByClassname(String generatorClassname) throws TException {
         assertNotNull(generatorClassname);
         return outputGenerators.stream()
@@ -301,9 +428,8 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
                 .findFirst().orElseThrow(() -> new TException("Unknown output generator: " + generatorClassname));
     }
 
-    private static String loadDefaultLicenseInfoHeaderText(){
-            String defaultLicenseInfoHeader = new String( CommonUtils.loadResource(LicenseInfoHandler.class, DEFAULT_LICENSE_INFO_HEADER_FILE).orElse(new byte[0]) );
-            defaultLicenseInfoHeader = defaultLicenseInfoHeader.replaceAll("(?m)^#.*\\n", "");  // ignore comments in template file
-            return defaultLicenseInfoHeader;
+    private static String dropCommentedLine(String TEMPLATE_FILE) {
+        String text = new String( CommonUtils.loadResource(LicenseInfoHandler.class, TEMPLATE_FILE).orElse(new byte[0]) );
+        return text.replaceAll("(?m)^#.*(?:\r?\n)?", ""); // ignore comments in template file
     }
 }

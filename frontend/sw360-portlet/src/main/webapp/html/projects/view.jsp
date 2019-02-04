@@ -13,6 +13,8 @@
 <%@ page import="org.eclipse.sw360.datahandler.thrift.projects.Project" %>
 <%@ page import="org.eclipse.sw360.portal.common.PortalConstants" %>
 <%@ page import="javax.portlet.PortletRequest" %>
+<%@ page import="org.eclipse.sw360.datahandler.thrift.projects.ProjectType" %>
+<%@ page import="org.eclipse.sw360.datahandler.thrift.projects.ProjectState" %>
 
 <%@ include file="/html/init.jsp" %>
 <%-- the following is needed by liferay to display error messages--%>
@@ -111,8 +113,10 @@
             <tr>
                 <td>
                     <label for="project_type">Project Type</label>
-                    <input type="text" class="searchbar" name="<portlet:namespace/><%=Project._Fields.PROJECT_TYPE%>"
-                           value="<sw360:out value="${projectType}"/>" id="project_type" class="filterInput">
+                    <select class="searchbar toplabelledInput filterInput" id="project_type" name="<portlet:namespace/><%=Project._Fields.PROJECT_TYPE%>">
+                        <option value="<%=PortalConstants.NO_FILTER%>" class="textlabel stackedLabel"></option>
+                        <sw360:DisplayEnumOptions type="<%=ProjectType.class%>" selectedName="${projectType}" useStringValues="true"/>
+                    </select>
                 </td>
             </tr>
             <tr>
@@ -127,8 +131,7 @@
                     <label for="group">Group</label>
                     <select class="searchbar toplabelledInput filterInput" id="group" name="<portlet:namespace/><%=Project._Fields.BUSINESS_UNIT%>">
                         <option value="" class="textlabel stackedLabel"
-                                <core_rt:if test="${empty businessUnit}"> selected="selected"</core_rt:if>
-                        ></option>
+                                <core_rt:if test="${empty businessUnit}"> selected="selected"</core_rt:if>></option>
                         <core_rt:forEach items="${organizations}" var="org">
                             <option value="<sw360:out value="${org.name}"/>" class="textlabel stackedLabel"
                                     <core_rt:if test="${org.name == businessUnit}"> selected="selected"</core_rt:if>
@@ -139,9 +142,11 @@
             </tr>
             <tr>
                 <td>
-                    <label for="state">State</label>
-                    <input type="text" class="searchbar" name="<portlet:namespace/><%=Project._Fields.STATE%>"
-                           value="<sw360:out value="${state}"/>" id="state" class="filterInput">
+                    <label for="project_state">State</label>
+                    <select class="searchbar toplabelledInput filterInput" id="project_state" name="<portlet:namespace/><%=Project._Fields.STATE%>">
+                        <option value="<%=PortalConstants.NO_FILTER%>" class="textlabel stackedLabel"></option>
+                        <sw360:DisplayEnumOptions type="<%=ProjectState.class%>" selectedName="${state}" useStringValues="true"/>
+                    </select>
                 </td>
             </tr>
             <tr>
@@ -191,9 +196,9 @@
     </form>
 </div>
 
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/github-com-craftpip-jquery-confirm/3.0.1/jquery-confirm.min.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-dt/1.1.2/css/buttons.dataTables.min.css"/>
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/themes/base/jquery-ui.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-confirm2/dist/jquery-confirm.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-bs/css/buttons.bootstrap.min.css"/>
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/dataTable_Siemens.css">
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">
 
@@ -209,7 +214,7 @@
         var PortletURL = Liferay.PortletURL;
         const clearingSummaryColumnIndex = 4;
 
-        require(['jquery', 'modules/autocomplete', 'modules/confirm', /* jquery-plugins */ 'datatables', 'datatables_buttons', 'buttons.print'], function($, autocomplete, confirm) {
+        require(['jquery', 'modules/autocomplete', 'modules/confirm', /* jquery-plugins */ 'datatables.net', 'datatables.net-buttons', 'datatables.net-buttons.print'], function($, autocomplete, confirm) {
             var projectsTable;
 
              // initializing

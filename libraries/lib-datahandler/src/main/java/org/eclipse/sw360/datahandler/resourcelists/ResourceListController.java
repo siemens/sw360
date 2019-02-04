@@ -12,26 +12,36 @@
 
 package org.eclipse.sw360.datahandler.resourcelists;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-public class ResourceListController {
+public class ResourceListController<T> {
 
-    public PaginationResult applyPagingToList(List resources, PaginationOptions paginationOptions) throws PaginationParameterException {
-        List sortedResources = this.sortList(resources, paginationOptions.getSortComparator());
+    private static final String PAGINATION_PARAMETER_EXCEPTION_MESSAGE = "The given page index is bigger than the actual number of pages";
+
+    public PaginationResult<T> applyPagingToList(List<T> resources, PaginationOptions<T> paginationOptions) throws PaginationParameterException {
+        if(resources.size() == 0) {
+            if(paginationOptions.getPageNumber() == 0) {
+                return new PaginationResult<>(resources, 0, paginationOptions);
+            } else {
+                throw new PaginationParameterException(PAGINATION_PARAMETER_EXCEPTION_MESSAGE);
+            }
+        }
+        List<T> sortedResources = this.sortList(resources, paginationOptions.getSortComparator());
 
         int fromIndex = paginationOptions.getOffset();
         int toIndex = paginationOptions.getPageEndIndex();
         if(fromIndex >= sortedResources.size()) {
-            throw new PaginationParameterException("The page size of " + fromIndex + " exceeds the list size of 'sortedResources.size()'");
+            throw new PaginationParameterException(PAGINATION_PARAMETER_EXCEPTION_MESSAGE);
         } else if (toIndex > sortedResources.size()) {
             toIndex = sortedResources.size();
         }
-        return new PaginationResult(sortedResources.subList(fromIndex, toIndex), sortedResources.size(), paginationOptions);
+        return new PaginationResult<>(sortedResources.subList(fromIndex, toIndex), sortedResources.size(), paginationOptions);
     }
 
-    private List sortList(List resources, Comparator comparator) {
+    private List<T> sortList(List<T> resources, Comparator<T> comparator) {
         if(comparator == null) {
             return resources;
         }

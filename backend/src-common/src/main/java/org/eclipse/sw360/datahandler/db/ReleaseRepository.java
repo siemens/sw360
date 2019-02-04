@@ -10,8 +10,6 @@
  */
 package org.eclipse.sw360.datahandler.db;
 
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableListMultimap;
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
@@ -22,7 +20,9 @@ import org.ektorp.ViewQuery;
 import org.ektorp.support.View;
 import org.ektorp.support.Views;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -68,7 +68,16 @@ import static com.google.common.base.Strings.isNullOrEmpty;
                       "      emit(doc.mainLicenseIds[i], doc);" +
                       "    }" +
                       "  }" +
-                      "}")
+                        "}"),
+        @View(name = "byExternalIds",
+                map = "function(doc) {" +
+                        "  if (doc.type == 'release') {" +
+                        "    for (var externalId in doc.externalIds) {" +
+                        "       emit( [externalId, doc.externalIds[externalId]] , doc._id);" +
+                        "    }" +
+                        "  }" +
+                        "}")
+
 })
 public class ReleaseRepository extends SummaryAwareRepository<Release> {
 
@@ -126,5 +135,11 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
 
         return queryView("releaseIdsByLicenseId", licenseId);
+    }
+
+    public Set<Release> searchByExternalIds(Map<String, Set<String>> externalIds) {
+        RepositoryUtils repositoryUtils = new RepositoryUtils();
+        Set<String> searchIds = repositoryUtils.searchByExternalIds(this, "byExternalIds", externalIds);
+        return new HashSet<>(get(searchIds));
     }
 }

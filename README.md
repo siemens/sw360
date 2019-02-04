@@ -44,7 +44,7 @@ In order to build you will need:
 
 * A git client
 * Apache Maven 3.0.X
-* Apache Thrift 0.9.3
+* Apache Thrift 0.11.0
 
 http://maven.apache.org/download.html#Installation
 
@@ -62,7 +62,7 @@ The software is tested with
 
 ### PROBLEMS
 
-Running with the tested software shows no problems if you encounter some please report them at https://github.com/siemens/sw360portal/issues.
+Running with the tested software shows no problems if you encounter some please report them at https://github.com/eclipse/sw360/issues.
 
 
 ### Deployment

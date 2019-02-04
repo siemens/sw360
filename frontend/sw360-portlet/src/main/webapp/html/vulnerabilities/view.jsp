@@ -1,6 +1,6 @@
 <%--
   ~ Copyright (c) Bosch Software Innovations GmbH 2016.
-  ~ Copyright (c) Siemens AG 2016-2017. Part of the SW360 Portal Project.
+  ~ Copyright (c) Siemens AG 2016-2018. Part of the SW360 Portal Project.
   ~
   ~ SPDX-License-Identifier: EPL-1.0
   ~
@@ -38,8 +38,8 @@
 </portlet:resourceURL>
 
 
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-dt/1.1.2/css/buttons.dataTables.min.css"/>
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/themes/base/jquery-ui.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-bs/css/buttons.bootstrap.min.css"/>
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/dataTable_Siemens.css">
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">
 
@@ -126,7 +126,7 @@
     AUI().use('liferay-portlet-url', function () {
         var PortletURL = Liferay.PortletURL;
 
-        require(['jquery', 'utils/includes/quickfilter', /* jquery-plugins */ 'datatables', 'datatables_buttons', 'buttons.print', 'jquery-ui'], function($, quickfilter) {
+        require(['jquery', 'utils/includes/quickfilter', /* jquery-plugins */ 'datatables.net', 'datatables.net-buttons', 'datatables.net-buttons.print', 'jquery-ui'], function($, quickfilter) {
             var vulnerabilityTable;
 
             // initializing
@@ -167,7 +167,7 @@
                          </core_rt:if>
                             "",
                     "3": "<sw360:out value='${vulnerability.publishDate}'/>",
-                    "4": "<sw360:out value='${vulnerability.lastExternalUpdate}'/>"
+                    "4": "<sw360:out value='${vulnerability.lastExternalUpdate}' default='not set'/>"
                 });
                 </core_rt:forEach>
 
@@ -190,7 +190,7 @@
                         {"title": "Publish date"},
                         {"title": "Last update"}
                     ],
-                    "order": [[4, 'desc'],[2, 'asc']],
+                    "order": [[4, 'desc'],[3, 'desc']],
                     "autoWidth": false
                 });
                 vulnerabilityTable.$('td').tooltip({"delay": 0, "track": true, "fade": 250});

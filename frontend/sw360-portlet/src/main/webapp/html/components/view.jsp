@@ -63,9 +63,9 @@
     <portlet:param name="<%=PortalConstants.LICENSE_ID%>" value="<%=PortalConstants.FRIENDLY_URL_PLACEHOLDER_ID%>"/>
 </liferay-portlet:renderURL>
 
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/1.12.1/jquery-ui.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/github-com-craftpip-jquery-confirm/3.0.1/jquery-confirm.min.css">
-<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-dt/1.1.2/css/buttons.dataTables.min.css"/>
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-ui/themes/base/jquery-ui.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/jquery-confirm2/dist/jquery-confirm.min.css">
+<link rel="stylesheet" href="<%=request.getContextPath()%>/webjars/datatables.net-buttons-bs/css/buttons.bootstrap.min.css"/>
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/dataTable_Siemens.css">
 <link rel="stylesheet" href="<%=request.getContextPath()%>/css/sw360.css">
 
@@ -109,10 +109,9 @@
                 <td>
                     <label for="component_type">Component Type</label>
                     <select class="searchbar toplabelledInput filterInput" id="component_type" name="<portlet:namespace/><%=Component._Fields.COMPONENT_TYPE%>">
-                        <option value="<%=PortalConstants.NO_FILTER%>" class="textlabel stackedLabel">Any</option>
+                        <option value="<%=PortalConstants.NO_FILTER%>" class="textlabel stackedLabel"></option>
                         <sw360:DisplayEnumOptions type="<%=ComponentType.class%>" selectedName="${componentType}" useStringValues="true"/>
                     </select>
-                    <sw360:DisplayEnumInfo type="<%=ComponentType.class%>"/>
                 </td>
             </tr>
             <tr>
@@ -212,7 +211,7 @@
     AUI().use('liferay-portlet-url', function () {
         var PortletURL = Liferay.PortletURL;
 
-        require(['jquery', 'modules/autocomplete', 'modules/confirm', /* jquery-plugins: */ 'datatables', 'datatables_buttons', 'buttons.print'], function($, autocomplete, confirm) {
+        require(['jquery', 'modules/autocomplete', 'modules/confirm', /* jquery-plugins: */ 'datatables.net', 'datatables.net-buttons', 'datatables.net-buttons.print'], function($, autocomplete, confirm) {
             var componentsTable;
 
             // initializing
@@ -265,6 +264,7 @@
             }
 
             function createComponentsTable() {
+                var columnDefs =  [];
                 var columns = [
                     {"title": "Vendor", data: "vndrs"},
                     {"title": "Component Name", data: "name", render: {display: renderComponentNameLink}},
@@ -272,8 +272,6 @@
                     {"title": "Component Type", data: "cType"},
                     {"title": "Actions", data: "id", render: {display: renderComponentActions}}
                 ];
-                var order = [[1, 'asc']];
-                var columnDefs =  [];
 
                 if (window.codescoopEnabled) {
                     columns = [
@@ -298,7 +296,6 @@
                         {"title": "Component Type", data: "cType"},
                         {"title": "Actions", data: "id", render: {display: renderComponentActions}}
                     ];
-                    order = [[2, 'asc']];
                     columnDefs = [{ "orderable": false, "targets": [0, 4, 5, 6 ,7] }];
                 }
 
@@ -328,7 +325,6 @@
                     "pageLength": 25,
                     "searching": false,
                     "columns": columns,
-                    "order": order,
                     "aaSorting": [],
                     "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
                     "autoWidth": false,
