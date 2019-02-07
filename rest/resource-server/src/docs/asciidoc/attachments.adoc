@@ -12,6 +12,23 @@
 
 The Attachments resource is used to list attachment information.
 
+[[should_document_get_attachments_by_sha1]]
+==== Get attachments by SHA1
+
+A `GET` request will get a collection of attachments with the given sha1.
+
+===== Response structure
+include::{snippets}/should_document_get_attachments_by_sha1/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_attachments_by_sha1/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_attachments_by_sha1/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_get_attachments_by_sha1/links.adoc[]
+
 
 [[resources-attachment-information-get]]
 ==== Get attachment info

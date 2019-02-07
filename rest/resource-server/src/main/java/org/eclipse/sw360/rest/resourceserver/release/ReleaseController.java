@@ -34,6 +34,8 @@ import org.springframework.hateoas.Link;
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.ResourceProcessor;
 import org.springframework.hateoas.Resources;
+import org.springframework.hateoas.core.EmbeddedWrapper;
+import org.springframework.hateoas.core.EmbeddedWrappers;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -52,6 +54,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static java.util.Arrays.asList;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
 @BasePathAwareController
@@ -69,7 +72,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
     @NonNull
     private RestControllerHelper restControllerHelper;
 
-    @RequestMapping(value = RELEASES_URL, method = RequestMethod.GET)
+    @GetMapping(value = RELEASES_URL)
     public ResponseEntity<Resources<Resource>> getReleasesForUser(
             @RequestParam(value = "sha1", required = false) String sha1,
             @RequestParam(value = "fields", required = false) List<String> fields) throws TException {
@@ -78,7 +81,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         List<Release> sw360Releases = new ArrayList<>();
 
         if (sha1 != null && !sha1.isEmpty()) {
-            sw360Releases.add(searchReleaseBySha1(sha1, sw360User));
+            sw360Releases.addAll(searchReleasesBySha1(sha1, sw360User));
         } else {
             sw360Releases.addAll(releaseService.getReleasesForUser(sw360User));
         }
@@ -89,17 +92,32 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
             Resource<Release> releaseResource = new Resource<>(embeddedRelease);
             releaseResources.add(releaseResource);
         }
-        Resources<Resource> resources = new Resources<>(releaseResources);
+        Resources<Resource> resources;
 
-        return new ResponseEntity<>(resources, HttpStatus.OK);
+        if (!releaseResources.isEmpty()) {
+            resources = new Resources<>(releaseResources);
+            return new ResponseEntity<>(resources, HttpStatus.OK);
+        } else {
+            // Make sure we return an empty array, like "_embedded" : {"sw360:releases" : [ ]}
+            EmbeddedWrappers wrappers = new EmbeddedWrappers(false);
+            EmbeddedWrapper wrapper = wrappers.emptyCollectionOf(Release.class);
+            Resources<Object> emptyResources = new Resources<>(asList(wrapper));
+            return new ResponseEntity(emptyResources, HttpStatus.OK);
+        }
     }
 
-    private Release searchReleaseBySha1(String sha1, User sw360User) throws TException {
-        AttachmentInfo sw360AttachmentInfo = attachmentService.getAttachmentBySha1(sha1);
-        return releaseService.getReleaseForUserById(sw360AttachmentInfo.getOwner().getReleaseId(), sw360User);
+    private List<Release> searchReleasesBySha1(String sha1, User sw360User) throws TException {
+        List<AttachmentInfo> attachmentInfos = attachmentService.getAttachmentsBySha1(sha1);
+        List<Release> releases = new ArrayList<>();
+        for(AttachmentInfo attachmentInfo: attachmentInfos) {
+            if(attachmentInfo.getOwner().isSetReleaseId()) {
+                releases.add(releaseService.getReleaseForUserById(attachmentInfo.getOwner().getReleaseId(), sw360User));
+            }
+        }
+        return releases;
     }
 
-    @RequestMapping(value = RELEASES_URL + "/{id}", method = RequestMethod.GET)
+    @GetMapping(value = RELEASES_URL + "/{id}")
     public ResponseEntity<Resource> getRelease(
             @PathVariable("id") String id) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -108,13 +126,13 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         return new ResponseEntity<>(halRelease, HttpStatus.OK);
     }
 
-    @RequestMapping(value = RELEASES_URL + "/searchByExternalIds", method = RequestMethod.GET)
+    @GetMapping(value = RELEASES_URL + "/searchByExternalIds")
     public ResponseEntity searchByExternalIds(@RequestParam MultiValueMap<String, String> externalIdsMultiMap) throws TException {
         return restControllerHelper.searchByExternalIds(externalIdsMultiMap, releaseService, null);
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = RELEASES_URL + "/{ids}", method = RequestMethod.DELETE)
+    @DeleteMapping(value = RELEASES_URL + "/{ids}")
     public ResponseEntity<List<MultiStatus>> deleteReleases(
             @PathVariable("ids") List<String> idsToDelete) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
@@ -133,7 +151,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = RELEASES_URL + "/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = RELEASES_URL + "/{id}")
     public ResponseEntity<Resource<Release>> patchComponent(
             @PathVariable("id") String id,
             @RequestBody Release updateRelease) throws TException {
@@ -146,7 +164,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = RELEASES_URL, method = RequestMethod.POST)
+    @PostMapping(value = RELEASES_URL)
     public ResponseEntity<Resource<Release>> createRelease(
             @RequestBody Release release) throws URISyntaxException, TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -186,7 +204,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         return ResponseEntity.created(location).body(halResource);
     }
 
-    @RequestMapping(value = RELEASES_URL + "/{id}/attachments", method = RequestMethod.GET)
+    @GetMapping(value = RELEASES_URL + "/{id}/attachments")
     public ResponseEntity<Resources<Resource<Attachment>>> getReleaseAttachments(
             @PathVariable("id") String id) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -195,7 +213,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         return new ResponseEntity<>(resources, HttpStatus.OK);
     }
 
-    @RequestMapping(value = RELEASES_URL + "/{releaseId}/attachments", method = RequestMethod.POST, consumes = {"multipart/mixed", "multipart/form-data"})
+    @PostMapping(value = RELEASES_URL + "/{releaseId}/attachments", consumes = {"multipart/mixed", "multipart/form-data"})
     public ResponseEntity<HalResource> addAttachmentToRelease(@PathVariable("releaseId") String releaseId,
                                                               @RequestPart("file") MultipartFile file,
                                                               @RequestPart("attachment") Attachment newAttachment) throws TException {
@@ -218,7 +236,7 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
         return new ResponseEntity<>(halRelease, HttpStatus.OK);
     }
 
-    @RequestMapping(value = RELEASES_URL + "/{releaseId}/attachments/{attachmentId}", method = RequestMethod.GET, produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @GetMapping(value = RELEASES_URL + "/{releaseId}/attachments/{attachmentId}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public void downloadAttachmentFromRelease(
             @PathVariable("releaseId") String releaseId,
             @PathVariable("attachmentId") String attachmentId,

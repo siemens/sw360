@@ -33,7 +33,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,27 +66,31 @@ public class Sw360AttachmentService {
     public AttachmentInfo getAttachmentById(String id) throws TException {
         AttachmentService.Iface attachmentClient = getThriftAttachmentClient();
         List<Attachment> attachments = attachmentClient.getAttachmentsByIds(Collections.singleton(id));
-        return createAttachmentInfo(attachmentClient, attachments);
-    }
-
-    public AttachmentInfo getAttachmentBySha1(String sha1) throws TException {
-        AttachmentService.Iface attachmentClient = getThriftAttachmentClient();
-        List<Attachment> attachments = attachmentClient.getAttachmentsBySha1s(Collections.singleton(sha1));
-        return createAttachmentInfo(attachmentClient, attachments);
-    }
-
-    private AttachmentInfo createAttachmentInfo(AttachmentService.Iface attachmentClient, List<Attachment> attachments) throws TException {
-        AttachmentInfo attachmentInfo = new AttachmentInfo(getValidAttachment(attachments));
-        String attachmentId = attachmentInfo.getAttachment().getAttachmentContentId();
-        attachmentInfo.setOwner(attachmentClient.getAttachmentOwnersByIds(Collections.singleton(attachmentId)).get(0));
-        return attachmentInfo;
-    }
-
-    private Attachment getValidAttachment(List<Attachment> attachments) {
         if (attachments.isEmpty()) {
             throw new ResourceNotFoundException();
         }
-        return attachments.get(0);
+        return createAttachmentInfo(attachmentClient, attachments.get(0));
+    }
+
+    public List<AttachmentInfo> getAttachmentsBySha1(String sha1) throws TException {
+        AttachmentService.Iface attachmentClient = getThriftAttachmentClient();
+        List<Attachment> attachments = attachmentClient.getAttachmentsBySha1s(Collections.singleton(sha1));
+        return createAttachmentInfos(attachmentClient, attachments);
+    }
+
+    private AttachmentInfo createAttachmentInfo(AttachmentService.Iface attachmentClient, Attachment attachment) throws TException {
+        AttachmentInfo attachmentInfo = new AttachmentInfo(attachment);
+        attachmentInfo.setOwner(attachmentClient.getAttachmentOwnersByIds(
+                Collections.singleton(attachment.getAttachmentContentId())).get(0));
+        return attachmentInfo;
+    }
+
+    private List<AttachmentInfo> createAttachmentInfos(AttachmentService.Iface attachmentClient, List<Attachment> attachments) throws TException {
+        List<AttachmentInfo> attachmentInfos = new ArrayList<>();
+        for (Attachment attachment : attachments) {
+            attachmentInfos.add(createAttachmentInfo(attachmentClient, attachment));
+        }
+        return attachmentInfos;
     }
 
     public void downloadAttachmentWithContext(Object context, String attachmentId, HttpServletResponse response, User sw360User) {
@@ -100,7 +103,7 @@ public class Sw360AttachmentService {
             response.setContentType(contentType);
             response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
             FileCopyUtils.copy(attachmentStream, response.getOutputStream());
-        } catch (TException|IOException e) {
+        } catch (TException | IOException e) {
             log.error(e.getMessage());
         }
     }
@@ -114,9 +117,9 @@ public class Sw360AttachmentService {
         String contentType = file.getContentType();
         final AttachmentContent attachmentContent = makeAttachmentContent(fileName, contentType);
 
-        final AttachmentConnector attachmentConnector = getConnector();
+        final AttachmentConnector connector = getConnector();
         Attachment attachment = new AttachmentFrontendUtils().uploadAttachmentContent(attachmentContent, file.getInputStream(), sw360User);
-        attachment.setSha1(attachmentConnector.getSha1FromAttachmentContentId(attachmentContent.getId()));
+        attachment.setSha1(connector.getSha1FromAttachmentContentId(attachmentContent.getId()));
 
         AttachmentType attachmentType = newAttachment.getAttachmentType();
         if (attachmentType != null) {

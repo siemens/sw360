@@ -11,14 +11,18 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
+import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
@@ -31,6 +35,7 @@ import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -68,16 +73,40 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
     private Attachment attachment;
     Component component;
 
-    private String releaseId = "3765276512";
+    private final String releaseId = "3765276512";
+    private final String attachmentSha1 = "da373e491d3863477568896089ee9457bc316783";
 
     @Before
     public void before() throws TException {
-        Set<Attachment> attachmentList = new HashSet<>();
+        Set<Attachment> attachments = new HashSet<>();
         List<Resource<Attachment>> attachmentResources = new ArrayList<>();
         attachment = new Attachment("1231231254", "spring-core-4.3.4.RELEASE.jar");
-        attachment.setSha1("da373e491d3863477568896089ee9457bc316783");
-        attachmentList.add(attachment);
+        attachment.setSha1(attachmentSha1);
+        attachments.add(attachment);
         attachmentResources.add(new Resource<>(attachment));
+
+        attachment.setSha1(attachmentSha1);
+        attachment.setAttachmentType(AttachmentType.BINARY_SELF);
+        attachment.setCreatedTeam("Clearing Team 1");
+        attachment.setCreatedComment("please check asap");
+        attachment.setCreatedOn("2016-12-18");
+        attachment.setCreatedBy("admin@sw360.org");
+        attachment.setCheckedTeam("Clearing Team 2");
+        attachment.setCheckedComment("everything looks good");
+        attachment.setCheckedOn("2016-12-18");
+        attachment.setCheckStatus(CheckStatus.ACCEPTED);
+
+        attachments.add(attachment);
+
+        AttachmentInfo attachmentInfo = new AttachmentInfo(attachment);
+        List<AttachmentInfo> attachmentInfos = new ArrayList<>();
+        attachmentInfos.add(attachmentInfo);
+
+        Source owner = new Source();
+        attachmentInfo.setOwner(owner);
+
+        given(this.attachmentServiceMock.getAttachmentById(eq(attachment.getAttachmentContentId()))).willReturn(attachmentInfo);
+        given(this.attachmentServiceMock.getAttachmentsBySha1(eq(attachment.getSha1()))).willReturn(attachmentInfos);
 
         given(this.attachmentServiceMock.getAttachmentContent(anyObject())).willReturn(new AttachmentContent().setId("1231231254").setFilename("spring-core-4.3.4.RELEASE.jar").setContentType("binary"));
         given(this.attachmentServiceMock.getResourcesFromList(anyObject())).willReturn(new Resources<>(attachmentResources));
@@ -98,19 +127,21 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         List<Release> releaseList = new ArrayList<>();
         release = new Release();
         release.setId(releaseId);
-        release.setName("Angular");
-        release.setCpeid("cpe:/a:Google:Angular:2.3.0:");
+        owner.setReleaseId(release.getId());
+        release.setName("Spring Core 4.3.4");
+        release.setCpeid("cpe:/a:pivotal:spring-core:4.3.4:");
         release.setReleaseDate("2016-12-07");
-        release.setVersion("2.3.0");
+        release.setVersion("4.3.4");
         release.setCreatedOn("2016-12-18");
         release.setCreatedBy("admin@sw360.org");
-        release.setDownloadurl("http://www.google.com");
         release.setModerators(new HashSet<>(Arrays.asList("admin@sw360.org", "jane@sw360.org")));
+        release.setCreatedBy("admin@sw360.org");
+        release.setDownloadurl("http://www.google.com");
         release.setComponentId(component.getId());
         release.setClearingState(ClearingState.APPROVED);
-        release.setMainlineState(MainlineState.OPEN);
+        release.setMainlineState(MainlineState.SPECIFIC);
         release.setExternalIds(Collections.singletonMap("mainline-id-component", "1432"));
-        release.setAttachments(attachmentList);
+        release.setAttachments(attachments);
         releaseList.add(release);
 
         Release release2 = new Release();
@@ -342,5 +373,24 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("createdOn").description("The creation date of the internal sw360 release"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                         )));
+    }
+
+
+    @Test
+    public void should_document_get_releases_by_sha1() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        MvcResult result = mockMvc.perform(get("/api/releases?sha1=" + attachmentSha1 + "&fields=mainlineState,clearingState")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
+                        responseFields(
+                                fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("_embedded.sw360:releases").description("The collection of <<resources-release,Attachment resources>>. In most cases the result should contain either on element or an empty collection. If the same binary file is uploaded and attached to multiple sw360 resources, the collection will contain all the releases that have attachments with matching sha1 hash.")
+                        )))
+                .andReturn();
     }
 }

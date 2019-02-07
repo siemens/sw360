@@ -39,7 +39,7 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     private int defaultPageSize;
 
     private static final String PROPERTIES_FILE_PATH = "/sw360.properties";
-    private static final String CURIE_NAMESPACE = "sw360";
+    public static final String CURIE_NAMESPACE = "sw360";
 
     public static final String API_TOKEN_HASH_SALT;
     public static final String API_TOKEN_MAX_VALIDITY_READ_IN_DAYS;

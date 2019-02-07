@@ -15,10 +15,17 @@ package org.eclipse.sw360.rest.resourceserver.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.Source;
+import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
+import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
+import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
@@ -57,21 +64,49 @@ public class ReleaseTest extends TestIntegrationBase {
     @MockBean
     private Sw360ReleaseService releaseServiceMock;
 
-    private Release release;
-    private String releaseId = "121831bjh1v2j";
+    @MockBean
+    private Sw360AttachmentService attachmentServiceMock;
+
+    private Release release1;
+    private String release1Id = "121831bjh1v2j";
+    private String attachmentShaUsedMultipleTimes = "12345";
+    private String attachmentShaInvalid = "999";
 
     @Before
     public void before() throws TException {
-        List<Release> releaseList = new ArrayList<>();
-        release = new Release();
-        release.setName("Release 1");
-        release.setId(releaseId);
-        release.setComponentId("component123");
-        release.setVersion("1.0.4");
-        release.setCpeid("cpe:id-1231");
-        releaseList.add(release);
+        List<Attachment> attachments = new ArrayList<>();
+        Attachment attachment1 = new Attachment();
+        attachment1.setAttachmentContentId("a1");
+        attachment1.setSha1(attachmentShaUsedMultipleTimes);
+        attachment1.setFilename("Attachment 1");
+        attachment1.setAttachmentType(AttachmentType.BINARY);
+        attachments.add(attachment1);
 
-        given(this.releaseServiceMock.getReleasesForUser(anyObject())).willReturn(releaseList);
+        Source source1 = new Source(Source._Fields.RELEASE_ID, release1Id);
+
+        Attachment attachment2 = new Attachment();
+        attachment2.setAttachmentContentId("a2");
+        attachment2.setSha1(attachmentShaUsedMultipleTimes);
+        attachment2.setFilename("Attachment 2");
+        attachment2.setAttachmentType(AttachmentType.SOURCE);
+        attachments.add(attachment2);
+
+        String releaseId2 = "3451831bjh1v2jxxz";
+        Source source2 = new Source(Source._Fields.RELEASE_ID, releaseId2);
+
+        List<AttachmentInfo> attachmentInfos = new ArrayList<>();
+        AttachmentInfo attachmentInfo1 = new AttachmentInfo(attachment1);
+        attachmentInfo1.setOwner(source1);
+        attachmentInfos.add(attachmentInfo1);
+
+        AttachmentInfo attachmentInfo2 = new AttachmentInfo(attachment2);
+        attachmentInfo2.setOwner(source2);
+        attachmentInfos.add(attachmentInfo2);
+
+        given(this.attachmentServiceMock.getAttachmentsBySha1(eq(attachmentShaUsedMultipleTimes))).willReturn(attachmentInfos);
+
+        List<AttachmentInfo> emptyAttachmentInfos = new ArrayList<>();
+        given(this.attachmentServiceMock.getAttachmentsBySha1(eq(attachmentShaInvalid))).willReturn(emptyAttachmentInfos);
 
         User user = new User();
         user.setId("123456789");
@@ -79,20 +114,47 @@ public class ReleaseTest extends TestIntegrationBase {
         user.setFullname("John Doe");
 
         given(this.userServiceMock.getUserByEmail("admin@sw360.org")).willReturn(user);
+
+        List<Release> releases = new ArrayList<>();
+
+        release1 = new Release();
+        release1.setName("Release 1");
+        release1.setId(this.release1Id);
+        release1.setComponentId("component123");
+        release1.setVersion("1.0.4");
+        release1.setCpeid("cpe:id-1231");
+        release1.setMainlineState(MainlineState.MAINLINE);
+        release1.setClearingState(ClearingState.APPROVED);
+        releases.add(release1);
+
+        given(this.releaseServiceMock.getReleaseForUserById(eq(this.release1Id), eq(user))).willReturn(release1);
+
+        Release release2 = new Release();
+        release2.setName("Release 2");
+        release2.setId(releaseId2);
+        release2.setComponentId("component456");
+        release2.setVersion("2.0.0");
+        release2.setCpeid("cpe:id-4567");
+        release2.setMainlineState(MainlineState.OPEN);
+        release2.setClearingState(ClearingState.NEW_CLEARING);
+        releases.add(release2);
+
+        given(this.releaseServiceMock.getReleasesForUser(anyObject())).willReturn(releases);
+        given(this.releaseServiceMock.getReleaseForUserById(eq(releaseId2), eq(user))).willReturn(release2);
     }
 
     @Test
     public void should_update_release_valid() throws IOException, TException {
         String updatedReleaseName = "updatedReleaseName";
         given(this.releaseServiceMock.updateRelease(anyObject(), anyObject())).willReturn(RequestStatus.SUCCESS);
-        given(this.releaseServiceMock.getReleaseForUserById(eq(releaseId), anyObject())).willReturn(release);
+        given(this.releaseServiceMock.getReleaseForUserById(eq(release1Id), anyObject())).willReturn(release1);
         HttpHeaders headers = getHeaders(port);
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, String> body = new HashMap<>();
         body.put("name", updatedReleaseName);
         body.put("wrong_prop", "abc123");
         ResponseEntity<String> response =
-                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases/" + releaseId,
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases/" + release1Id,
                         HttpMethod.PATCH,
                         new HttpEntity<>(body, headers),
                         String.class);
@@ -128,21 +190,21 @@ public class ReleaseTest extends TestIntegrationBase {
                         new HttpEntity<>(null, headers),
                         String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        TestHelper.checkResponse(response.getBody(), "releases", 1, Collections.singletonList(extraField));
+        TestHelper.checkResponse(response.getBody(), "releases", 2, Collections.singletonList(extraField));
     }
 
     @Test
     public void should_delete_releases() throws IOException, TException {
         String unknownReleaseId = "abcde12345";
-        given(this.releaseServiceMock.deleteRelease(eq(releaseId), anyObject())).willReturn(RequestStatus.SUCCESS);
+        given(this.releaseServiceMock.deleteRelease(eq(release1Id), anyObject())).willReturn(RequestStatus.SUCCESS);
         HttpHeaders headers = getHeaders(port);
         ResponseEntity<String> response =
-                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases/" + releaseId + "," + unknownReleaseId,
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases/" + release1Id + "," + unknownReleaseId,
                         HttpMethod.DELETE,
                         new HttpEntity<>(null, headers),
                         String.class);
         List<MultiStatus> multiStatusList = new ArrayList<>();
-        multiStatusList.add(new MultiStatus(releaseId, HttpStatus.OK));
+        multiStatusList.add(new MultiStatus(release1Id, HttpStatus.OK));
         multiStatusList.add(new MultiStatus(unknownReleaseId, HttpStatus.INTERNAL_SERVER_ERROR));
         TestHelper.handleBatchDeleteResourcesResponse(response, multiStatusList);
     }
@@ -162,4 +224,27 @@ public class ReleaseTest extends TestIntegrationBase {
         TestHelper.handleBatchDeleteResourcesResponse(response, multiStatusList);
     }
 
+    @Test
+    public void should_get_empty_collection_for_invalid_sha() throws IOException {
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases?sha1=" + attachmentShaInvalid,
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        TestHelper.checkResponse(response.getBody(), "releases", 0);
+    }
+
+    @Test
+    public void should_get_collection_for_duplicated_shas() throws IOException {
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/releases?sha1=" + attachmentShaUsedMultipleTimes + "&fields=mainlineState,clearingState",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        TestHelper.checkResponse(response.getBody(), "releases", 2);
+    }
 }
