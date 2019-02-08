@@ -168,6 +168,7 @@
 <%@include file="/html/components/includes/vendors/searchVendor.jspf" %>
 
 <script>
+    document.title = "${component.name} - " + document.title;
     var tabView; // we still need this global variable, until invalidHandlerShowErrorTab is modularized
 
     YUI().use(

@@ -144,6 +144,7 @@
 </core_rt:if>
 
 <script>
+document.title = "${project.name} - " + document.title
 var tabView;
 var Y = YUI().use(
     'aui-tabview',
