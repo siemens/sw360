@@ -104,7 +104,7 @@ public class VMDatabaseHandlerTest {
         pr1 = new VMProcessReporting(VMAction.class.getSimpleName(), SW360Utils.getCreatedOnTime());
 
         // Prepare the handler
-        handler = new VMDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbName);
+        handler = new VMDatabaseHandler();
     }
 
     @After

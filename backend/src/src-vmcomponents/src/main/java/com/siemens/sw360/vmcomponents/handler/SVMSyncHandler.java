@@ -79,7 +79,7 @@ public class SVMSyncHandler<T extends TBase> {
         assertNotNull(type);
         this.type = type;
         if (dbHandler == null) {
-            this.dbHandler = new VMDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_VM);
+            this.dbHandler = new VMDatabaseHandler();
         } else {
             this.dbHandler = dbHandler;
         }
