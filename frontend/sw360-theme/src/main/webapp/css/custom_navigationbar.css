@@ -11,7 +11,7 @@
 */
 @import "compass";
 
-@import url(custom_common.css);
+@import url(custom_breadcrumbs.css);
 
 @import url(color_schemes/green.css);
 

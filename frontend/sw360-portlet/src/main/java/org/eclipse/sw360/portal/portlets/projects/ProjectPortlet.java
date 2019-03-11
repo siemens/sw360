@@ -15,10 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
 import com.google.common.collect.*;
 import com.liferay.portal.kernel.json.*;
+import com.liferay.portal.kernel.model.Organization;
 import com.liferay.portal.kernel.portlet.PortletResponseUtil;
 import com.liferay.portal.kernel.servlet.SessionMessages;
-import com.liferay.portal.model.Organization;
-import com.liferay.portal.util.PortalUtil;
+import com.liferay.portal.kernel.util.PortalUtil;
 
 import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
