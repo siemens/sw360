@@ -51,8 +51,6 @@ build_sw360:
 #     - packages
 
 deploy_sw360:
-  tags:
-  - VLAN
   allow_failure: true
   stage: deploy
   environment:
