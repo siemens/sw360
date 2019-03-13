@@ -22,6 +22,8 @@ import com.siemens.sw360.vmcomponents.common.SVMMapper;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TBase;
+import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.vulnerabilities.db.VulnerabilityDatabaseHandler;
 import org.ektorp.http.HttpClient;
@@ -50,9 +52,10 @@ public class VMDatabaseHandler extends VulnerabilityDatabaseHandler {
     private VMProcessReportingRepository processRepo;
     private VMMatchRepository matchRepo;
 
-    public VMDatabaseHandler(Supplier<HttpClient> httpClient, String dbName) throws MalformedURLException {
-        super(httpClient, dbName);
+    public VMDatabaseHandler() throws MalformedURLException {
         // Create the connector
+        DatabaseConnector db = new DatabaseConnector(DatabaseSettings.getConfiguredHttpClient(),
+                 DatabaseSettings.COUCH_DB_VM);
         compRepo = new VMComponentRepository(db);
         actionRepo = new VMActionRepository(db);
         prioRepo = new VMPriorityRepository(db);

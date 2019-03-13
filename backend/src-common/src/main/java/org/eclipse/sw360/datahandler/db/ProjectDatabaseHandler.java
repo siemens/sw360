@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
  * With contributions by Siemens Healthcare Diagnostics Inc, 2018.
  *
  * SPDX-License-Identifier: EPL-1.0
@@ -28,10 +28,7 @@ import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
-import org.eclipse.sw360.datahandler.thrift.projects.Project;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectWithReleaseRelationTuple;
+import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserService;
@@ -39,6 +36,8 @@ import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ProjectVulnerabilityRating;
 import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
+
+import org.apache.log4j.Logger;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
@@ -56,7 +55,9 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.*;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.fail;
-import static org.eclipse.sw360.datahandler.common.SW360Utils.*;
+import static org.eclipse.sw360.datahandler.common.SW360Utils.getBUFromOrganisation;
+import static org.eclipse.sw360.datahandler.common.SW360Utils.getCreatedOn;
+import static org.eclipse.sw360.datahandler.common.SW360Utils.printName;
 import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 
 /**
@@ -206,7 +207,9 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         assertNotNull(project);
 
-        if (!changePassesSanityCheck(project, actual)){
+        if (changeWouldResultInDuplicate(actual, project)) {
+            return RequestStatus.DUPLICATE;
+        } else if (!changePassesSanityCheck(project, actual)) {
             return RequestStatus.FAILED_SANITY_CHECK;
         } else if (makePermission(actual, user).isActionAllowed(RequestedAction.WRITE)) {
             copyImmutableFields(project,actual);
@@ -221,6 +224,16 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         } else {
             return moderator.updateProject(project, user);
         }
+    }
+
+    private boolean changeWouldResultInDuplicate(Project before, Project after) {
+        if (before.getName().equals(after.getName()) && ((before.getVersion() == null && after.getVersion() == null)
+                || (before.getVersion() != null && before.getVersion().equals(after.getVersion())))) {
+            // sth else was changed, not one of the duplication relevant properties
+            return false;
+        }
+
+        return isDuplicate(after);
     }
 
     private void deleteAttachmentUsagesOfUnlinkedReleases(Project updated, Project actual) throws SW360Exception {
