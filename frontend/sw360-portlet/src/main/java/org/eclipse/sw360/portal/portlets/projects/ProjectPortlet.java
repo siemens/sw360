@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2013-2018. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
  * With contributions by Bosch Software Innovations GmbH, 2016.
  *
  * SPDX-License-Identifier: EPL-1.0
@@ -14,31 +14,19 @@ package org.eclipse.sw360.portal.portlets.projects;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
 import com.google.common.collect.*;
-import com.liferay.portal.kernel.json.JSONArray;
-import com.liferay.portal.kernel.json.JSONException;
-import com.liferay.portal.kernel.json.JSONFactoryUtil;
-import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.json.*;
 import com.liferay.portal.kernel.portlet.PortletResponseUtil;
 import com.liferay.portal.kernel.servlet.SessionMessages;
 import com.liferay.portal.model.Organization;
 import com.liferay.portal.util.PortalUtil;
-import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
-import org.apache.thrift.TSerializer;
-import org.apache.thrift.protocol.TSimpleJSONProtocol;
-import org.eclipse.sw360.datahandler.common.CommonUtils;
-import org.eclipse.sw360.datahandler.common.SW360Constants;
-import org.eclipse.sw360.datahandler.common.SW360Utils;
-import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
+
+import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.*;
-import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
-import org.eclipse.sw360.datahandler.thrift.components.Release;
-import org.eclipse.sw360.datahandler.thrift.components.ReleaseClearingStatusData;
-import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.VulnerabilityUpdateStatus;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
@@ -56,20 +44,24 @@ import org.eclipse.sw360.portal.portlets.FossologyAwarePortlet;
 import org.eclipse.sw360.portal.users.LifeRayUserSession;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 import org.eclipse.sw360.portal.users.UserUtils;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.thrift.TException;
+import org.apache.thrift.TSerializer;
+import org.apache.thrift.protocol.TSimpleJSONProtocol;
 import org.jetbrains.annotations.NotNull;
 
 import javax.portlet.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URLConnection;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.function.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -292,13 +284,15 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private void sendLicenseInfoResponse(ResourceRequest request, ResourceResponse response, Project project, LicenseInfoFile licenseInfoFile) throws IOException {
-        OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
-        String filename = String.format("LicenseInfo-%s-%s.%s", project.getName(), SW360Utils.getCreatedOn(),
-                outputFormatInfo.getFileExtension());
-        String mimetype = outputFormatInfo.getMimeType();
-        if (isNullOrEmpty(mimetype)) {
-            mimetype = URLConnection.guessContentTypeFromName(filename);
-        }
+    	OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
+	String filename = String.format("LicenseInfo-%s%s-%s.%s", project.getName(),
+			StringUtils.isBlank(project.getVersion()) ? "" : "-" + project.getVersion(),
+			SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
+			outputFormatInfo.getFileExtension());
+    	String mimetype = outputFormatInfo.getMimeType();
+    	if (isNullOrEmpty(mimetype)) {
+    		mimetype = URLConnection.guessContentTypeFromName(filename);
+    	}
 
         PortletResponseUtil.sendFile(request, response, filename, licenseInfoFile.getGeneratedOutput(), mimetype);
     }
@@ -862,7 +856,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 putVulnerabilitiesInRequest(request, id, user);
                 putAttachmentUsagesInRequest(request, id);
                 request.setAttribute(
-                        VULNERABILITY_RATINGS_EDITABLE,
+                        WRITE_ACCESS_USER,
                         PermissionUtils.makePermission(project, user).isActionAllowed(RequestedAction.WRITE));
 
                 addProjectBreadcrumb(request, response, project);
@@ -1176,9 +1170,17 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
                 requestStatus = client.updateProject(project, user);
                 setSessionMessage(request, requestStatus, "Project", "update", printName(project));
-                cleanUploadHistory(user.getEmail(), id);
-                response.setRenderParameter(PAGENAME, PAGENAME_DETAIL);
-                response.setRenderParameter(PROJECT_ID, request.getParameter(PROJECT_ID));
+                if (RequestStatus.DUPLICATE.equals(requestStatus)) {
+                    setSW360SessionError(request, ErrorMessages.PROJECT_DUPLICATE);
+                    response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
+                    request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
+                    request.setAttribute(DOCUMENT_ID, id);
+                    prepareRequestForEditAfterDuplicateError(request, project, user);
+                } else {
+                    cleanUploadHistory(user.getEmail(), id);
+                    response.setRenderParameter(PAGENAME, PAGENAME_DETAIL);
+                    response.setRenderParameter(PROJECT_ID, request.getParameter(PROJECT_ID));
+                }
             } else {
                 // Add project
                 Project project = new Project();
