@@ -15,6 +15,7 @@ package org.eclipse.sw360.datahandler.thrift;
 import com.siemens.sw360.datahandler.thrift.vmcomponents.VMComponentService;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentService;
+import org.eclipse.sw360.datahandler.thrift.codescoop.CodescoopService;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
@@ -69,6 +70,7 @@ public class ThriftClients {
     private static final String SCHEDULE_SERVICE_URL = "/schedule/thrift";
     private static final String VM_SERVICE_URL = "/vmcomponents/thrift";
     private static final String WSIMPORT_SERVICE_URL = "/wsimport/thrift";
+    private static final String CODESCOOP_SERVICE_URL = "/codescoop/thrift";
 
     // A service which has to be scheduled by the scheduler should be registered here!
     // names of services that can be scheduled by the schedule service, i.e. that have an "update" method
@@ -163,5 +165,9 @@ public class ThriftClients {
 
     public ProjectImportService.Iface makeWsImportClient() {
         return new ProjectImportService.Client(makeProtocol(BACKEND_URL, WSIMPORT_SERVICE_URL));
+    }
+
+    public CodescoopService.Iface makeCodescoopClient() {
+        return new CodescoopService.Client(makeProtocol(BACKEND_URL, CODESCOOP_SERVICE_URL));
     }
 }
