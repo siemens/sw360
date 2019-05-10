@@ -36,10 +36,12 @@ import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static org.eclipse.sw360.datahandler.thrift.MainlineState.MAINLINE;
+import static org.eclipse.sw360.datahandler.thrift.MainlineState.OPEN;
 import static org.eclipse.sw360.datahandler.thrift.ReleaseRelationship.CONTAINED;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Matchers.anyObject;
@@ -78,7 +80,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
 
     @Before
-    public void before() throws TException {
+    public void before() throws TException, IOException {
         Set<Attachment> attachmentList = new HashSet<>();
         List<Resource<Attachment>> attachmentResources = new ArrayList<>();
         attachment = new Attachment("1231231254", "spring-core-4.3.4.RELEASE.jar");
@@ -88,6 +90,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
         given(this.attachmentServiceMock.getAttachmentContent(anyObject())).willReturn(new AttachmentContent().setId("1231231254").setFilename("spring-core-4.3.4.RELEASE.jar").setContentType("binary"));
         given(this.attachmentServiceMock.getResourcesFromList(anyObject())).willReturn(new Resources<>(attachmentResources));
+        given(this.attachmentServiceMock.uploadAttachment(anyObject(), anyObject(), anyObject())).willReturn(attachment);
 
         Map<String, ProjectReleaseRelationship> linkedReleases = new HashMap<>();
         Map<String, ProjectRelationship> linkedProjects = new HashMap<>();
@@ -132,6 +135,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         projectList.add(project);
         projectListByName.add(project);
         project.setAttachments(attachmentList);
+        project.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
+        project.setProjectResponsible("projectresponsible@sw360.org");
 
 
         Project project2 = new Project();
@@ -158,6 +163,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project2.setSpecialRisks3rdParty("Lorem Ipsum");
         project2.setDeliveryChannels("Lorem Ipsum");
         project2.setRemarksAdditionalRequirements("Lorem Ipsum");
+        project2.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
+        project2.setProjectResponsible("projectresponsible@sw360.org");
         Map<String, String> projExtKeys = new HashMap();
         projExtKeys.put("mainline-id-project", "7657");
         projExtKeys.put("portal-id", "13319-XX3");
@@ -297,6 +304,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("systemTestEnd").description("Date of the project system end phase"),
                                 fieldWithPath("linkedProjects").description("The relationship between linked projects of the project"),
                                 fieldWithPath("linkedReleases").description("The relationship between linked releases of the project"),
+                                fieldWithPath("securityResponsibles").description("An array of users responsible for security of the project."),
+                                fieldWithPath("projectResponsible").description("A user who is responsible for the project."),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
                                 fieldWithPath("_embedded.createdBy").description("The user who created this project"),
                                 fieldWithPath("_embedded.sw360:projects").description("An array of <<resources-projects, Projects resources>>"),
@@ -444,12 +453,18 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_create_project() throws Exception {
-        Map<String, String> project = new HashMap<>();
+        Map<String, Object> project = new HashMap<>();
         project.put("name", "Test Project");
         project.put("version", "1.0");
         project.put("visibility", "PRIVATE");
         project.put("description", "This is the description of my Test Project");
         project.put("projectType", ProjectType.PRODUCT.toString());
+        Map<String, ProjectReleaseRelationship> releaseIdToUsage = new HashMap<>();
+        releaseIdToUsage.put("3765276512", new ProjectReleaseRelationship(CONTAINED, OPEN));
+        project.put("linkedReleases", releaseIdToUsage);
+        Map<String, ProjectRelationship> linkedProjects = new HashMap<String, ProjectRelationship>();
+        linkedProjects.put("376576", ProjectRelationship.CONTAINED);
+        project.put("linkedProjects", linkedProjects);
 
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(post("/api/projects")
@@ -463,7 +478,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("description").description("The project description"),
                                 fieldWithPath("version").description("The version of the new project"),
                                 fieldWithPath("visibility").description("The project visibility, possible values are: " + Arrays.asList(Visibility.values())),
-                                fieldWithPath("projectType").description("The project type, possible values are: " + Arrays.asList(ProjectType.values()))
+                                fieldWithPath("projectType").description("The project type, possible values are: " + Arrays.asList(ProjectType.values())),
+                                fieldWithPath("linkedReleases").description("The relationship between linked releases of the project"),
+                                fieldWithPath("linkedProjects").description("The relationship between linked projects of the project")
                         ),
                         responseFields(
                                 fieldWithPath("name").description("The name of the project"),
@@ -472,8 +489,24 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("createdOn").description("The date the project was created"),
                                 fieldWithPath("description").description("The project description"),
                                 fieldWithPath("projectType").description("The project type, possible values are: " + Arrays.asList(ProjectType.values())),
+                                fieldWithPath("securityResponsibles").description("An array of users responsible for security of the project."),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
                                 fieldWithPath("_embedded.createdBy").description("The user who created this project")
                         )));
+    }
+
+    @Test
+    public void should_document_upload_attachment_to_project() throws Exception {
+        testAttachmentUpload("/api/projects/", project.getId());
+    }
+
+    @Test
+    public void should_document_link_releases() throws Exception {
+        List<String> releaseIds = Arrays.asList("3765276512", "5578999", "3765276513");
+
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        this.mockMvc.perform(post("/api/projects/" + project.getId() + "/releases").contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(releaseIds))
+                .header("Authorization", "Bearer " + accessToken)).andExpect(status().isCreated());
     }
 }
