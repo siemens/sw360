@@ -32,6 +32,7 @@ import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -71,7 +72,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
     private String releaseId = "3765276512";
 
     @Before
-    public void before() throws TException {
+    public void before() throws TException, IOException {
         Set<Attachment> attachmentList = new HashSet<>();
         List<Resource<Attachment>> attachmentResources = new ArrayList<>();
         attachment = new Attachment("1231231254", "spring-core-4.3.4.RELEASE.jar");
@@ -81,6 +82,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
 
         given(this.attachmentServiceMock.getAttachmentContent(anyObject())).willReturn(new AttachmentContent().setId("1231231254").setFilename("spring-core-4.3.4.RELEASE.jar").setContentType("binary"));
         given(this.attachmentServiceMock.getResourcesFromList(anyObject())).willReturn(new Resources<>(attachmentResources));
+        given(this.attachmentServiceMock.uploadAttachment(anyObject(), anyObject(), anyObject())).willReturn(attachment);
 
         Map<String, Set<String>> externalIds = new HashMap<>();
         externalIds.put("mainline-id-component", new HashSet<>(Arrays.asList("1432", "4876")));
@@ -111,6 +113,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release.setMainlineState(MainlineState.OPEN);
         release.setExternalIds(Collections.singletonMap("mainline-id-component", "1432"));
         release.setAttachments(attachmentList);
+        release.setLanguages(new HashSet<>(Arrays.asList("C++", "Java")));
         releaseList.add(release);
 
         Release release2 = new Release();
@@ -127,6 +130,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release2.setClearingState(ClearingState.APPROVED);
         release2.setMainlineState(MainlineState.MAINLINE);
         release2.setExternalIds(Collections.singletonMap("mainline-id-component", "4876"));
+        release2.setLanguages(new HashSet<>(Arrays.asList("C++", "Java")));
         releaseList.add(release2);
 
         given(this.releaseServiceMock.getReleasesForUser(anyObject())).willReturn(releaseList);
@@ -216,6 +220,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("mainlineState").description("the mainline state of the release, possible values are: " + Arrays.asList(MainlineState.values())),
                                 fieldWithPath("downloadurl").description("the download url of the release"),
                                 fieldWithPath("externalIds").description("When releases are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("languages").description("The language of the component"),
                                 fieldWithPath("_embedded.sw360:moderators").description("An array of all release moderators with email and link to their <<resources-user-get,User resource>>"),
                                 fieldWithPath("_embedded.sw360:attachments").description("An array of all release attachments and link to their <<resources-attachment-get,Attachment resource>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
@@ -267,6 +272,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("mainlineState").description("the mainline state of the release, possible values are: " + Arrays.asList(MainlineState.values())),
                                 fieldWithPath("downloadurl").description("the download url of the release"),
                                 fieldWithPath("externalIds").description("When releases are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("languages").description("The language of the component"),
                                 fieldWithPath("_embedded.sw360:moderators").description("An array of all release moderators with email and link to their <<resources-user-get,User resource>>"),
                                 fieldWithPath("_embedded.sw360:attachments").description("An array of all release attachments and link to their <<resources-attachment-get,Attachment resource>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
@@ -342,5 +348,10 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("createdOn").description("The creation date of the internal sw360 release"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                         )));
+    }
+
+    @Test
+    public void should_document_upload_attachment_to_release() throws Exception {
+        testAttachmentUpload("/api/releases/", releaseId);
     }
 }
