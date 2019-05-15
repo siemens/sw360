@@ -1261,11 +1261,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
                 requestStatus = client.updateProject(project, user);
                 setSessionMessage(request, requestStatus, "Project", "update", printName(project));
-                if (RequestStatus.DUPLICATE.equals(requestStatus) || RequestStatus.DUPLICATE_ATTACHMENT.equals(requestStatus)) {
-                    if(RequestStatus.DUPLICATE.equals(requestStatus))
-                        setSW360SessionError(request, ErrorMessages.PROJECT_DUPLICATE);
-                    else
-                        setSW360SessionError(request, ErrorMessages.DUPLICATE_ATTACHMENT);
+                if (RequestStatus.DUPLICATE.equals(requestStatus)) {
+                    setSW360SessionError(request, ErrorMessages.PROJECT_DUPLICATE);
                     response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
                     request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
                     request.setAttribute(DOCUMENT_ID, id);
