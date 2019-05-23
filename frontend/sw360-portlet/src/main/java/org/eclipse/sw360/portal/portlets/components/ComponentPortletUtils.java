@@ -13,11 +13,13 @@ package org.eclipse.sw360.portal.portlets.components;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.Todo;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
@@ -85,10 +87,23 @@ public abstract class ComponentPortletUtils {
                 case ADDITIONAL_DATA:
                     release.setAdditionalData(PortletUtils.getAdditionalDataMapFromRequest(request));
                     break;
+                case MAINLINE_STATE:
+                    release.setMainlineState(updateMainlineState(request, release));
+                    break;
                 default:
                     setFieldValue(request, release, field);
             }
         }
+    }
+
+    private static MainlineState updateMainlineState(PortletRequest request, Release release) {
+        if (PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, UserCacheHolder.getUserFromRequest(request))
+                || PortalConstants.MAINLINE_STATE_ENABLED_FOR_USER) {
+            return MainlineState.findByValue(Integer.parseInt(request.getParameter(Release._Fields.MAINLINE_STATE.toString())));
+        } else if (release.isSetId()) {
+            return release.getMainlineState();
+        }
+        return MainlineState.OPEN;
     }
 
     private static ClearingInformation getClearingInformationFromRequest(PortletRequest request) {

@@ -18,6 +18,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
@@ -33,7 +34,9 @@ import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
+import org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
@@ -137,20 +140,28 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
     @RequestMapping(value = PROJECTS_URL, method = RequestMethod.POST)
     public ResponseEntity createProject(
             @RequestBody Project project) throws URISyntaxException, TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         if (project.getReleaseIdToUsage() != null) {
 
             Map<String, ProjectReleaseRelationship> releaseIdToUsage = new HashMap<>();
             Map<String, ProjectReleaseRelationship> oriReleaseIdToUsage = project.getReleaseIdToUsage();
+            final boolean isAtLeastClearingAdmin = PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, sw360User);
+            final boolean isMainlineStateChangeEnabled = Sw360ResourceServer.MAINLINE_STATE_ENABLED_FOR_USER;
             for (String releaseURIString : oriReleaseIdToUsage.keySet()) {
                 URI releaseURI = new URI(releaseURIString);
                 String path = releaseURI.getPath();
                 String releaseId = path.substring(path.lastIndexOf('/') + 1);
-                releaseIdToUsage.put(releaseId, oriReleaseIdToUsage.get(releaseURIString));
+                ProjectReleaseRelationship releaseRelationship = oriReleaseIdToUsage.get(releaseURIString);
+                if (isAtLeastClearingAdmin || isMainlineStateChangeEnabled) {
+                    releaseIdToUsage.put(releaseId, releaseRelationship);
+                } else {
+                    releaseIdToUsage.put(releaseId, new ProjectReleaseRelationship(
+                            releaseRelationship.getReleaseRelation(), MainlineState.OPEN));
+                }
             }
             project.setReleaseIdToUsage(releaseIdToUsage);
         }
 
-        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         project = projectService.createProject(project, sw360User);
         HalResource<Project> halResource = createHalProject(project, sw360User);
 
@@ -358,6 +369,16 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
             @RequestBody Project updateProject) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
         Project sw360Project = projectService.getProjectForUserById(id, user);
+        if (!(PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user) || Sw360ResourceServer.MAINLINE_STATE_ENABLED_FOR_USER)) {
+            Map<String, ProjectReleaseRelationship> updatedReleaseIdToUsage = updateProject.getReleaseIdToUsage();
+            Map<String, ProjectReleaseRelationship> currentReleaseIdToUsage = sw360Project.getReleaseIdToUsage();
+            
+            for (Map.Entry<String, ProjectReleaseRelationship> entry : updatedReleaseIdToUsage.entrySet()) {
+                ProjectReleaseRelationship cPrr = currentReleaseIdToUsage.get(entry.getKey());
+                entry.getValue().setMainlineState(cPrr.getMainlineState());
+            }
+            updateProject.setReleaseIdToUsage(updatedReleaseIdToUsage);
+        }
         sw360Project = this.restControllerHelper.updateProject(sw360Project, updateProject);
         projectService.updateProject(sw360Project, user);
         HalResource<Project> userHalResource = createHalProject(sw360Project, user);

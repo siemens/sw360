@@ -16,11 +16,15 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
+import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.component.ComponentController;
@@ -139,6 +143,10 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
             @RequestBody Release updateRelease) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
         Release sw360Release = releaseService.getReleaseForUserById(id, user);
+        if (!PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user) &&
+                !Sw360ResourceServer.MAINLINE_STATE_ENABLED_FOR_USER) {
+            updateRelease.setMainlineState(sw360Release.getMainlineState());
+        }
         sw360Release = this.restControllerHelper.updateRelease(sw360Release, updateRelease);
         releaseService.updateRelease(sw360Release, user);
         HalResource<Release> halRelease = createHalReleaseResource(sw360Release, true);
@@ -174,6 +182,11 @@ public class ReleaseController implements ResourceProcessor<RepositoryLinksResou
                 mainLicenseIds.add(licenseId);
             }
             release.setMainLicenseIds(mainLicenseIds);
+        }
+
+        if (!PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, sw360User) &&
+                !Sw360ResourceServer.MAINLINE_STATE_ENABLED_FOR_USER) {
+            release.setMainlineState(MainlineState.OPEN);
         }
 
         Release sw360Release = releaseService.createRelease(release, sw360User);

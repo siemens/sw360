@@ -13,6 +13,7 @@ package org.eclipse.sw360.portal.portlets.projects;
 import com.google.common.collect.*;
 
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
@@ -22,6 +23,7 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectTodo;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ProjectVulnerabilityRating;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityCheckStatus;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityRatingForProject;
@@ -158,16 +160,25 @@ public class ProjectPortletUtils {
     }
 
     private static void updateLinkedReleasesFromRequest(PortletRequest request, Map<String, ProjectReleaseRelationship> releaseUsage) {
-        releaseUsage.clear();
         String[] ids = request.getParameterValues(Project._Fields.RELEASE_ID_TO_USAGE.toString() + ReleaseLink._Fields.ID.toString());
         String[] relations = request.getParameterValues(Project._Fields.RELEASE_ID_TO_USAGE.toString() + ProjectReleaseRelationship._Fields.RELEASE_RELATION.toString());
         String[] mainlStates = request.getParameterValues(Project._Fields.RELEASE_ID_TO_USAGE.toString() + ProjectReleaseRelationship._Fields.MAINLINE_STATE.toString());
         if (ids != null && relations != null && mainlStates != null && ids.length == relations.length && ids.length == mainlStates.length) {
+            releaseUsage.keySet().retainAll(Arrays.asList(ids));
+            final boolean isAtLeastClearingAdmin = PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, UserCacheHolder.getUserFromRequest(request));
+            final boolean isMainlineStateChangeEnabled = PortalConstants.MAINLINE_STATE_ENABLED_FOR_USER;
             for (int k = 0; k < ids.length; ++k) {
                 ReleaseRelationship relation = ReleaseRelationship.findByValue(Integer.parseInt(relations[k]));
-                MainlineState mainlState = MainlineState.findByValue(Integer.parseInt(mainlStates[k]));
+                MainlineState mainlState = MainlineState.OPEN;
+                if (isAtLeastClearingAdmin || isMainlineStateChangeEnabled) {
+                    mainlState = MainlineState.findByValue(Integer.parseInt(mainlStates[k]));
+                } else if (releaseUsage.containsKey(ids[k])) {
+                    mainlState = MainlineState.findByValue(releaseUsage.get(ids[k]).getMainlineState().getValue());
+                }
                 releaseUsage.put(ids[k], new ProjectReleaseRelationship(relation, mainlState));
             }
+        } else {
+            releaseUsage.clear();
         }
     }
 
