@@ -14,6 +14,7 @@ import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer;
 import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority;
+import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
@@ -28,6 +29,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.common.util.OAuth2Utils;
 import org.springframework.security.oauth2.provider.ClientDetails;
 import org.springframework.security.oauth2.provider.ClientDetailsService;
+import org.springframework.security.oauth2.provider.ClientRegistrationException;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 
 import javax.annotation.PostConstruct;
@@ -36,7 +38,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * This {@link AuthenticationProvider} is specialised on requests where the
+ * This {@link AuthenticationProvider} is specialized on requests where the
  * {@link Sw360CustomHeaderAuthenticationFilter} made sure that the user has
  * already been authenticated by some external proxy that set some headers to
  * let us know about the authentication.
@@ -44,6 +46,8 @@ import java.util.stream.Collectors;
  * In addition it is special because it calculates the granted authorities for
  * the user depending on the user's authorities given by his groups and the
  * client's scopes. The result will be the intersection between these two lists.
+ * Of course this is only done for an oauth request and not for normal ones
+ * (that have nothing to do with clients).
  */
 public class Sw360CustomHeaderAuthenticationProvider implements AuthenticationProvider {
 
@@ -52,13 +56,13 @@ public class Sw360CustomHeaderAuthenticationProvider implements AuthenticationPr
     @Value("${security.customheader.headername.intermediateauthstore:#{null}}")
     private String customHeaderHeadernameIntermediateAuthStore;
 
-    private boolean active;
-
     @Autowired
-    private Sw360CustomHeaderUserDetailsProvider sw360CustomHeaderUserDetailsProvider;
+    private Sw360UserDetailsProvider sw360CustomHeaderUserDetailsProvider;
 
     @Autowired
     private ClientDetailsService clientDetailsService;
+
+    private boolean active;
 
     @PostConstruct
     public void postSw360CustomHeaderAuthenticationProviderConstruction() {
@@ -81,38 +85,80 @@ public class Sw360CustomHeaderAuthenticationProvider implements AuthenticationPr
 
             // get user details
             String email = (String) authentication.getPrincipal();
-            String externalId = (String) authDetails.get(customHeaderHeadernameIntermediateAuthStore);
+            Object externalIds = authDetails.get(customHeaderHeadernameIntermediateAuthStore);
+            String externalId;
+            if (externalIds != null && externalIds instanceof String[]) {
+                externalId = ((String[]) externalIds)[0];
+            } else {
+                externalId = (String) externalIds;
+            }
             User userDetails = sw360CustomHeaderUserDetailsProvider.provideUserDetails(email, externalId);
 
             // calculate user authorities
             List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
             grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.READ.getAuthority()));
-            if (userDetails != null && PermissionUtils
-                    .isUserAtLeast(Sw360AuthorizationServer.CONFIG_WRITE_ACCESS_USERGROUP, userDetails)) {
-                grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.WRITE.getAuthority()));
+            if (userDetails != null) {
+                if (PermissionUtils.isUserAtLeast(Sw360AuthorizationServer.CONFIG_WRITE_ACCESS_USERGROUP, userDetails)) {
+                    grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.WRITE.getAuthority()));
+                }
+                if (PermissionUtils.isUserAtLeast(Sw360AuthorizationServer.CONFIG_ADMIN_ACCESS_USERGROUP, userDetails)) {
+                    grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.ADMIN.getAuthority()));
+                }
             }
 
-            // keep only intersection of user authorities and client scopes
-            String clientId = (String) authDetails.get(OAuth2Utils.CLIENT_ID);
-            ClientDetails clientDetails = clientDetailsService.loadClientByClientId(clientId);
-            Set<String> clientScopes = clientDetails.getScope();
+            // get client details (if oauth request)
+            if (authentication instanceof UsernamePasswordAuthenticationToken) {
+                // if we have a UsernamePasswordAuthenticationToken, then we have an OAuth
+                // request in which case we only want to keep intersection of user authorities
+                // and client scopes
+                Object clientIds = authDetails.get(OAuth2Utils.CLIENT_ID);
+                String clientId;
+                if (clientIds != null && clientIds instanceof String[]) {
+                    clientId = ((String[]) clientIds)[0];
+                } else {
+                    clientId = (String) clientIds;
+                }
 
-            log.debug("User " + email + " has authorities " + grantedAuthorities + " while used client " + clientId
-                    + " has scopes " + clientScopes
-                    + ". Setting intersection as granted authorities for access token!");
+                ClientDetails clientDetails = null;
+                try {
+                    clientDetails = clientDetailsService.loadClientByClientId(clientId);
 
-            grantedAuthorities = grantedAuthorities.stream().map(GrantedAuthority::toString)
-                    .filter(gas -> clientScopes.contains(gas))
-                    .map(gas -> Sw360GrantedAuthority.valueOf(gas)).collect(Collectors.toList());
+                    log.debug("Found client " + clientDetails + " for id " + clientId + " in authentication details.");
+
+                    Set<String> clientScopes = clientDetails.getScope();
+
+                    log.debug("User " + email + " has authorities " + grantedAuthorities + " while used client "
+                            + clientId + " has scopes " + clientScopes
+                            + ". Setting intersection as granted authorities for access token!");
+
+                    grantedAuthorities = grantedAuthorities.stream().map(GrantedAuthority::toString)
+                            .filter(gas -> clientScopes.contains(gas)).map(gas -> Sw360GrantedAuthority.valueOf(gas))
+                            .collect(Collectors.toList());
+                } catch (ClientRegistrationException e) {
+                    log.warn("No valid client for id " + clientId + " could be found. It is possible that it is locked,"
+                            + " expired, disabled, or invalid for any other reason. So absolutely no authorities granted!");
+
+                    grantedAuthorities = new ArrayList<>();
+                }
+            } else {
+                // if we have a PreAuthenticationToken (no other case possible, see supports()
+                // method), then we have a normal REST request in which case we can grant all
+                // authorities calculated from the user profile
+
+                log.debug("User " + email + " has authorities " + grantedAuthorities
+                        + " which he will be granted during this request!");
+            }
 
             return new PreAuthenticatedAuthenticationToken(email, "N/A", grantedAuthorities);
         }
+
         return null;
     }
 
     @Override
     public boolean supports(Class<?> authentication) {
-        return active && authentication.equals(UsernamePasswordAuthenticationToken.class);
+        return active
+                && (authentication.equals(UsernamePasswordAuthenticationToken.class) || authentication.equals(PreAuthenticatedAuthenticationToken.class));
     }
 
 }

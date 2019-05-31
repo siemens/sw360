@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2017. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2017, 2019. Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -8,21 +8,19 @@
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  */
-
 package org.eclipse.sw360.rest.authserver.security.basicauth;
 
-import com.google.common.base.Strings;
-
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
-import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.datahandler.thrift.users.UserService;
+import org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer;
+import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority;
+import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
 
-import org.apache.thrift.TException;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,29 +28,33 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.common.util.OAuth2Utils;
+import org.springframework.security.oauth2.provider.ClientDetails;
+import org.springframework.security.oauth2.provider.ClientDetailsService;
+import org.springframework.security.oauth2.provider.ClientRegistrationException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import static org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer.CONFIG_WRITE_ACCESS_USERGROUP;
 import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.READ;
-import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.WRITE;
 
 /**
  * This {@link AuthenticationProvider} is able to verify the given credentials
  * of the {@link Authentication} object against a configured Liferay instance.
+ *
+ * In addition it supports the special password grant flow of spring in
+ * retrieving information about the oauth client that has initiated the request
+ * and cutting the user authorities to those of the client in such case.
  */
 public class Sw360LiferayAuthenticationProvider implements AuthenticationProvider {
 
-    @Value("${sw360.test-user-id:#{null}}")
-    private String testUserId;
+    private final Logger log = Logger.getLogger(this.getClass());
 
-    @Value("${sw360.test-user-password:#{null}}")
-    private String testUserPassword;
+    private static final String SUPPORTED_GRANT_TYPE = "password";
 
     @Value("${sw360.sw360-portal-server-url}")
     private String sw360PortalServerURL;
@@ -61,9 +63,13 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
     private String sw360LiferayCompanyId;
 
     @Autowired
-    Environment environment;
+    private RestTemplateBuilder restTemplateBuilder;
 
-    private static final String ENVIRONMENT_DEV_PROFILE = "dev";
+    @Autowired
+    private ClientDetailsService clientDetailsService;
+
+    @Autowired
+    private Sw360UserDetailsProvider sw360CustomHeaderUserDetailsProvider;
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -74,22 +80,17 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
         }
         String password = possiblePassword.toString();
 
-        // FIXME: we should definitely find a way to remove this test code in production
-        // code!
-        if (isDevEnvironment() && testUserId != null && testUserPassword != null) {
-            // For easy testing without having a Liferay portal running, we mock an existing sw360 user
-            if (userIdentifier.equals(testUserId) && password.equals(testUserPassword)) {
-                return createAuthenticationToken(userIdentifier, password, null);
-            }
-        } else if (isValidString(sw360PortalServerURL) && isValidString(sw360LiferayCompanyId)) {
+        if (isValidString(sw360PortalServerURL) && isValidString(sw360LiferayCompanyId)) {
             // Verify if the user exists in sw360 and set the corresponding authority (read, write)
             if (isAuthorized(userIdentifier, password)) {
-                User user = getUserByEmailOrExternalId(userIdentifier, userIdentifier);
+                User user = sw360CustomHeaderUserDetailsProvider.provideUserDetails(userIdentifier, userIdentifier);
                 if (!Objects.isNull(user)) {
-                    return createAuthenticationToken(userIdentifier, password, user);
+                    ClientDetails clientDetails = extractClient(authentication);
+                    return createAuthenticationToken(userIdentifier, password, user, clientDetails);
                 }
             }
         }
+
         return null;
     }
 
@@ -106,7 +107,6 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
     private boolean liferayAuthCheckRequest(String route, String userParam, String user, String password) {
         String liferayParameterURL = "/api/jsonws/user/%s?companyId=%s&%s=%s";
         String url = sw360PortalServerURL + String.format(liferayParameterURL, route, sw360LiferayCompanyId, userParam, user);
-        RestTemplateBuilder restTemplateBuilder = new RestTemplateBuilder();
         String encodedPassword;
 
         try {
@@ -126,35 +126,75 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
         return true;
     }
 
-    private User getUserByEmailOrExternalId(String email, String externalId) {
-        UserService.Iface client = new ThriftClients().makeUserClient();
-        try {
-            if (!Strings.isNullOrEmpty(email) && client != null) {
-                return client.getByEmailOrExternalId(email, externalId);
+    private ClientDetails extractClient(Authentication authentication) {
+        ClientDetails clientDetails = null;
+
+        // check if the request contained a grant type to be more sure that is has been
+        // an oauth request
+        if (authentication.getDetails() instanceof Map<?, ?>
+                && ((Map<?, ?>) authentication.getDetails()).containsKey(OAuth2Utils.GRANT_TYPE)) {
+            Map<?, ?> authDetails = ((Map<?, ?>) authentication.getDetails());
+
+            Object grantTypes = authDetails.get(OAuth2Utils.GRANT_TYPE);
+            String grantType;
+            if (grantTypes != null && grantTypes instanceof String[]) {
+                grantType = ((String[]) grantTypes)[0];
+            } else {
+                grantType = (String) grantTypes;
             }
-        } catch (TException e) {
-            return null;
+
+            if (StringUtils.isNotEmpty(grantType) && grantType.equalsIgnoreCase(SUPPORTED_GRANT_TYPE)) {
+                // in the spring's oauth password grant flow, the client (whose credentials have
+                // been used as basic auth) is at this location still the current authentication
+                // object. After the authentication manager found an authentication provider
+                // that can authenticate the given authentication of the user, that one will be
+                // put in the context.
+                Authentication clientAuthentication = SecurityContextHolder.getContext().getAuthentication();
+                if (clientAuthentication != null
+                        && clientAuthentication instanceof UsernamePasswordAuthenticationToken) {
+                    String clientId = ((org.springframework.security.core.userdetails.User) clientAuthentication
+                            .getPrincipal()).getUsername();
+                    try {
+                        clientDetails = clientDetailsService.loadClientByClientId(clientId);
+                        log.debug("Found client " + clientDetails + " for id " + clientId
+                                + " in authentication details.");
+                    } catch (ClientRegistrationException e) {
+                        log.warn("No valid client for id " + grantType + " could be found. It is possible that it is "
+                                + "locked, expired, disabled, or invalid for any other reason.");
+                    }
+                }
+            }
         }
-        return null;
+
+        return clientDetails;
     }
 
-    private Authentication createAuthenticationToken(String name, String password, User user) {
+    private Authentication createAuthenticationToken(String name, String password, User user,
+            ClientDetails clientDetails) {
         List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
         grantedAuthorities.add(new SimpleGrantedAuthority(READ.getAuthority()));
-        if (!Objects.isNull(user) && PermissionUtils.isUserAtLeast(CONFIG_WRITE_ACCESS_USERGROUP, user)) {
-            grantedAuthorities.add(new SimpleGrantedAuthority(WRITE.getAuthority()));
-        }
-        return new UsernamePasswordAuthenticationToken(name, password, grantedAuthorities);
-    }
-
-    private boolean isDevEnvironment() {
-        String[] activeProfiles = environment.getActiveProfiles();
-        for (String profile : activeProfiles) {
-            if (profile.equals(ENVIRONMENT_DEV_PROFILE)) {
-                return true;
+        if (!Objects.isNull(user)) {
+            if (PermissionUtils.isUserAtLeast(Sw360AuthorizationServer.CONFIG_WRITE_ACCESS_USERGROUP, user)) {
+                grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.WRITE.getAuthority()));
+            }
+            if (PermissionUtils.isUserAtLeast(Sw360AuthorizationServer.CONFIG_ADMIN_ACCESS_USERGROUP, user)) {
+                grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.ADMIN.getAuthority()));
             }
         }
-        return false;
+
+        if (!Objects.isNull(clientDetails)) {
+            Set<String> clientScopes = clientDetails.getScope();
+
+            log.debug("User " + user.email + " has authorities " + grantedAuthorities + " while used client "
+                    + clientDetails.getClientId() + " has scopes " + clientScopes
+                    + ". Setting intersection as granted authorities for access token!");
+
+            grantedAuthorities = grantedAuthorities.stream().map(GrantedAuthority::toString)
+                    .filter(gas -> clientScopes.contains(gas)).map(gas -> Sw360GrantedAuthority.valueOf(gas))
+                    .collect(Collectors.toList());
+        }
+
+        return new UsernamePasswordAuthenticationToken(name, password, grantedAuthorities);
     }
 
     private boolean isValidString(String string) {
