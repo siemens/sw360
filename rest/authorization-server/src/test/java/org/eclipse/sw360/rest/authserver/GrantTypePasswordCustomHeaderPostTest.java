@@ -31,7 +31,7 @@ public class GrantTypePasswordCustomHeaderPostTest extends GrantTypePasswordTest
         // since we do not have a proxy that sets the header during test, we set it
         // already on client-side
         HttpHeaders headers = new HttpHeaders();
-        headers.add("authenticated-email", adminTestUser.email);
+        headers.add("mellon-email", adminTestUser.email);
 
         responseEntity = new TestRestTemplate().postForEntity(url, new HttpEntity<>(headers), String.class);
     }

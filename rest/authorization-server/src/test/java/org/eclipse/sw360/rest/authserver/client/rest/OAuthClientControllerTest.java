@@ -94,7 +94,7 @@ public class OAuthClientControllerTest extends IntegrationTestBase {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Lists.newArrayList(MediaType.APPLICATION_JSON));
-        headers.set("authenticated-email", "my-unknown-user");
+        headers.set("mellon-email", "my-unknown-user");
 
         responseEntity = template.exchange(
                 new RequestEntity<String>(headers, HttpMethod.GET, new URI("/client-management")), String.class);
@@ -112,7 +112,7 @@ public class OAuthClientControllerTest extends IntegrationTestBase {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Lists.newArrayList(MediaType.APPLICATION_JSON));
-        headers.set("authenticated-email", adminTestUser.email);
+        headers.set("mellon-email", adminTestUser.email);
 
         responseEntity = template.exchange(
                 new RequestEntity<String>(headers, HttpMethod.GET, new URI("/client-management")), String.class);
@@ -130,7 +130,7 @@ public class OAuthClientControllerTest extends IntegrationTestBase {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Lists.newArrayList(MediaType.APPLICATION_JSON));
-        headers.set("authenticated-email", normalTestUser.email);
+        headers.set("mellon-email", normalTestUser.email);
 
         responseEntity = template.exchange(
                 new RequestEntity<String>(headers, HttpMethod.GET, new URI("/client-management")), String.class);

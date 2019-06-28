@@ -11,11 +11,11 @@ server:
   port: 8090
 
 couchdb:
-  url: http://sw360couchdb:5984
+  url: http://localhost:5984
   database: sw360oauthclients
   # if your couchdb does not use authentication, pls just don't use the settings for username and password
-  #username:
-  #password:
+  username:
+  password:
 
 spring:
   jackson:
@@ -34,8 +34,8 @@ security:
       # Attention: please make sure that the proxy is removing there headers
       # if they are coming from anywhere else then the authentication server
       intermediateauthstore: custom-header-auth-marker
-      email: authenticated-email
-      extid: authenticated-extid
+      email: mellon-email
+      extid: mellon-gid
       # also available - at least in saml pre auth - are "givenname", "surname" and "department"
 
   oauth2:
