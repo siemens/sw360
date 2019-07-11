@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.oauth2.config.annotation.configurers.ClientDetailsServiceConfigurer;
@@ -30,6 +32,8 @@ import org.springframework.security.oauth2.provider.token.store.JwtTokenStore;
 import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFactory;
 
 import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.BASIC;
+
+import java.io.File;
 
 /**
  * This class configures the oauth2 authorization server specialties for the
@@ -79,8 +83,12 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
 
     @Bean
     protected JwtAccessTokenConverter jwtAccessTokenConverter() {
-        KeyStoreKeyFactory keyStoreKeyFactory =
-                new KeyStoreKeyFactory(new ClassPathResource("jwt-keystore.jks"), "sw360SecretKey".toCharArray());
+        Resource resource = new FileSystemResource(new File("/etc/sw360/jwt-keystore.jks"));
+        if (!resource.exists()) {
+            resource = new ClassPathResource("jwt-keystore.jks");
+        }
+
+        KeyStoreKeyFactory keyStoreKeyFactory = new KeyStoreKeyFactory(resource, "sw360SecretKey".toCharArray());
         JwtAccessTokenConverter jwtAccessTokenConverter = new JwtAccessTokenConverter();
         jwtAccessTokenConverter.setKeyPair(keyStoreKeyFactory.getKeyPair("jwt"));
         return jwtAccessTokenConverter;
