@@ -13,6 +13,7 @@
 
 package org.eclipse.sw360.rest.resourceserver.core;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -34,7 +35,7 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.rest.resourceserver.core.serializer.JsonProjectRelationSerializer;
 import org.eclipse.sw360.rest.resourceserver.core.serializer.JsonReleaseRelationSerializer;
-
+import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProject;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -62,6 +63,7 @@ class JacksonCustomizations {
             setMixInAnnotation(Vulnerability.class, Sw360Module.VulnerabilityMixin.class);
             setMixInAnnotation(VulnerabilityDTO.class, Sw360Module.VulnerabilityDTOMixin.class);
             setMixInAnnotation(EccInformation.class, Sw360Module.EccInformationMixin.class);
+            setMixInAnnotation(EmbeddedProject.class, Sw360Module.EmbeddedProjectMixin.class);
         }
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -153,9 +155,7 @@ class JacksonCustomizations {
                 "setOwnerAccountingUnit",
                 "setLicenseInfoHeaderText",
                 "setProjectOwner",
-                "enableSvm",
                 "setEnableSvm",
-                "enableVulnerabilitiesDisplay",
                 "setEnableVulnerabilitiesDisplay"
         })
         static abstract class ProjectMixin extends Project {
@@ -182,6 +182,16 @@ class JacksonCustomizations {
             @JsonProperty("id")
             abstract public String getId();
         }
+
+	static abstract class EmbeddedProjectMixin extends ProjectMixin {
+            @Override
+            @JsonIgnore
+            abstract public boolean isEnableSvm();
+
+            @Override
+            @JsonIgnore
+            abstract public boolean isEnableVulnerabilitiesDisplay();
+	}
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonIgnoreProperties({
@@ -236,7 +246,6 @@ class JacksonCustomizations {
                 "releases",
                 "mainLicenseIds",
                 "softwarePlatforms",
-                "homepage",
                 "mailinglist",
                 "wiki",
                 "blog",
