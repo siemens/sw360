@@ -21,6 +21,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.config.annotation.configurers.ClientDetailsServiceConfigurer;
 import org.springframework.security.oauth2.config.annotation.web.configuration.AuthorizationServerConfigurerAdapter;
 import org.springframework.security.oauth2.config.annotation.web.configuration.EnableAuthorizationServer;
@@ -49,13 +50,17 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
     @Autowired
     private Sw360CustomHeaderAuthenticationFilter sw360CustomHeaderAuthenticationFilter;
 
+    @Autowired
+    private Sw360UserDetailsProvider sw360UserDetailsProvider;
+
     @Override
     public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
         endpoints
                 .allowedTokenEndpointRequestMethods(HttpMethod.GET, HttpMethod.POST)
                 .tokenStore(tokenStore())
                 .tokenEnhancer(jwtAccessTokenConverter())
-                .authenticationManager(authenticationManager);
+                .authenticationManager(authenticationManager)
+                .userDetailsService(userDetailsService());
     }
 
     @Override
@@ -77,6 +82,17 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
     }
 
     @Bean
+    public UserDetailsService userDetailsService() {
+        return new Sw360UserDetailsService(sw360UserDetailsProvider, sw360ClientDetailsService(),
+                sw360UserAndClientAuthoritiesMerger());
+    }
+
+    @Bean
+    public Sw360UserAndClientAuthoritiesMerger sw360UserAndClientAuthoritiesMerger() {
+        return new Sw360UserAndClientAuthoritiesMerger();
+    }
+
+    @Bean
     public TokenStore tokenStore() {
         return new JwtTokenStore(jwtAccessTokenConverter());
     }
@@ -93,5 +109,4 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
         jwtAccessTokenConverter.setKeyPair(keyStoreKeyFactory.getKeyPair("jwt"));
         return jwtAccessTokenConverter;
     }
-
 }

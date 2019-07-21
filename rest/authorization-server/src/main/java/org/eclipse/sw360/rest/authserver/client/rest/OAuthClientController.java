@@ -25,10 +25,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This REST controller can be accessed by users having the authority
@@ -105,9 +104,7 @@ public class OAuthClientController {
     }
 
     private void updateClientEntityFromResource(OAuthClientEntity clientEntity, OAuthClientResource clientResource) {
-        // updateable properties
-        // clientEntity.setClientId(clientResource.getClientId());
-        // clientEntity.setClientSecret(clientResource.getClientSecret());
+        // updateable properties (clientId and clientSecret cannot be changed)
         clientEntity.setDescription(clientResource.getDescription());
         clientEntity.setAuthoritiesAsStrings(clientResource.getAuthorities());
         clientEntity.setScope(clientResource.getScope());
@@ -115,8 +112,9 @@ public class OAuthClientController {
         clientEntity.setRefreshTokenValiditySeconds(clientResource.getRefreshTokenValidity());
 
         // static properties
-        clientEntity.setAuthorizedGrantTypes(Sets.newHashSet("client_credentials", "password"));
-        clientEntity.setAutoApproveScopes(Sets.newHashSet("true"));
+        clientEntity.setAuthorizedGrantTypes(
+                Stream.of("client_credentials", "password", "refresh_token").collect(Collectors.toSet()));
+        clientEntity.setAutoApproveScopes(Collections.singleton("true"));
         clientEntity.setResourceIds(Sets.newHashSet(resourceId));
         clientEntity.setRegisteredRedirectUri(null);
     }

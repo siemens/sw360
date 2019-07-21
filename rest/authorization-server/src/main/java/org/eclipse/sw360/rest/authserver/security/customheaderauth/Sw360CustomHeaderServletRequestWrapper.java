@@ -17,9 +17,7 @@ import org.springframework.security.web.savedrequest.Enumerator;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * This {@link HttpServletRequestWrapper} is able to extend the parameter list
@@ -72,14 +70,11 @@ public class Sw360CustomHeaderServletRequestWrapper extends HttpServletRequestWr
 
     @Override
     public String getParameter(String name) {
-        String result = null;
         String[] allValues = addableParameterMap.get(name);
 
-        if (allValues != null && allValues.length > 0) {
-            result = allValues[0];
-        }
-
-        return result;
+        return Arrays.stream(allValues)
+                .findFirst()
+                .orElse(null);
     }
 
 }

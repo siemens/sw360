@@ -99,7 +99,8 @@ public class Sw360CustomHeaderAuthenticationFilter extends GenericFilterBean {
     public void postSw360CustomHeaderAuthenticationFilterConstruction() {
         if (StringUtils.isEmpty(customHeaderHeadernameEmail) || StringUtils.isEmpty(customHeaderHeadernameExtid)
                 || StringUtils.isEmpty(customHeaderHeadernameIntermediateAuthStore)) {
-            log.warn("Filter is NOT active! Some configuration is missing. Needed config keys:\n"
+            log.info("Filter is NOT active! If you want to activate it, please provide a complete configuration. "
+                    + "Needed config keys:\n"
                     + "- security.customheader.headername.email\n"
                     + "- security.customheader.headername.extid\n"
                     + "- security.customheader.headername.intermediateauthstore");
