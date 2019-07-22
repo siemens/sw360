@@ -320,8 +320,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private void sendLicenseInfoResponse(ResourceRequest request, ResourceResponse response, Project project, LicenseInfoFile licenseInfoFile) throws IOException {
-    	OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
-	String filename = String.format("LicenseInfo-%s%s-%s.%s", project.getName(),
+        OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
+        String documentVariant = licenseInfoFile.getOutputFormatInfo().getVariant() == OutputFormatVariant.DISCLOSURE ? "LicenseInfo" : "ProjectClearingReport";
+        String filename = String.format("%s-%s%s-%s.%s", documentVariant, project.getName(),
 			StringUtils.isBlank(project.getVersion()) ? "" : "-" + project.getVersion(),
 			SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
 			outputFormatInfo.getFileExtension());
@@ -1222,6 +1223,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 putDirectlyLinkedReleasesInRequest(request, newProject);
                 request.setAttribute(USING_PROJECTS, Collections.emptySet());
                 request.setAttribute(ALL_USING_PROJECTS_COUNT, 0);
+                request.setAttribute(SOURCE_PROJECT_ID, id);
             } else {
                 Project project = new Project();
                 project.setBusinessUnit(user.getDepartment());
@@ -1277,6 +1279,12 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 Project project = new Project();
                 ProjectPortletUtils.updateProjectFromRequest(request, project);
                 AddDocumentRequestSummary summary = client.addProject(project, user);
+                String  newProjectId= summary.getId();
+                String sourceProjectId = request.getParameter(SOURCE_PROJECT_ID);
+
+                if (sourceProjectId != null) {
+                    copyAttachmentUsagesForClonedProject(request, sourceProjectId, newProjectId);
+                }
 
                 AddDocumentRequestStatus status = summary.getRequestStatus();
                 switch(status) {
@@ -1300,6 +1308,30 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         } catch (TException e) {
             log.error("Error updating project in backend!", e);
             setSW360SessionError(request, ErrorMessages.DEFAULT_ERROR_MESSAGE);
+        }
+    }
+
+    private void copyAttachmentUsagesForClonedProject(ActionRequest request, String sourceProjectId, String newProjectId)
+            throws TException, PortletException {
+        try {
+            AttachmentService.Iface attachmentClient = thriftClients.makeAttachmentClient();
+
+            List<AttachmentUsage> attachmentUsages = wrapTException(
+                    () -> attachmentClient.getUsedAttachments(Source.projectId(sourceProjectId), null));
+            attachmentUsages.forEach(attachmentUsage -> {
+                attachmentUsage.unsetId();
+                attachmentUsage.setUsedBy(Source.projectId(newProjectId));
+                if (attachmentUsage.isSetUsageData()
+                        && attachmentUsage.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO)
+                        && attachmentUsage.getUsageData().getLicenseInfo().isSetProjectPath()) {
+                    LicenseInfoUsage licenseInfoUsage = attachmentUsage.getUsageData().getLicenseInfo();
+                    String projectPath = licenseInfoUsage.getProjectPath();
+                    licenseInfoUsage.setProjectPath(projectPath.replace(sourceProjectId, newProjectId));
+                }
+            });
+            attachmentClient.makeAttachmentUsages(attachmentUsages);
+        } catch (WrappedTException e) {
+            throw new PortletException("Cannot clone attachment usages", e);
         }
     }
 

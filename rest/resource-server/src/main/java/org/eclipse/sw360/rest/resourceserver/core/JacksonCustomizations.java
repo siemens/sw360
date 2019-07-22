@@ -99,6 +99,7 @@ class JacksonCustomizations {
                 "setType",
                 "setName",
                 "setDescription",
+                "setDomain",
                 "setVersion",
                 "setExternalIds",
                 "setAttachments",
@@ -246,7 +247,6 @@ class JacksonCustomizations {
                 "releases",
                 "mainLicenseIds",
                 "softwarePlatforms",
-                "mailinglist",
                 "wiki",
                 "blog",
                 "wikipedia",
@@ -326,7 +326,6 @@ class JacksonCustomizations {
                 "revision",
                 "attachments",
                 "permissions",
-                "createdBy",
                 "moderators",
                 "clearingInformation",
                 "setAttachments",
@@ -375,7 +374,6 @@ class JacksonCustomizations {
                 "clearingTeamToFossologyStatusSize",
                 "setClearingTeamToFossologyStatus",
                 "setEccInformation",
-                "operatingSystems",
                 "languagesIterator",
                 "operatingSystemsIterator",
                 "cotsDetails",
@@ -384,7 +382,10 @@ class JacksonCustomizations {
                 "contributorsIterator",
                 "rolesSize",
                 "setRoles",
-                "setCreatorDepartment"
+                "setCreatorDepartment",
+                "setSoftwarePlatforms",
+                "softwarePlatformsSize",
+                "softwarePlatformsIterator",
         })
         static abstract class ReleaseMixin extends Release {
             @Override
