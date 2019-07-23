@@ -17,8 +17,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -35,6 +37,7 @@ import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFacto
 import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.BASIC;
 
 import java.io.File;
+
 
 /**
  * This class configures the oauth2 authorization server specialties for the
@@ -84,12 +87,12 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
     @Bean
     public UserDetailsService userDetailsService() {
         return new Sw360UserDetailsService(sw360UserDetailsProvider, sw360ClientDetailsService(),
-                sw360UserAndClientAuthoritiesMerger());
+                sw360UserAndClientAuthoritiesCalculator());
     }
 
     @Bean
-    public Sw360UserAndClientAuthoritiesMerger sw360UserAndClientAuthoritiesMerger() {
-        return new Sw360UserAndClientAuthoritiesMerger();
+    public Sw360GrantedAuthoritiesCalculator sw360UserAndClientAuthoritiesCalculator() {
+        return new Sw360GrantedAuthoritiesCalculator();
     }
 
     @Bean
@@ -109,4 +112,5 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
         jwtAccessTokenConverter.setKeyPair(keyStoreKeyFactory.getKeyPair("jwt"));
         return jwtAccessTokenConverter;
     }
+
 }
