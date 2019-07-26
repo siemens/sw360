@@ -141,8 +141,3 @@ If you like to receive a copy of the source code, please contact SIEMENS at the 
   Germany
   Keyword: Open Source Request (please specify Product name and version, if applicable)
 
-SIEMENS may charge a handling fee of up to 5 EUR to fulfill the request.
-
-  Warranty regarding further use of the Open Source Software:
-
-  SIEMENS' warranty obligations are set forth in your agreement with SIEMENS. SIEMENS does not provide any warranty or technical support for this Product or any OSS components contained in it if they are modified or used in any manner not specified by SIEMENS. The license conditions listed below may contain disclaimers that apply between you and the respective licensor. For the avoidance of doubt, SIEMENS does not make any warranty commitment on behalf of or binding upon any third party licensor.
