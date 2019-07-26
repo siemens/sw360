@@ -71,6 +71,7 @@ public class PortalConstants {
 
     public static final String IS_USER_AT_LEAST_CLEARING_ADMIN = "isUserAtLeastClearingAdmin";
     public static final String IS_USER_AT_LEAST_ECC_ADMIN = "isUserAtLeastECCAdmin";
+    public static final String IS_USER_ADMIN = "isUserAdmin";
 
     //! Specialized keys for licenses
     public static final String KEY_LICENSE_DETAIL = "licenseDetail";
@@ -416,6 +417,8 @@ public class PortalConstants {
     public static final String CUSTOM_MAP_VALUE = "customMapValue";
     public static final String EXTERNAL_ID_KEY = "externalIdKey";
     public static final String EXTERNAL_ID_VALUE = "externalIdValue";
+    public static final String ADDITIONAL_DATA_KEY = "additionalDataKey";
+    public static final String ADDITIONAL_DATA_VALUE = "additionalDataValue";
 
     //! request status
     public static final String REQUEST_STATUS = "request_status";
