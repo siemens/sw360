@@ -107,6 +107,8 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         angularComponent.setOperatingSystems(ImmutableSet.of("Windows", "Linux"));
         angularComponent.setAttachments(attachmentList);
         angularComponent.setExternalIds(Collections.singletonMap("component-id-key", "1831A3"));
+        angularComponent.setMailinglist("test@liferay.com");
+        angularComponent.setAdditionalData(Collections.singletonMap("Key", "Value"));
         angularComponent.setHomepage("https://angular.io");
         componentList.add(angularComponent);
         componentListByName.add(angularComponent);
@@ -128,6 +130,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         springComponent.setLanguages(ImmutableSet.of("EN", "DE"));
         springComponent.setOperatingSystems(ImmutableSet.of("Windows", "Linux"));
         springComponent.setExternalIds(Collections.singletonMap("component-id-key", "c77321"));
+        springComponent.setMailinglist("test@liferay.com");
         componentList.add(springComponent);
 
         when(this.componentServiceMock.createComponent(anyObject(), anyObject())).then(invocation ->
@@ -304,7 +307,9 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("categories").description("The component categories"),
                                 fieldWithPath("languages").description("The language of the component"),
                                 fieldWithPath("externalIds").description("When projects are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("additionalData").description("A place to store additional data used by external tools"),
                                 fieldWithPath("operatingSystems").description("The OS on which the component operates"),
+                                fieldWithPath("mailinglist").description("Component mailing lists"),
                                 fieldWithPath("homepage").description("The homepage url of the component"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
                                 fieldWithPath("_embedded.createdBy").description("The user who created this component"),
@@ -443,8 +448,10 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("ownerGroup").description("The owner group of the component"),
                                 fieldWithPath("ownerCountry").description("The owner country of the component"),
                                 fieldWithPath("externalIds").description("When projects are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("additionalData").description("A place to store additional data used by external tools"),
                                 fieldWithPath("categories").description("The component categories"),
                                 fieldWithPath("languages").description("The language of the component"),
+                                fieldWithPath("mailinglist").description("Component mailing lists"),
                                 fieldWithPath("operatingSystems").description("The OS on which the component operates"),
                                 fieldWithPath("homepage").description("The homepage url of the component"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources"),

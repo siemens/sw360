@@ -49,12 +49,20 @@
         <td><sw360:DisplayEnum value="${project.projectType}"/></td>
     </tr>
     <tr>
+        <td>Domain:</td>
+        <td><sw360:out value="${project.domain}"/></td>
+    </tr>
+    <tr>
         <td>Tag:</td>
         <td><sw360:out value="${project.tag}"/></td>
     </tr>
     <tr>
         <td>External ids:</td>
         <td><sw360:DisplayMap value="${project.externalIds}"/></td>
+    </tr>
+    <tr>
+        <td>Additional Data:</td>
+        <td><sw360:DisplayMap value="${project.additionalData}"/></td>
     </tr>
 </table>
 

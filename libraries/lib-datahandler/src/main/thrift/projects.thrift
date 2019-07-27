@@ -14,6 +14,7 @@ include "attachments.thrift"
 include "vendors.thrift"
 include "components.thrift"
 include "sw360.thrift"
+include "commonobligations.thrift"
 include "licenses.thrift"
 
 namespace java org.eclipse.sw360.datahandler.thrift.projects
@@ -73,9 +74,11 @@ struct Project {
     4: required string name,
     5: optional string description,
     6: optional string version,
+    7: optional string domain,
 
     // information from external data sources
     9: optional map<string, string> externalIds,
+    300: optional map<string, string> additionalData,
 
     // Additional informations
     10: optional set<Attachment> attachments,

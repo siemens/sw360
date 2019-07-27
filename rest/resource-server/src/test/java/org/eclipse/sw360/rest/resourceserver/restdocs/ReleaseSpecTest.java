@@ -17,9 +17,11 @@ import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
+import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.junit.Before;
@@ -31,6 +33,10 @@ import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultHandler;
+
+import com.google.common.collect.ImmutableSet;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -64,6 +70,9 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
 
     @MockBean
     private Sw360AttachmentService attachmentServiceMock;
+
+    @MockBean
+    private Sw360LicenseService licenseServiceMock;
 
     private Release release;
     private Attachment attachment;
@@ -112,8 +121,12 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release.setClearingState(ClearingState.APPROVED);
         release.setMainlineState(MainlineState.OPEN);
         release.setExternalIds(Collections.singletonMap("mainline-id-component", "1432"));
+        release.setAdditionalData(Collections.singletonMap("Key", "Value"));
         release.setAttachments(attachmentList);
         release.setLanguages(new HashSet<>(Arrays.asList("C++", "Java")));
+        release.setMainLicenseIds(new HashSet<>(Arrays.asList("GPL-2.0-or-later", "Apache-2.0")));
+        release.setOperatingSystems(ImmutableSet.of("Windows", "Linux"));
+        release.setSoftwarePlatforms(new HashSet<>(Arrays.asList("Java SE", ".NET")));
         releaseList.add(release);
 
         Release release2 = new Release();
@@ -131,6 +144,8 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release2.setMainlineState(MainlineState.MAINLINE);
         release2.setExternalIds(Collections.singletonMap("mainline-id-component", "4876"));
         release2.setLanguages(new HashSet<>(Arrays.asList("C++", "Java")));
+        release2.setOperatingSystems(ImmutableSet.of("Windows", "Linux"));
+        release2.setSoftwarePlatforms(new HashSet<>(Arrays.asList("Java SE", ".NET")));
         releaseList.add(release2);
 
         given(this.releaseServiceMock.getReleasesForUser(anyObject())).willReturn(releaseList);
@@ -154,6 +169,15 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                 new User("admin@sw360.org", "sw360").setId("123456789"));
         given(this.userServiceMock.getUserByEmail("jane@sw360.org")).willReturn(
                 new User("jane@sw360.org", "sw360").setId("209582812"));
+        given(this.licenseServiceMock.getLicenseById("Apache-2.0")).willReturn(
+                new License("Apache 2.0 License")
+                        .setText("Dummy License Text")
+                        .setShortname("Apache-2.0")
+                        .setId(UUID.randomUUID().toString()));
+        given(this.licenseServiceMock.getLicenseById("GPL-2.0-or-later")).willReturn(
+                new License("GNU General Public License 2.0").setText("GNU General Public License 2.0 Text")
+                        .setShortname("GPL-2.0-or-later")
+                        .setId(UUID.randomUUID().toString()));
     }
 
     @Test
@@ -212,6 +236,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                         responseFields(
                                 fieldWithPath("name").description("The name of the release, optional"),
                                 fieldWithPath("version").description("The version of the release"),
+                                fieldWithPath("createdBy").description("Email of the release creator"),
                                 fieldWithPath("cpeId").description("CpeId of the release"),
                                 fieldWithPath("clearingState").description("The clearing of the release, possible values are " + Arrays.asList(ClearingState.values())),
                                 fieldWithPath("cpeId").description("The CPE id"),
@@ -220,7 +245,11 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("mainlineState").description("the mainline state of the release, possible values are: " + Arrays.asList(MainlineState.values())),
                                 fieldWithPath("downloadurl").description("the download url of the release"),
                                 fieldWithPath("externalIds").description("When releases are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("additionalData").description("A place to store additional data used by external tools"),
                                 fieldWithPath("languages").description("The language of the component"),
+                                fieldWithPath("_embedded.sw360:licenses").description("An array of all main licenses with their fullName and link to their <<resources-license-get,License resource>>"),
+                                fieldWithPath("operatingSystems").description("The OS on which the release operates"),
+                                fieldWithPath("softwarePlatforms").description("The software platforms of the component"),
                                 fieldWithPath("_embedded.sw360:moderators").description("An array of all release moderators with email and link to their <<resources-user-get,User resource>>"),
                                 fieldWithPath("_embedded.sw360:attachments").description("An array of all release attachments and link to their <<resources-attachment-get,Attachment resource>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")
@@ -264,6 +293,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                         responseFields(
                                 fieldWithPath("name").description("The name of the release, optional"),
                                 fieldWithPath("version").description("The version of the release"),
+                                fieldWithPath("createdBy").description("Email of the release creator"),
                                 fieldWithPath("cpeId").description("CpeId of the release"),
                                 fieldWithPath("clearingState").description("The clearing of the release, possible values are " + Arrays.asList(ClearingState.values())),
                                 fieldWithPath("cpeId").description("The CPE id"),
@@ -272,7 +302,11 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("mainlineState").description("the mainline state of the release, possible values are: " + Arrays.asList(MainlineState.values())),
                                 fieldWithPath("downloadurl").description("the download url of the release"),
                                 fieldWithPath("externalIds").description("When releases are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("additionalData").description("A place to store additional data used by external tools"),
                                 fieldWithPath("languages").description("The language of the component"),
+                                fieldWithPath("_embedded.sw360:licenses").description("An array of all main licenses with their fullName and link to their <<resources-license-get,License resource>>"),
+                                fieldWithPath("operatingSystems").description("The OS on which the release operates"),
+                                fieldWithPath("softwarePlatforms").description("The software platforms of the component"),
                                 fieldWithPath("_embedded.sw360:moderators").description("An array of all release moderators with email and link to their <<resources-user-get,User resource>>"),
                                 fieldWithPath("_embedded.sw360:attachments").description("An array of all release attachments and link to their <<resources-attachment-get,Attachment resource>>"),
                                 fieldWithPath("_links").description("<<resources-index-links,Links>> to other resources")

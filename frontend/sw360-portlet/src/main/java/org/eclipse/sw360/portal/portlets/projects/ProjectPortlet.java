@@ -46,6 +46,7 @@ import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.*;
 import org.eclipse.sw360.exporter.ProjectExporter;
@@ -320,8 +321,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private void sendLicenseInfoResponse(ResourceRequest request, ResourceResponse response, Project project, LicenseInfoFile licenseInfoFile) throws IOException {
-    	OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
-	String filename = String.format("LicenseInfo-%s%s-%s.%s", project.getName(),
+        OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
+        String documentVariant = licenseInfoFile.getOutputFormatInfo().getVariant() == OutputFormatVariant.DISCLOSURE ? "LicenseInfo" : "ProjectClearingReport";
+        String filename = String.format("%s-%s%s-%s.%s", documentVariant, project.getName(),
 			StringUtils.isBlank(project.getVersion()) ? "" : "-" + project.getVersion(),
 			SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
 			outputFormatInfo.getFileExtension());
@@ -803,8 +805,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareStandardView(RenderRequest request) throws IOException {
+        User user = UserCacheHolder.getUserFromRequest(request);
         List<Organization> organizations = UserUtils.getOrganizations(request);
         request.setAttribute(PortalConstants.ORGANIZATIONS, organizations);
+        request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? "Yes" : "No");
         for (Project._Fields filteredField : projectFilteredFields) {
             String parameter = request.getParameter(filteredField.toString());
             request.setAttribute(filteredField.getFieldName(), nullToEmpty(parameter));
@@ -908,6 +912,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
                 addProjectBreadcrumb(request, response, project);
                 request.setAttribute(PROJECT_OBLIGATIONS, SW360Utils.getProjectObligations(project));
+                request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? "Yes" : "No");
 
             } catch (TException e) {
                 log.error("Error fetching project from backend!", e);
@@ -1222,6 +1227,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 putDirectlyLinkedReleasesInRequest(request, newProject);
                 request.setAttribute(USING_PROJECTS, Collections.emptySet());
                 request.setAttribute(ALL_USING_PROJECTS_COUNT, 0);
+                request.setAttribute(SOURCE_PROJECT_ID, id);
             } else {
                 Project project = new Project();
                 project.setBusinessUnit(user.getDepartment());
@@ -1277,6 +1283,12 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 Project project = new Project();
                 ProjectPortletUtils.updateProjectFromRequest(request, project);
                 AddDocumentRequestSummary summary = client.addProject(project, user);
+                String  newProjectId= summary.getId();
+                String sourceProjectId = request.getParameter(SOURCE_PROJECT_ID);
+
+                if (sourceProjectId != null) {
+                    copyAttachmentUsagesForClonedProject(request, sourceProjectId, newProjectId);
+                }
 
                 AddDocumentRequestStatus status = summary.getRequestStatus();
                 switch(status) {
@@ -1300,6 +1312,30 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         } catch (TException e) {
             log.error("Error updating project in backend!", e);
             setSW360SessionError(request, ErrorMessages.DEFAULT_ERROR_MESSAGE);
+        }
+    }
+
+    private void copyAttachmentUsagesForClonedProject(ActionRequest request, String sourceProjectId, String newProjectId)
+            throws TException, PortletException {
+        try {
+            AttachmentService.Iface attachmentClient = thriftClients.makeAttachmentClient();
+
+            List<AttachmentUsage> attachmentUsages = wrapTException(
+                    () -> attachmentClient.getUsedAttachments(Source.projectId(sourceProjectId), null));
+            attachmentUsages.forEach(attachmentUsage -> {
+                attachmentUsage.unsetId();
+                attachmentUsage.setUsedBy(Source.projectId(newProjectId));
+                if (attachmentUsage.isSetUsageData()
+                        && attachmentUsage.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO)
+                        && attachmentUsage.getUsageData().getLicenseInfo().isSetProjectPath()) {
+                    LicenseInfoUsage licenseInfoUsage = attachmentUsage.getUsageData().getLicenseInfo();
+                    String projectPath = licenseInfoUsage.getProjectPath();
+                    licenseInfoUsage.setProjectPath(projectPath.replace(sourceProjectId, newProjectId));
+                }
+            });
+            attachmentClient.makeAttachmentUsages(attachmentUsages);
+        } catch (WrappedTException e) {
+            throw new PortletException("Cannot clone attachment usages", e);
         }
     }
 

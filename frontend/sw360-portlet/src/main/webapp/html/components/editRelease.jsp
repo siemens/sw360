@@ -53,6 +53,7 @@
 
     <core_rt:set var="programmingLanguages" value='<%=PortalConstants.PROGRAMMING_LANGUAGES%>'/>
     <core_rt:set var="operatingSystemsAutoC" value='<%=PortalConstants.OPERATING_SYSTEMS%>'/>
+    <core_rt:set var="platformsAutoC" value='<%=PortalConstants.SOFTWARE_PLATFORMS%>'/>
 
     <core_rt:set var="addMode" value="${empty release.id}"/>
     <core_rt:set var="cotsMode" value="<%=component.componentType == ComponentType.COTS%>"/>
@@ -115,6 +116,8 @@
                             <core_rt:set var="externalIdsSet" value="${release.externalIds.entrySet()}"/>
                             <core_rt:set var="externalIdKeys" value="<%=PortalConstants.RELEASE_EXTERNAL_ID_KEYS%>"/>
                             <%@include file="/html/utils/includes/editExternalIds.jsp" %>
+                            <core_rt:set var="additionalDataSet" value="${release.additionalData.entrySet()}"/>
+                            <%@include file="/html/utils/includes/editAdditionalData.jsp" %>
                             <%@include file="/html/components/includes/releases/editReleaseRepository.jspf" %>
                         </div>
                         <div id="tab-ReleaseLinks">
@@ -179,6 +182,7 @@
         Liferay.on('allPortletsReady', function() {
             autocomplete.prepareForMultipleHits('programminglanguages', ${programmingLanguages});
             autocomplete.prepareForMultipleHits('op_systems', ${operatingSystemsAutoC});
+            autocomplete.prepareForMultipleHits('platformsTB', ${platformsAutoC});
 
             sw360Validate.validateWithInvalidHandlerNoIgnore('#releaseEditForm');
 

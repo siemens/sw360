@@ -11,7 +11,7 @@
 package org.eclipse.sw360.rest.authserver.security.basicauth;
 
 import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.rest.authserver.security.Sw360UserAndClientAuthoritiesMerger;
+import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthoritiesCalculator;
 import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
 
 import org.apache.commons.lang.StringUtils;
@@ -35,6 +35,8 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.Map;
 import java.util.Objects;
+
+
 /**
  * This {@link AuthenticationProvider} is able to verify the given credentials
  * of the {@link Authentication} object against a configured Liferay instance.
@@ -42,7 +44,7 @@ import java.util.Objects;
  * In addition it supports the special password grant flow of spring in
  * retrieving information about the oauth client that has initiated the request
  * and cutting the user authorities to those of the client in such case by using
- * the {@link Sw360UserAndClientAuthoritiesMerger}.
+ * the {@link Sw360GrantedAuthoritiesCalculator}.
  */
 public class Sw360LiferayAuthenticationProvider implements AuthenticationProvider {
 
@@ -66,7 +68,7 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
     private Sw360UserDetailsProvider sw360CustomHeaderUserDetailsProvider;
 
     @Autowired
-    private Sw360UserAndClientAuthoritiesMerger sw360UserAndClientAuthoritiesMerger;
+    private Sw360GrantedAuthoritiesCalculator sw360UserAndClientAuthoritiesCalculator;
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -84,7 +86,7 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
                 if (!Objects.isNull(user)) {
                     ClientDetails clientDetails = extractClient(authentication);
                     return new UsernamePasswordAuthenticationToken(userIdentifier, password,
-                            sw360UserAndClientAuthoritiesMerger.mergeAuthoritiesOf(user, clientDetails));
+                            sw360UserAndClientAuthoritiesCalculator.mergedAuthoritiesOf(user, clientDetails));
                 }
             }
         }

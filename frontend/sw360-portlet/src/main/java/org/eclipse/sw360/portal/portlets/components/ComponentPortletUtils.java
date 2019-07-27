@@ -15,6 +15,7 @@ import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
+import org.eclipse.sw360.datahandler.thrift.licenses.Todo;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
@@ -78,8 +79,13 @@ public abstract class ComponentPortletUtils {
                     break;
                 case ROLES:
                     release.setRoles(PortletUtils.getCustomMapFromRequest(request));
+                    break;
                 case EXTERNAL_IDS:
                     release.setExternalIds(PortletUtils.getExternalIdMapFromRequest(request));
+                    break;
+                case ADDITIONAL_DATA:
+                    release.setAdditionalData(PortletUtils.getAdditionalDataMapFromRequest(request));
+                    break;
                 default:
                     setFieldValue(request, release, field);
             }
@@ -125,14 +131,24 @@ public abstract class ComponentPortletUtils {
     }
 
     static void updateComponentFromRequest(PortletRequest request, Component component) {
-        List<String> requestParams = Collections.list(request.getParameterNames());
-        for (Component._Fields field : extractFieldsForComponentUpdate(requestParams, component)) {
-            setFieldValue(request, component, field);
+        for (Component._Fields field : Component._Fields.values()) {
+            switch (field) {
+                case ATTACHMENTS:
+                    component.setAttachments(PortletUtils.updateAttachmentsFromRequest(request, component.getAttachments()));
+                    break;
+                case ROLES:
+                    component.setRoles(PortletUtils.getCustomMapFromRequest(request));
+                case EXTERNAL_IDS:
+                    component.setExternalIds(PortletUtils.getExternalIdMapFromRequest(request));
+                    break;
+                case ADDITIONAL_DATA:
+                    component.setAdditionalData(PortletUtils.getAdditionalDataMapFromRequest(request));
+                    break;
+                default:
+                    setFieldValue(request, component, field);
+                    break;
+            }
         }
-
-        component.setAttachments(PortletUtils.updateAttachmentsFromRequest(request, component.getAttachments()));
-        component.setRoles(PortletUtils.getCustomMapFromRequest(request));
-        component.setExternalIds(PortletUtils.getExternalIdMapFromRequest(request));
     }
 
     private static List<Component._Fields> extractFieldsForComponentUpdate(List<String> requestParams, Component component) {
@@ -147,6 +163,12 @@ public abstract class ComponentPortletUtils {
         setFieldValue(request, vendor, Vendor._Fields.FULLNAME);
         setFieldValue(request, vendor, Vendor._Fields.SHORTNAME);
         setFieldValue(request, vendor, Vendor._Fields.URL);
+    }
+
+    public static void updateTodoFromRequest(PortletRequest request, Todo todo) {
+        setFieldValue(request, todo, Todo._Fields.TITLE);
+        setFieldValue(request, todo, Todo._Fields.TEXT);
+        setFieldValue(request, todo, Todo._Fields.VALID_FOR_PROJECT);
     }
 
     private static void updateLinkedReleaseFromRequest(PortletRequest request, Map<String, ReleaseRelationship> linkedReleases) {
@@ -185,6 +207,10 @@ public abstract class ComponentPortletUtils {
 
     private static void setFieldValue(PortletRequest request, Vendor vendor, Vendor._Fields field) {
         PortletUtils.setFieldValue(request, vendor, field, Vendor.metaDataMap.get(field), "");
+    }
+
+    private static void setFieldValue(PortletRequest request, Todo todo, Todo._Fields field) {
+        PortletUtils.setFieldValue(request, todo, field, Todo.metaDataMap.get(field), "");
     }
 
     public static RequestStatus deleteRelease(PortletRequest request, Logger log) {

@@ -177,6 +177,7 @@ struct Release {
 
     // information from external data sources
     9: optional  map<string, string> externalIds,
+    300: optional map<string, string> additionalData,
 
     // Additional informations
     10: optional set<Attachment> attachments,
@@ -206,6 +207,7 @@ struct Release {
     53: optional set<string> operatingSystems,
     54: optional COTSDetails cotsDetails,
     55: optional EccInformation eccInformation,
+    56: optional set<string> softwarePlatforms,
 
     65: optional set<string> mainLicenseIds,
 
@@ -256,6 +258,7 @@ struct Component {
 
     // information from external data sources
     31: optional  map<string, string> externalIds,
+    300: optional map<string, string> additionalData,
 
     // Linked objects
     32: optional list<Release> releases,
