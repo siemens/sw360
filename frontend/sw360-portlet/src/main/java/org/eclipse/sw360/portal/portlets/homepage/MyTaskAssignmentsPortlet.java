@@ -10,26 +10,26 @@
  */
 package org.eclipse.sw360.portal.portlets.homepage;
 
-import org.eclipse.sw360.datahandler.common.CommonUtils;
-import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
-import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.portal.common.PortalConstants;
-import org.eclipse.sw360.portal.portlets.Sw360Portlet;
-import org.eclipse.sw360.portal.portlets.moderation.ModerationPortletUtils;
-import org.eclipse.sw360.portal.users.UserCacheHolder;
-
-import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
-import org.osgi.service.component.annotations.ConfigurationPolicy;
+import static org.eclipse.sw360.portal.common.PortalConstants.MY_TASK_ASSIGNMENTS_PORTLET_NAME;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import javax.portlet.*;
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
 
-import static org.apache.log4j.Logger.getLogger;
-import static org.eclipse.sw360.portal.common.PortalConstants.MY_TASK_ASSIGNMENTS_PORTLET_NAME;
+import com.google.common.collect.Lists;
+
+import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.portal.common.PortalConstants;
+import org.eclipse.sw360.portal.portlets.moderation.ModerationPortletUtils;
+import org.eclipse.sw360.portal.users.UserCacheHolder;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
 
 @org.osgi.service.component.annotations.Component(
     immediate = true,
@@ -48,14 +48,17 @@ import static org.eclipse.sw360.portal.common.PortalConstants.MY_TASK_ASSIGNMENT
     service = Portlet.class,
     configurationPolicy = ConfigurationPolicy.REQUIRE
 )
-public class MyTaskAssignmentsPortlet extends Sw360Portlet {
+public class MyTaskAssignmentsPortlet extends AbstractTasksPortlet {
+    public void serveResource(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
+        String action = request.getParameter(PortalConstants.ACTION);
 
-    private static final Logger log = getLogger(MyTaskAssignmentsPortlet.class);
+        if (PortalConstants.LOAD_TASK_ASSIGNMENT_LIST.equals(action)) {
+            serveTaskList(request, response);
+        }
+    }
 
-
-    @Override
-    public void doView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
-        List<ModerationRequest> openModerations=null;
+    private void serveTaskList(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
+        List<ModerationRequest> openModerations = Lists.newArrayList();
 
         try {
             User user = UserCacheHolder.getUserFromRequest(request);
@@ -65,8 +68,6 @@ public class MyTaskAssignmentsPortlet extends Sw360Portlet {
             log.error("Could not fetch your moderations from backend", e);
         }
 
-        request.setAttribute(PortalConstants.MODERATION_REQUESTS,  CommonUtils.nullToEmptyList(openModerations));
-
-        super.doView(request, response);
+        sendModerations(request, response, openModerations);
     }
 }
