@@ -23,6 +23,10 @@ build_sw360:
   - export http_proxy=http://194.138.0.3:9400
   - export https_proxy=http://194.138.0.3:9400
   - export no_proxy='couchdb'
+  - wget https://linux.siemens.com/pub/tools/FOSSologyNG/liferay-ce-portal-tomcat-7.2.0-ga1-20190531153709761.tar.gz -O /opt/liferay.gz
+  - tar -xvf liferay.gz
+  - rm liferay.gz
+  - export LIFERAY_INSTALL=/opt/liferay-portal-7.2.0-ga1
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
   - apt-get -qq update && apt-get -qq -y install build-essential rsync
   - ./scripts/install-thrift.sh
@@ -35,7 +39,7 @@ build_sw360:
   - workdir=$(pwd)
   - mkdir -p packages/deploy
   - mkdir -p packages/webapps
-  - mvn --batch-mode install -Pdeploy -Ddeploy.dir=${workdir}/packages/deploy -Dwebapps.dir=${workdir}/packages/webapps -Dmaven.repo.local=.m2/repository
+  - mvn --batch-mode clean package -P deploy -Dbase.deploy.dir=. -Dliferay.deploy.dir=${LIFERAY_INSTALL}/deploy -Dbackend.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -Drest.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -Dmaven.repo.local=.m2/repository
   - tar -czvf packages.tar.gz packages
   - mkdir -p ~/.ssh
   - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
