@@ -22,10 +22,10 @@ build_sw360:
   - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.11.0.tar.gz -O /vagrant_shared/packages/thrift-0.11.0.tar.gz
   - export http_proxy=http://194.138.0.3:9400
   - export https_proxy=http://194.138.0.3:9400
-  - export no_proxy='couchdb'
-  - wget https://linux.siemens.com/pub/tools/FOSSologyNG/liferay-ce-portal-tomcat-7.2.0-ga1-20190531153709761.tar.gz -O /opt/liferay.gz
-  - tar -xvf liferay.gz
-  - rm liferay.gz
+  - export no_proxy='couchdb,linux.siemens.com,.siemens.com,.siemens.de,.siemens.co.in'
+  - wget --no-check-certificate 'https://linux.siemens.com/pub/tools/FOSSologyNG/liferay-ce-portal-tomcat-7.2.0-ga1-20190531153709761.tar.gz' -O /opt/liferay.gz
+  - tar -xvf /opt/liferay.gz
+  - rm /opt/liferay.gz
   - export LIFERAY_INSTALL=/opt/liferay-portal-7.2.0-ga1
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
   - apt-get -qq update && apt-get -qq -y install build-essential rsync
