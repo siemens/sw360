@@ -31,6 +31,8 @@ sw360:
 security:
   customheader:
     headername:
+      # You have to enable authorization by headers explicitly here
+      enabled: true
       # Attention: please make sure that the proxy is removing there headers
       # if they are coming from anywhere else then the authentication server
       intermediateauthstore: custom-header-auth-marker
