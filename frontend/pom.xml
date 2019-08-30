@@ -17,16 +17,15 @@
     <parent>
         <groupId>org.eclipse.sw360</groupId>
         <artifactId>sw360</artifactId>
-        <version>3.4.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>frontend</artifactId>
     <packaging>pom</packaging>
 
     <modules>
-        <module>layouttpl</module>
         <module>sw360-portlet</module>
-        <module>sw360-theme</module>
+        <module>liferay-theme</module>
     </modules>
 
     <dependencies>

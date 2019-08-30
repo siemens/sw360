@@ -1,5 +1,5 @@
 /*
- * Copyright Siemens AG, 2013-2017. Part of the SW360 Portal Project.
+ * Copyright Siemens AG, 2013-2017, 2019. Part of the SW360 Portal Project.
  *
  * SPDX-License-Identifier: EPL-1.0
  *
@@ -10,39 +10,55 @@
  */
 package org.eclipse.sw360.portal.portlets.homepage;
 
-import org.eclipse.sw360.datahandler.common.CommonUtils;
-import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
-import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.portal.common.PortalConstants;
-import org.eclipse.sw360.portal.portlets.Sw360Portlet;
-import org.eclipse.sw360.portal.portlets.moderation.ModerationPortletUtils;
-import org.eclipse.sw360.portal.users.UserCacheHolder;
-import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
+import static org.eclipse.sw360.portal.common.PortalConstants.MY_TASK_ASSIGNMENTS_PORTLET_NAME;
 
-import javax.portlet.PortletException;
-import javax.portlet.RenderRequest;
-import javax.portlet.RenderResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.log4j.Logger.getLogger;
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
 
-/**
- * Small homepage portlet
- *
- * @author cedric.bodet@tngtech.com
- * @author gerrit.grenzebach@tngtech.com
- */
-public class MyTaskAssignmentsPortlet extends Sw360Portlet {
+import com.google.common.collect.Lists;
 
-    private static final Logger log = getLogger(MyTaskAssignmentsPortlet.class);
+import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.portal.common.PortalConstants;
+import org.eclipse.sw360.portal.portlets.moderation.ModerationPortletUtils;
+import org.eclipse.sw360.portal.users.UserCacheHolder;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
 
+@org.osgi.service.component.annotations.Component(
+    immediate = true,
+    properties = {
+        "/org/eclipse/sw360/portal/portlets/base.properties",
+        "/org/eclipse/sw360/portal/portlets/user.properties"
+    },
+    property = {
+        "javax.portlet.name=" + MY_TASK_ASSIGNMENTS_PORTLET_NAME,
+        "javax.portlet.display-name=My Task Assignments",
+        "javax.portlet.info.short-title=My Task Assignments",
+        "javax.portlet.info.title=My Task Assignments",
 
-    @Override
-    public void doView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
-        List<ModerationRequest> openModerations=null;
+        "javax.portlet.init-param.view-template=/html/homepage/mytaskassignments/view.jsp",
+    },
+    service = Portlet.class,
+    configurationPolicy = ConfigurationPolicy.REQUIRE
+)
+public class MyTaskAssignmentsPortlet extends AbstractTasksPortlet {
+    public void serveResource(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
+        String action = request.getParameter(PortalConstants.ACTION);
+
+        if (PortalConstants.LOAD_TASK_ASSIGNMENT_LIST.equals(action)) {
+            serveTaskList(request, response);
+        }
+    }
+
+    private void serveTaskList(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
+        List<ModerationRequest> openModerations = Lists.newArrayList();
 
         try {
             User user = UserCacheHolder.getUserFromRequest(request);
@@ -52,8 +68,6 @@ public class MyTaskAssignmentsPortlet extends Sw360Portlet {
             log.error("Could not fetch your moderations from backend", e);
         }
 
-        request.setAttribute(PortalConstants.MODERATION_REQUESTS,  CommonUtils.nullToEmptyList(openModerations));
-
-        super.doView(request, response);
+        sendModerations(request, response, openModerations);
     }
 }
