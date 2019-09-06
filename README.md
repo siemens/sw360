@@ -1,25 +1,25 @@
 [![Build Status](https://travis-ci.org/eclipse/sw360.svg?branch=master)](https://travis-ci.org/eclipse/sw360)
 
-### sw360portal
+### SW360 Portal
 
 A software component catalogue application - designed to work with FOSSology.
 
-SW360 is a liferay portal application to maintain your projects / products and
-the software components within. It can send files to the open source
-license scanner FOSSology for checking the license conditions and 
-maintain license information.
+SW360 is a server with a REST interface and a liferay portal application
+to maintain your projects / products and the software components within.
+
+It can manage SPDX files for checking the license conditions and maintain
+license information.
 
 ### Introduction
 
 It is comprised of one frontend (portal) part, backend (services) part and additionally a REST API:
 
-* Frontend: Liferay-(Tomcat-)based portal application using the Alloy UI framework.
+* Frontend: Liferay-(Tomcat-)based portal application using portlets.
 * Backend: Tomcat-based thrift services for being called by different applications.
 * Database: we store software components and metadata about them in couchdb.
-* Rest: this REST API provides access to project resources for external clients.
-        Please note the state of the REST API is experimental and its may exposed by breaking changes.
+* Rest: this REST API provides access to project resources for external integration.
 
-The reference platform is the Ubuntu server 14.04 (which is a LTS version). However, it
+The reference platform is the Ubuntu server 16.04 (which is a LTS version). However, it
 runs well on other OSes (see below).
 
 ### Project structure
@@ -29,7 +29,6 @@ This is a multi module maven file. please consider that we have the following mo
 * frontend: for portlets, themes and layouts, the liferay part.
 * backend: for the thrift based services.
 * libraries: for general stuff that is reused among the above, for example, couchdb access.
-* importers: for provisioning tasks.
 * scripts: for deploying either inside the vagrant or on your development machine.
 * rest: for the REST API which contains an authorization and resource server.
 
@@ -37,13 +36,27 @@ This is a multi module maven file. please consider that we have the following mo
 
 * Java 1.8.X
 * CouchDB, at least 1.5
-* Liferay Portal CE 6.2 GA5
-* Apache Tomcat 7.0.X or 8.0.X
+* Liferay Portal CE 7.2.0 GA1
+* Apache Tomcat 9.0.X
+
+In addition, the Liferay instance must provide the following dependecies via OSGi:
+
+* Apache Commons Codec 1.12
+* Apache Commons Collections4 4.1
+* Apache Commons CSV 1.4
+* Apache Commons IO 2.6
+* Apache Commons Lang 2.4
+* Apache Commons Logging 1.2
+* Google Gson 2.8.5
+* Google Guava 21.0
+* Jackson Annotations 2.9.8
+* Jackson Core 2.9.8
+* Jackson Databind 2.9.8
 
 In order to build you will need:
 
 * A git client
-* Apache Maven 3.0.X
+* Apache Maven 3.6.X
 * Apache Thrift 0.11.0
 
 http://maven.apache.org/download.html#Installation
@@ -52,26 +65,32 @@ Then, you must install Apache Tomcat, CouchDB. And, Java of course.
 
 The software is tested with
 
-* Maven 3.0.4 / 3.0.5
-* Apache Tomcat 8.0.26 / 7.0.54 / 7.0.61
-* Liferay GA5
+* Maven 3.6.1
+* Apache Tomcat 9.0.17
+* Liferay 7.2.0 GA1
 * CouchDB 1.5 / 1.5.1
-* OpenJDK Java 1.8.0_45 (64-bit) 
-* Tested with windows 7 SP1, ubuntu 14.04, macosx 10.8, 10.9 10.10
-* We run Liferay with PostgreSQL 9.3, but HSQL (as of the bundle) runs also OK.
+* Java 1.8.X
+* Tested with debian 8, debian 9, ubuntu 16.04, macosx 10.8 - 10.14
+* We run Liferay with PostgreSQL 9.X, as the Lifera requires, but HSQL (as of the bundle) runs also OK.
 
 ### PROBLEMS
 
-Running with the tested software shows no problems if you encounter some please report them at https://github.com/eclipse/sw360/issues.
+Running with the tested software shows no problems if you encounter some please report them at: 
 
+https://github.com/eclipse/sw360/issues
 
 ### Deployment
 
-There is a vagrant project for one-step-deployment. See the project wiki for details.
+There is a vagrant project for one-step-deployment. See the project wiki for details:
 
-Apart from the vagrant way, the software can be deployed using the provided scripts.
+https://github.com/eclipse/sw360/wiki
+
+Apart from the vagrant way, the software can be deployed using sw360chores:
+
+https://github.com/sw360/sw360chores
 
 ### Commands
+
 Most commands are using maven which is a dependency to build SW360.
 
 #### Compiling, testing and deploying
@@ -91,21 +110,20 @@ Actually, there is a hierarchy of maven files, in general
 
 For deployment run the command
 ```
-mvn install -Pdeploy
+mvn install -Dbase.deploy.dir=<SOME_ABSOLUTE_PATH> -P deploy
 ```
-which copies the war files to the liferay auto deploy folder (if `LIFERAY_PATH` is set).
-Otherwise one has to specify the absolute path to the deploy folder in the following way:
-```
-mvn install -Pdeploy \
-    -Ddeploy.dir=/ABSOLUTE/PATH/TO/DEPLOY/FOLDER
-```
-It is even better to also pass the path to the webapps folder, thus allowing maven to deploy the backend services directly via the native tomcat hot deploy mechanism.
-This is done in the following way:
-```
-mvn install -Pdeploy \
-    -Ddeploy.dir=/ABSOLUTE/PATH/TO/DEPLOY/FOLDER \
-    -Dwebapps.dir=/ABSOLUTE/PATH/TO/WEBAPPS/FOLDER
-```
+which copies the artifacts depending on their type to the following folders:
+  - backend: `<SOME_ABSOLUTE_PATH>/tomcat`
+  - rest: `<SOME_ABSOLUTE_PATH>/tomcat`
+  - frontend: `<SOME_ABSOLUTE_PATH>/liferay`
+  - libraries: `<SOME_ABSOLUTE_PATH>/liferay`
+
+You may also specify the paths using these properties:
+  - backend artifacts: `backend.deploy.dir`
+  - rest artifacts: `rest.deploy.dir`
+  - liferay artifacts (frontend, libraries): `liferay.deploy.dir`
+Be aware that you have to deploy the liferay artifacts in the Liferay auto-deploy folder.
+On the other hand you must not deploy rest and backend artifacts to the auto-deploy folder.
 
 ### Liferay Configuration
 
