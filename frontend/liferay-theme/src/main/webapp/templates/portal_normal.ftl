@@ -121,7 +121,10 @@
 			<@liferay.language key="powered-by" />
 			<a href="http://www.github.com/eclipse/sw360" rel="external" target="_blank">SW360</a> |
 			<a href="/resource/docs/api-guide.html" rel="external" target="_blank">REST API Docs</a> |
-			<a href="https://github.com/eclipse/sw360/issues" rel="external" target="_blank"> Report an issue.</a>
+                        <a href="https://wiki.siemens.com/display/en/SW360+RESTful+API" rel="external" target="_blank">REST API Access</a> |
+                        <a href="https://github.com/eclipse/sw360/issues" rel="external" target="_blank">Public Issue Tracker</a> |
+                        <a href="https://code.siemens.com/sw360/sw360portal/issues" rel="external" target="_blank">Siemens Issue Tracker</a> |
+                        <a href="https://wiki.siemens.com/pages/viewpage.action?pageId=61346243" rel="external" target="_blank">Siemens Wiki</a>
 		</div>
 		<div class="build-info text-muted">
 			<#if sw360_build_info??>
