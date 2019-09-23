@@ -31,6 +31,7 @@ import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.UserController;
 import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
 import org.eclipse.sw360.rest.resourceserver.vendor.VendorController;
+import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -47,6 +48,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -76,6 +78,9 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
 
     @NonNull
     private final Sw360VendorService vendorService;
+
+    @NonNull
+    private final Sw360UserService userService;
 
     @NonNull
     private final Sw360AttachmentService attachmentService;
@@ -259,7 +264,7 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
             restControllerHelper.addEmbeddedModerators(halComponent, moderators);
         }
 
-        if (sw360Component.getDefaultVendorId() != null) {
+        if (!isNullOrEmpty(sw360Component.getDefaultVendorId())) {
             Vendor defaultVendor;
             if (sw360Component.getDefaultVendor() == null
                     || sw360Component.getDefaultVendor().getId() != sw360Component.getDefaultVendorId()) {
@@ -284,7 +289,7 @@ public class ComponentController implements ResourceProcessor<RepositoryLinksRes
             restControllerHelper.addEmbeddedAttachments(halComponent, sw360Component.getAttachments());
         }
 
-        restControllerHelper.addEmbeddedUser(halComponent, user, "createdBy");
+        restControllerHelper.addEmbeddedUser(halComponent, userService.getUserByEmail(sw360Component.getCreatedBy()), "createdBy");
 
         return halComponent;
     }

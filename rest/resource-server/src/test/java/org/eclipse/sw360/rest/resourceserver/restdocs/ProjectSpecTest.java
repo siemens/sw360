@@ -31,6 +31,7 @@ import org.eclipse.sw360.rest.resourceserver.licenseinfo.Sw360LicenseInfoService
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
+import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -61,6 +62,7 @@ import static org.springframework.restdocs.request.RequestDocumentation.requestP
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 public class ProjectSpecTest extends TestRestDocsSpecBase {
@@ -226,6 +228,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .setDescription("This is the description of my Test Project")
                         .setProjectType(ProjectType.PRODUCT)
                         .setVersion("1.0")
+                        .setCreatedBy("admin@sw360.org")
                         .setCreatedOn(new SimpleDateFormat("yyyy-MM-dd").format(new Date())));
 
         Release release = new Release();
@@ -275,7 +278,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         LicenseInfoFile licenseInfoFile = new LicenseInfoFile();
         licenseInfoFile.setGeneratedOutput(new byte[0]);
         given(this.licenseInfoMockService.getLicenseInfoFile(anyObject(), anyObject(), anyObject(), anyObject(),
-                anyObject())).willReturn(licenseInfoFile);
+                anyObject(),anyObject())).willReturn(licenseInfoFile);
     }
 
     @Test
@@ -512,6 +515,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .content(this.objectMapper.writeValueAsString(project))
                 .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("_embedded.createdBy.email", Matchers.is("admin@sw360.org")))
                 .andDo(this.documentationHandler.document(
                         requestFields(
                                 fieldWithPath("name").description("The name of the project"),
@@ -638,7 +642,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     @Test
     public void should_document_get_download_license_info() throws Exception {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE")
+        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE&externalIds=portal-id,main-project-id")
                 .header("Authorization", "Bearer " + accessToken)
                 .accept("application/xhtml+xml"))
                 .andExpect(status().isOk())
@@ -648,6 +652,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                         .description("All possible values for output generator class names are "
                                                 + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
                                 parameterWithName("variant").description("All the possible values for variants are "
-                                        + Arrays.asList(OutputFormatVariant.values())))));
+                                        + Arrays.asList(OutputFormatVariant.values())),
+                                parameterWithName("externalIds").description("The external Ids of the project"))));
     }
 }

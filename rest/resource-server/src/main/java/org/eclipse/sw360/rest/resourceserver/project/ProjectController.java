@@ -40,6 +40,7 @@ import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.licenseinfo.Sw360LicenseInfoService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
+import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
@@ -77,6 +78,9 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 
     @NonNull
     private final Sw360ProjectService projectService;
+
+    @NonNull
+    private final Sw360UserService userService;
 
     @NonNull
     private final Sw360ReleaseService releaseService;
@@ -264,6 +268,7 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
     public void downloadLicenseInfo(@PathVariable("id") String id,
                                     @RequestParam("generatorClassName") String generatorClassName,
                                     @RequestParam("variant") String variant,
+                                    @RequestParam(value = "externalIds", required=false) String externalIds,
                                     HttpServletResponse response) throws TException, IOException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
@@ -294,7 +299,7 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 			StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
 			outputFormatInfo.getFileExtension());
 
-        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User, outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicenses);
+        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User, outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicenses, externalIds);
         byte[] byteContent = licenseInfoFile.bufferForGeneratedOutput().array();
         response.setContentType(outputFormatInfo.getMimeType());
         response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
@@ -395,7 +400,7 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 
     private HalResource<Project> createHalProject(Project sw360Project, User sw360User) throws TException {
         HalResource<Project> halProject = new HalResource<>(sw360Project);
-        restControllerHelper.addEmbeddedUser(halProject, sw360User, "createdBy");
+        restControllerHelper.addEmbeddedUser(halProject, userService.getUserByEmail(sw360Project.getCreatedBy()), "createdBy");
 
         Map<String, ProjectReleaseRelationship> releaseIdToUsage = sw360Project.getReleaseIdToUsage();
         if (releaseIdToUsage != null) {

@@ -220,7 +220,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                         .filter(usage -> allUsagesByProject.stream()
                                 .noneMatch(isUsageEquivalent(usage)))
                         .collect(Collectors.toList());
-
+                setProjectPathToAttachmentUsages(usagesToCreate,project);
                 if (!usagesToDelete.isEmpty()) {
                     attachmentClient.deleteAttachmentUsages(usagesToDelete);
                 }
@@ -237,6 +237,14 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE, Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
         }
 
+    }
+
+    private void setProjectPathToAttachmentUsages(List<AttachmentUsage> usagesToCreate, Project project) {
+        usagesToCreate.forEach(usage -> {
+            LicenseInfoUsage licenseInfo= usage.getUsageData().getLicenseInfo();
+            if (licenseInfo != null && !licenseInfo.isSetProjectPath())
+                licenseInfo.setProjectPath(project.getId());
+        });
     }
 
     private void serveAttachmentUsagesRows(ResourceRequest request, ResourceResponse response) throws PortletException, IOException {
@@ -272,7 +280,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     private void downloadLicenseInfo(ResourceRequest request, ResourceResponse response) throws IOException {
         final String projectId = request.getParameter(PROJECT_ID);
-        final String outputGenerator = request.getParameter(PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT);
+        String outputGenerator = request.getParameter(PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT);
+        String extIdsFromRequest = request.getParameter(PortalConstants.EXTERNAL_ID_SELECTED_KEYS);
+
+        String externalIds = Optional.of(extIdsFromRequest).orElse(StringUtils.EMPTY);
 
         Set<String> selectedAttachmentIdsWithPath = Sets
                 .newHashSet(request.getParameterValues(PortalConstants.LICENSE_INFO_RELEASE_TO_ATTACHMENT));
@@ -312,7 +323,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             final User user = UserCacheHolder.getUserFromRequest(request);
             Project project = thriftClients.makeProjectClient().getProjectById(projectId, user);
             LicenseInfoFile licenseInfoFile = licenseInfoClient.getLicenseInfoFile(project, user, outputGenerator,
-                    releaseIdsToSelectedAttachmentIds, excludedLicensesPerAttachmentId);
+                    releaseIdsToSelectedAttachmentIds, excludedLicensesPerAttachmentId, externalIds);
             saveLicenseInfoAttachmentUsages(project, user, selectedAttachmentIdsWithPath,
                     excludedLicensesPerAttachmentIdWithPath);
             sendLicenseInfoResponse(request, response, project, licenseInfoFile);
@@ -886,11 +897,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void prepareDetailView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
         User user = UserCacheHolder.getUserFromRequest(request);
         String id = request.getParameter(PROJECT_ID);
-        request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
+        setDefaultRequestAttributes(request);
         request.setAttribute(DOCUMENT_ID, id);
-        request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
-
-        request.setAttribute(DEFAULT_OBLIGATIONS_TEXT, getProjectDefaultObligationsText());
         if (id != null) {
             try {
                 ProjectService.Iface client = thriftClients.makeProjectClient();
@@ -937,6 +945,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 Project project = client.getProjectById(id, user);
                 request.setAttribute(PROJECT, project);
                 request.setAttribute(DOCUMENT_ID, id);
+
+                Map<String,String> extIdMap = project.getExternalIds();
+                request.setAttribute("externalIds", extIdMap.keySet());
 
                 LicenseInfoService.Iface licenseInfoClient = thriftClients.makeLicenseInfoClient();
                 List<OutputFormatInfo> outputFormats = licenseInfoClient.getPossibleOutputFormats();
@@ -1150,12 +1161,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void prepareProjectEdit(RenderRequest request) {
         User user = UserCacheHolder.getUserFromRequest(request);
         String id = request.getParameter(PROJECT_ID);
-        request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
+        setDefaultRequestAttributes(request);
         Project project;
         Set<Project> usingProjects;
         int allUsingProjectCount = 0;
-        request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
-        request.setAttribute(DEFAULT_OBLIGATIONS_TEXT, getProjectDefaultObligationsText());
 
         if (id != null) {
 
@@ -1214,7 +1223,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void prepareProjectDuplicate(RenderRequest request) {
         User user = UserCacheHolder.getUserFromRequest(request);
         String id = request.getParameter(PROJECT_ID);
-        request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
+        setDefaultRequestAttributes(request);
 
         try {
             if (id != null) {
@@ -1476,6 +1485,12 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         } else {
             return min(projectParameters.getDisplayStart() + projectParameters.getDisplayLength(), maxSize);
         }
+    }
+
+    private void setDefaultRequestAttributes(RenderRequest request) {
+        request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
+        request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
+        request.setAttribute(DEFAULT_OBLIGATIONS_TEXT, getProjectDefaultObligationsText());
     }
 
     private List<Project> sortProjectList(List<Project> projectList, PaginationParameters projectParameters) {
