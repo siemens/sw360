@@ -126,6 +126,12 @@ not create URIs themselves, instead they should use the above-described links to
 
 This chapter provides information about the sw360 authorization token.
 
+Please note that the following text represents a general documentation.
+
+For the deployments inside the Siemens group company, please consider the following guide:
+
+https://wiki.siemens.com/display/en/SW360+RESTful+API
+
 [[token-request]]
 === Token Request - REST API Tokens
 
