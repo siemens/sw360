@@ -215,49 +215,6 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
           }
     }
 
-    private void fillExternalIds(XWPFDocument document, Map<String, String> externalIdMap) {
-        if(!externalIdMap.isEmpty()) {
-            replaceText(document, CAPTION_EXTID_TABLE, CAPTION_EXTID_TABLE_VALUE);
-            List<XWPFParagraph> list = document.getParagraphs().stream()
-                    .filter(x -> x.getParagraphText().equalsIgnoreCase(EXTERNAL_ID_TABLE)).collect(Collectors.toList());
-            if (!list.isEmpty()) {
-                XmlCursor cursor = list.get(0).getCTP().newCursor();
-                XWPFTable table = document.insertNewTbl(cursor);
-                XWPFTableRow tableHeader = table.getRow(0);
-                tableHeader.addNewTableCell();
-
-                addFormattedText(tableHeader.getCell(0).addParagraph().createRun(),
-                        EXT_ID_TABLE_HEADER_COL1, FONT_SIZE, true);
-                addFormattedText(tableHeader.getCell(1).addParagraph().createRun(),
-                        EXT_ID_TABLE_HEADER_COL2, FONT_SIZE, true);
-
-                externalIdMap.entrySet().forEach(x -> {
-                    XWPFTableRow row = table.createRow();
-                    row.getCell(0).setText(x.getKey());
-                    row.getCell(1).setText(x.getValue());
-                });
-
-                setTableRowSize(table);
-                removeParagraph(document, EXTERNAL_ID_TABLE);
-                addNewLines(document, 1);
-            }
-        }else {
-            removeParagraph(document,EXTERNAL_ID_TABLE);
-            removeParagraph(document, CAPTION_EXTID_TABLE);
-        }
-    }
-
-    private void setTableRowSize(XWPFTable table) {
-        for(int x = 0;x < table.getNumberOfRows(); x++){
-            XWPFTableRow row = table.getRow(x);
-            int numberOfCell = row.getTableCells().size();
-            for(int y = 0; y < numberOfCell ; y++){
-                XWPFTableCell cell = row.getCell(y);
-                cell.getCTTc().addNewTcPr().addNewTcW().setW(BigInteger.valueOf(TABLE_WIDTH));
-            }
-          }
-    }
-
     private void fillReportDocument(
         XWPFDocument document,
         Collection<LicenseInfoParsingResult> projectLicenseInfoResults,
