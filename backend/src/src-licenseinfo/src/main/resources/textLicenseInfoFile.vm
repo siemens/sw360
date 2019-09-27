@@ -37,29 +37,15 @@ Please note the following license conditions and copyright notices applicable to
 ## Copyrights
 ##
 #foreach($releaseName in $licenseInfoResults.keySet())
-#set($copyrights = [])
-#if(${licenseInfoResults.get($releaseName).licenseInfo})
-#set($copyrights = $licenseInfoResults.get($releaseName).licenseInfo.copyrights)
-#if($copyrights.size() > 0)
-Copyright Notices for $releaseName
------------------
-#foreach($copyright in ${copyrights})
-$copyright
-#end## foreach($copyright in ${copyrights})
 
-
-#end## if($copyrights.size() > 0)
-#end## if(${licenseInfoResults.get($releaseName).licenseInfo})
-##
-##
 ## Acknowledgments
 ##
 #set($acks = [])
 #if(${acknowledgements.get($releaseName)})
+#set($acks = $acknowledgements.get($releaseName))
 #if($acks.size() > 0)
 Acknowledgements for $releaseName
 ----------------
-#set($acks = $acknowledgements.get($releaseName))
 #foreach($ack in ${acks})
 $ack
 #end## foreach($ack in ${acks})
@@ -88,8 +74,22 @@ Licenses for $releaseName
 * $licenseName ($licenseId)
 #end## foreach($license in ${licenses})
 #end## if($licenses.size() > 0)
+#set($copyrights = [])
+#if(${licenseInfoResults.get($releaseName).licenseInfo})
+#set($copyrights = $licenseInfoResults.get($releaseName).licenseInfo.copyrights)
+#if($copyrights.size() > 0)
+
+Copyright Notices for $releaseName
+-----------------
+#foreach($copyright in ${copyrights})
+$copyright
+#end## foreach($copyright in ${copyrights})
 
 
+#end## if($copyrights.size() > 0)
+#end## if(${licenseInfoResults.get($releaseName).licenseInfo})
+##
+##
 #end## if(${licenseInfoResults.get($releaseName).licenseInfo})
 ##
 #end## foreach($releaseName in $licenseInfoResults.keySet())
