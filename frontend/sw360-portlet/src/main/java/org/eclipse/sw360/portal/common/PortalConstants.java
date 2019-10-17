@@ -37,6 +37,7 @@ public class PortalConstants {
     public static final Set<String> SET_CLEARING_TEAMS_STRING;
     public static final String LICENSE_IDENTIFIERS;
     public static final String PREFERRED_COUNTRY_CODES;
+    public static final Boolean MAINLINE_STATE_ENABLED_FOR_USER;
 
     // DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING !!!
     // - friendly url mapping files must be changed
@@ -132,6 +133,11 @@ public class PortalConstants {
     public static final String RELEASE_EXTERNAL_IDS;
     public static final Set<String> RELEASE_EXTERNAL_ID_KEYS;
     public static final String RELEASE_LINK_TO_PROJECT = "releaseLinkToProject";
+    public static final String PAGENAME_MERGE_RELEASE = "mergeRelease";
+    public static final String RELEASE_SELECTION = "releaseSelection";
+    public static final String RELEASE_SOURCE_ID = "releaseSourceId";
+    public static final String RELEASE_TARGET_ID = "releaseTargetId";
+    
 
     //! Specialized keys for vendors
     public static final String VENDOR_PORTLET_NAME = PORTLET_NAME_PREFIX + "vendors";
@@ -202,7 +208,6 @@ public class PortalConstants {
 
 
     public static final String FOSSOLOGY_PORTLET_NAME = PORTLET_NAME_PREFIX + "fossology";
-    public static final String FOSSOLOGY_FINGER_PRINTS = "fingerPrints";
     public static final String USER_LIST = "userList";
     public static final String MISSING_USER_LIST = "missingUserList";
     public static final String GET_CLEARING_STATE_SUMMARY = "getClearingStateSummary";
@@ -412,13 +417,15 @@ public class PortalConstants {
 
     // fossology actions
     public static final String FOSSOLOGY_PREFIX = "fossology";
-    public static final String FINGER_PRINTS = "fingerPrints";
-    public static final String FOSSOLOGY_GET_PUBKEY = FOSSOLOGY_PREFIX + "get_pub";
-    public static final String FOSSOLOGY_DEPLOY_SCRIPTS = FOSSOLOGY_PREFIX + "deploy_scripts";
+    public static final String FOSSOLOGY_CONFIG_BEAN = FOSSOLOGY_PREFIX + "Config";
+    public static final String FOSSOLOGY_CONFIG_KEY_URL = FOSSOLOGY_PREFIX + "config_url";
+    public static final String FOSSOLOGY_CONFIG_KEY_TOKEN = FOSSOLOGY_PREFIX + "config_token";
+    public static final String FOSSOLOGY_CONFIG_KEY_FOLDER_ID = FOSSOLOGY_PREFIX + "config_folder_id";
     public static final String FOSSOLOGY_CHECK_CONNECTION = FOSSOLOGY_PREFIX + "check_connection";
-    public static final String FOSSOLOGY_SEND = FOSSOLOGY_PREFIX + "send";
-    public static final String FOSSOLOGY_GET_SENDABLE = FOSSOLOGY_PREFIX + "get_sendable";
-    public static final String FOSSOLOGY_GET_STATUS = FOSSOLOGY_PREFIX + "get_status";
+
+    public static final String FOSSOLOGY_ACTION_STATUS = FOSSOLOGY_PREFIX + "status";
+    public static final String FOSSOLOGY_ACTION_PROCESS = FOSSOLOGY_PREFIX + "process";
+    public static final String FOSSOLOGY_ACTION_OUTDATED = FOSSOLOGY_PREFIX + "outdated";
 
     public static final String RELEASES_AND_PROJECTS = "releasesAndProjects";
 
@@ -535,6 +542,7 @@ public class PortalConstants {
         RELEASE_EXTERNAL_ID_KEYS = CommonUtils.splitToSet(props.getProperty("release.externalkeys", "org.maven.id,com.github.id,com.gitlab.id,purl.id"));
         PROJECTIMPORT_HOSTS = props.getProperty("projectimport.hosts", "");
         PREFERRED_COUNTRY_CODES = props.getProperty("preferred.country.codes", "DE,AT,CH,US");
+        MAINLINE_STATE_ENABLED_FOR_USER = Boolean.parseBoolean(props.getProperty("mainline.state.enabled.for.user", "false"));
 
         // SW360 REST API Constants
         API_TOKEN_ENABLE_GENERATOR = Boolean.parseBoolean(props.getProperty("rest.apitoken.generator.enable", "false"));

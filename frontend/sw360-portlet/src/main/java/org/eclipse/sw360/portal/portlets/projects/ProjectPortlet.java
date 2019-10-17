@@ -54,6 +54,10 @@ import org.apache.thrift.protocol.TSimpleJSONProtocol;
 import org.jetbrains.annotations.NotNull;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 
+import javax.portlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URLConnection;
@@ -62,10 +66,6 @@ import java.util.Map.Entry;
 import java.util.function.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
-
-import javax.portlet.*;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -473,13 +473,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     @Override
     protected void dealWithFossologyAction(ResourceRequest request, ResourceResponse response, String action) throws IOException, PortletException {
-        if (PortalConstants.FOSSOLOGY_SEND.equals(action)) {
-            serveProjectSendToFossology(request, response);
-        } else if (PortalConstants.FOSSOLOGY_GET_SENDABLE.equals(action)) {
-            serveGetSendableReleases(request, response);
-        } else if (PortalConstants.FOSSOLOGY_GET_STATUS.equals(action)) {
-            serveFossologyStatus(request, response);
-        }
+        throw new UnsupportedOperationException("cannot call this action on the project portlet");
     }
 
     private void serveRemoveProject(ResourceRequest request, ResourceResponse response) throws IOException {
@@ -613,6 +607,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     @SuppressWarnings("Duplicates")
     private void serveNewTableRowLinkedRelease(ResourceRequest request, ResourceResponse response, String[] linkedIds) throws IOException, PortletException {
         final User user = UserCacheHolder.getUserFromRequest(request);
+        request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
 
         List<ReleaseLink> linkedReleases = new ArrayList<>();
         try {
@@ -1165,6 +1160,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Project project;
         Set<Project> usingProjects;
         int allUsingProjectCount = 0;
+        request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
 
         if (id != null) {
 
@@ -1223,6 +1219,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void prepareProjectDuplicate(RenderRequest request) {
         User user = UserCacheHolder.getUserFromRequest(request);
         String id = request.getParameter(PROJECT_ID);
+        request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
         setDefaultRequestAttributes(request);
 
         try {
