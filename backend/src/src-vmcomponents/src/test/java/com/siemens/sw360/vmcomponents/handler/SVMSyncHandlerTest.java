@@ -34,6 +34,7 @@ import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
 import org.junit.After;
@@ -71,6 +72,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
     private VMDatabaseHandler handler;
     private ComponentDatabaseHandler compDBHandler;
     private VendorRepository vendorRepository;
+    private User user;
 
     private static final String dbNameVM = DatabaseSettings.COUCH_DB_VM;
     private static final String dbNameComp = DatabaseSettings.COUCH_DB_DATABASE;
@@ -92,7 +94,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         svmPriorityHandler = new SVMSyncHandler<VMPriority>(VMPriority.class);
         svmVulHandler = new SVMSyncHandler<Vulnerability>(Vulnerability.class);
         releaseHandler = new SVMSyncHandler<Release>(Release.class);
-
+        user = new User().setEmail("me");
         // Prepare the handler
         handler = new VMDatabaseHandler();
         compDBHandler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbNameComp, dbNameAtt);
@@ -124,7 +126,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         compDBHandler.addComponent(relComponent, "me");
         Release release = new Release("droelf", "1.0", relComponent.getId());
         release.setCpeid("droelf");
-        compDBHandler.addRelease(release, "me");
+        compDBHandler.addRelease(release, user);
 
         VMMatchState[] states = {VMMatchState.ACCEPTED, VMMatchState.DECLINED, VMMatchState.MATCHING_LEVEL_1, VMMatchState.MATCHING_LEVEL_2, VMMatchState.MATCHING_LEVEL_3};
         HashSet<VMMatchType> types = new HashSet<>();
@@ -268,7 +270,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         compDBHandler.addComponent(relComponent, "me");
         assertNotNull(relComponent.getId());
         Release release = new Release("droelf", "1.0", relComponent.getId());
-        compDBHandler.addRelease(release, "me");
+        compDBHandler.addRelease(release, user);
         assertNotNull(release.getId());
         matchResult = svmComponentHandler.findMatchByComponent(component.getId());
         assertEquals(RequestStatus.SUCCESS, matchResult.requestSummary.requestStatus);
@@ -276,7 +278,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
 
         release = new Release("oelf", "2.0", relComponent.getId());
         release.setCpeid("cpe");
-        compDBHandler.addRelease(release, "me");
+        compDBHandler.addRelease(release, user);
         assertNotNull(release.getId());
 
         List<VMMatch> matches = handler.getAll(VMMatch.class);
@@ -327,7 +329,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         Release release = new Release("droelf", "1.0", relComponent.getId());
         release.setVendorId(vendor.getId());
         release.setVendor(vendor);
-        compDBHandler.addRelease(release, "me");
+        compDBHandler.addRelease(release, user);
         assertNotNull(release.getId());
         List<VMMatch> matches = handler.getAll(VMMatch.class);
         assertEquals(0, matches.size());
@@ -363,7 +365,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
 
         release.setVendorId(vendor.getId());
         release.setVendor(vendor);
-        compDBHandler.addRelease(release, "me");
+        compDBHandler.addRelease(release, user);
         assertNotNull(release.getId());
 
         VMComponent component = new VMComponent(SW360Utils.getCreatedOnTime(), "droe");

@@ -10,10 +10,12 @@
  */
 package org.eclipse.sw360.rest.authserver.security;
 
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.rest.authserver.client.service.Sw360ClientDetailsService;
 import org.eclipse.sw360.rest.authserver.security.customheaderauth.Sw360CustomHeaderAuthenticationFilter;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -55,6 +57,9 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
 
     @Autowired
     private Sw360UserDetailsProvider sw360UserDetailsProvider;
+
+    @Value("${jwt.secretkey:sw360SecretKey}")
+    private String secretKey;
 
     @Override
     public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
@@ -102,12 +107,13 @@ public class Sw360AuthorizationServerConfiguration extends AuthorizationServerCo
 
     @Bean
     protected JwtAccessTokenConverter jwtAccessTokenConverter() {
-        Resource resource = new FileSystemResource(new File("/etc/sw360/jwt-keystore.jks"));
+        String keystore = "/jwt-keystore.jks";
+        Resource resource = new FileSystemResource(new File(CommonUtils.SYSTEM_CONFIGURATION_PATH + keystore));
         if (!resource.exists()) {
-            resource = new ClassPathResource("jwt-keystore.jks");
+            resource = new ClassPathResource(keystore);
         }
-
-        KeyStoreKeyFactory keyStoreKeyFactory = new KeyStoreKeyFactory(resource, "sw360SecretKey".toCharArray());
+        KeyStoreKeyFactory keyStoreKeyFactory =
+                new KeyStoreKeyFactory(resource, secretKey.toCharArray());
         JwtAccessTokenConverter jwtAccessTokenConverter = new JwtAccessTokenConverter();
         jwtAccessTokenConverter.setKeyPair(keyStoreKeyFactory.getKeyPair("jwt"));
         return jwtAccessTokenConverter;

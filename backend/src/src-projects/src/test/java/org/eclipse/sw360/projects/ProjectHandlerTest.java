@@ -32,6 +32,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.eclipse.sw360.datahandler.common.SW360Utils.getProjectIds;
@@ -54,10 +55,10 @@ public class ProjectHandlerTest {
     public void setUp() throws Exception {
         List<Project> projects = new ArrayList<>();
 
-        projects.add(new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
-        projects.add(new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
+        projects.add(new Project().setId("P1").setName("Project1").setBusinessUnit("AB CD EF").setCreatedBy("user1").setReleaseIdToUsage(Collections.emptyMap()).setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
+        projects.add(new Project().setId("P2").setName("Project2").setBusinessUnit("AB CD FE").setCreatedBy("user2").setReleaseIdToUsage(Collections.emptyMap()).setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
         projects.get(1).addToContributors("user1");
-        projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3").setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
+        projects.add(new Project().setId("P3").setName("Project3").setBusinessUnit("AB CD EF").setCreatedBy("user3").setReleaseIdToUsage(Collections.emptyMap()).setVisbility(Visibility.BUISNESSUNIT_AND_MODERATORS));
 
         // Create the database
         TestUtils.createDatabase(DatabaseSettings.getConfiguredHttpClient(), dbName);
