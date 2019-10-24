@@ -204,6 +204,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return releaseRepository.getReleasesFromVendorIds(ids);
     }
 
+    public Set<Release> getReleasesByVendorId(String vendorId) {
+        return releaseRepository.getReleasesByVendorId(vendorId);
+    }
+
     public List<Release> getReleasesFromComponentId(String id, User user) throws TException {
         return releaseRepository.getReleasesFromComponentId(id, user);
     }
@@ -861,6 +865,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return requestSummary;
     }
 
+    public RequestSummary updateReleasesDirectly(Set<Release> releases, User user) throws SW360Exception {
+        return RepositoryUtils.doBulk(prepareReleases(releases), user, releaseRepository);
+    }
+
     public RequestStatus updateReleaseFromAdditionsAndDeletions(Release releaseAdditions, Release releaseDeletions, User user){
 
         try {
@@ -874,7 +882,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     }
 
-    protected Component updateReleaseDependentFieldsForComponentId(String componentId) {
+    public Component updateReleaseDependentFieldsForComponentId(String componentId) {
         Component component = componentRepository.get(componentId);
         recomputeReleaseDependentFields(component, null);
         componentRepository.update(component);
@@ -1593,6 +1601,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public Set<Component> getUsingComponents(Set<String> releaseIds) {
         return componentRepository.getUsingComponents(releaseIds);
+    }
+
+    public Set<Component> getComponentsByDefaultVendorId(String vendorId) {
+        return componentRepository.getComponentsByDefaultVendorId(vendorId);
     }
 
     public Component getComponentForReportFromFossologyUploadId(String uploadId) {
