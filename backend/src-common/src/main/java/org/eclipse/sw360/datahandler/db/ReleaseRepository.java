@@ -176,7 +176,6 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public List<Release> getReleasesFromVendorIds(Set<String> ids) {
-
         return makeSummaryFromFullDocs(SummaryType.SHORT, queryByIds("releaseByVendorId", ids));
     }
 
@@ -184,8 +183,11 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return queryForIds("releaseIdsByVendorId", ids);
     }
 
-    public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
+    public Set<Release> getReleasesByVendorId(String vendorId) {
+        return new HashSet<>(queryView("releaseByVendorId", vendorId));
+    }
 
+    public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
         return queryView("releaseIdsByLicenseId", licenseId);
     }
 
