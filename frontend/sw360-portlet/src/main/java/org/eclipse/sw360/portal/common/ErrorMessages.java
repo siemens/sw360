@@ -22,6 +22,7 @@ public class ErrorMessages {
     public static final String CLOSED_UPDATE_NOT_ALLOWED = "User cannot edit a closed project";
     public static final String COMPONENT_NOT_ADDED = "Component could not be added.";
     public static final String COMPONENT_DUPLICATE = "A component with the same name already exists.";
+    public static final String COMPONENT_NAMING_ERROR = "Name of component cannot contain only space characters.";
     public static final String RELEASE_NOT_ADDED = "Release could not be added.";
     public static final String RELEASE_DUPLICATE = "A release with the same name and version already exists.";
     public static final String ERROR_GETTING_PROJECT = "Error fetching project from backend.";
@@ -56,6 +57,7 @@ public class ErrorMessages {
             .add(CLOSED_UPDATE_NOT_ALLOWED)
             .add(COMPONENT_NOT_ADDED)
             .add(COMPONENT_DUPLICATE)
+            .add(COMPONENT_NAMING_ERROR)
             .add(RELEASE_NOT_ADDED)
             .add(RELEASE_DUPLICATE)
             .add(LICENSE_USED_BY_RELEASE)

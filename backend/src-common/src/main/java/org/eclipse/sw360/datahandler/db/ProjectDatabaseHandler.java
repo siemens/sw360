@@ -42,6 +42,7 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ProjectVulnerability
 import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
 import org.apache.log4j.Logger;
+import org.apache.thrift.TException;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
@@ -79,6 +80,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final int DELETION_SANITY_CHECK_THRESHOLD = 5;
     private static final String DUMMY_NEW_PROJECT_ID = "newproject";
     public static final int SVMML_JSON_LOG_CUTOFF_LENGTH = 3000;
+    private static final String SEPARATOR = " -> ";
 
     private final ProjectRepository repository;
     private final ProjectVulnerabilityRatingRepository pvrRepository;
@@ -188,7 +190,6 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         project.createdBy = user.getEmail();
         project.createdOn = getCreatedOn();
         project.businessUnit = getBUFromOrganisation(user.getDepartment());
-        setReleaseRelatoins(project, user, null);
 
         // Add project to database and return ID
         repository.add(project);
@@ -221,8 +222,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         } else if (makePermission(actual, user).isActionAllowed(RequestedAction.WRITE)) {
             copyImmutableFields(project,actual);
             project.setAttachments( getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), project.getAttachments()) );
-            deleteAttachmentUsagesOfUnlinkedReleases(project, actual);
-            setReleaseRelatoins(project, user, actual);
+            setReleaseRelations(project, user, actual);
+            updateProjectDependentLinkedFields(project, actual);
             repository.update(project);
 
             //clean up attachments in database
@@ -234,14 +235,22 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
     }
 
-    private void setReleaseRelatoins(Project updated, User user, Project current) {
+    public void updateProjectForObligations(String id, Map<String, ObligationStatusInfo> obligationStatusMap) {
+        log.info("Updating linked obligations of project: " + id + ", as previously accepted CLI file was changed.");
+        Project project = repository.get(id);
+        project.setLinkedObligations(obligationStatusMap);
+        repository.update(project);
+        log.info("Successfully updated linked obligations of project: " + id);
+    }
+
+    private void setReleaseRelations(Project updated, User user, Project current) {
         boolean isMainlineStateDisabled = !(BackendUtils.MAINLINE_STATE_ENABLED_FOR_USER
                 || PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user))
                 && updated.getReleaseIdToUsageSize() > 0;
 
         Map<String, ProjectReleaseRelationship> updatedReleaseIdToUsage = updated.getReleaseIdToUsage();
 
-        if ((null == current || current.getReleaseIdToUsage().isEmpty()) && isMainlineStateDisabled) {
+        if ((null == current || current.getReleaseIdToUsageSize() == 0) && isMainlineStateDisabled) {
             updatedReleaseIdToUsage.forEach((k, v) -> v.setMainlineState(MainlineState.OPEN));
         } else if (isMainlineStateDisabled) {
             Map<String, ProjectReleaseRelationship> currentReleaseIdToUsage = current.getReleaseIdToUsage();
@@ -280,11 +289,39 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return true;
     }
 
-    private void deleteAttachmentUsagesOfUnlinkedReleases(Project updated, Project actual) throws SW360Exception {
+    private Map<String, ObligationStatusInfo> deleteObligationsOfUnlinkedReleases(Project updated) {
+        Set<String> updatedLinkedReleaseIds = nullToEmptyMap(updated.getReleaseIdToUsage()).keySet();
+        // return null if no linked releases in updated project.
+        if (CommonUtils.isNullOrEmptyCollection(updatedLinkedReleaseIds)) {
+            return null;
+        }
+        Map<String, ObligationStatusInfo> updatedOsInfoMap = nullToEmptyMap(updated.getLinkedObligations());
+        // using iterator to remove the entries without release
+        for (Iterator<Map.Entry<String, ObligationStatusInfo>> it = updatedOsInfoMap.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<String, ObligationStatusInfo> entry = it.next();
+            Map<String, String> releaseIdToAcceptedCLI = entry.getValue().getReleaseIdToAcceptedCLI();
+            // intersection of release present in updated and current project.
+            Set<String> releaseIds = Sets.intersection(releaseIdToAcceptedCLI.keySet(), updatedLinkedReleaseIds);
+            releaseIdToAcceptedCLI.keySet().retainAll(releaseIds);
+            // remove the obligations without releases.
+            if (releaseIdToAcceptedCLI.isEmpty()) {
+                it.remove();
+            }
+        }
+        return updatedOsInfoMap;
+    }
+
+    private void updateProjectDependentLinkedFields(Project updated, Project actual) throws SW360Exception {
         Source usedBy = Source.projectId(updated.getId());
         Set<String> updatedLinkedReleaseIds = nullToEmptyMap(updated.getReleaseIdToUsage()).keySet();
         Set<String> actualLinkedReleaseIds = nullToEmptyMap(actual.getReleaseIdToUsage()).keySet();
         deleteAttachmentUsagesOfUnlinkedReleases(usedBy, updatedLinkedReleaseIds, actualLinkedReleaseIds);
+
+        // update the obligations only if linked obligations were present in current project,
+        // and there is change in linked releases in updated project
+        if (actual.getLinkedObligationsSize() > 0 && !actualLinkedReleaseIds.equals(updatedLinkedReleaseIds)) {
+            updated.setLinkedObligations(deleteObligationsOfUnlinkedReleases(updated));
+        }
     }
 
     private boolean changePassesSanityCheck(Project updated, Project current) {
@@ -621,6 +658,24 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         releaseIdToProjects(project, user, visitedProjectIds, releaseIdToProjects);
         return releaseIdToProjects;
+    }
+
+    public String getCyclicLinkedProjectPath(Project project, User user) throws TException {
+        Map<String, String> linkedProjectPath = new LinkedHashMap<>();
+        String firstProjFullName = SW360Utils.printName(project);
+        linkedProjectPath.put(project.getId(), firstProjFullName);
+        Object[] cyclicLinkedProjectPresenceAndLastProjectInCycle = getCyclicProjectPresenceAndLastProjectInCycle(
+                project, user, linkedProjectPath);
+        String cyclicHierarchy = "";
+        boolean isCyclicLinkedProjectPresent = (Boolean) cyclicLinkedProjectPresenceAndLastProjectInCycle[0];
+        if (isCyclicLinkedProjectPresent) {
+            String[] arrayOfProjectpath = linkedProjectPath.values().toArray(new String[0]);
+            String lastProjInCycle = (String) cyclicLinkedProjectPresenceAndLastProjectInCycle[1];
+            cyclicHierarchy = String.join(SEPARATOR, arrayOfProjectpath);
+            cyclicHierarchy = cyclicHierarchy.concat(SEPARATOR).concat(lastProjInCycle);
+        }
+
+        return cyclicHierarchy;
     }
 
     private void releaseIdToProjects(Project project, User user, Set<String> visitedProjectIds, Multimap<String, ProjectWithReleaseRelationTuple> releaseIdToProjects) throws SW360Exception {
@@ -1029,4 +1084,32 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 });
         return gidByEmail;
     }
+
+    private Object[] getCyclicProjectPresenceAndLastProjectInCycle(Project project, User user,
+            Map<String, String> linkedProjectPath) throws TException {
+        Map<String, ProjectRelationship> linkedProjects = project.getLinkedProjects();
+        if (linkedProjects != null) {
+            Iterator<String> linkedProjectIterator = linkedProjects.keySet().iterator();
+
+            while (linkedProjectIterator.hasNext()) {
+                String linkedProjectId = linkedProjectIterator.next();
+                Project linkedProject = getProjectById(linkedProjectId, user);
+                String projFullName = SW360Utils.printName(linkedProject);
+                if (linkedProjectPath.containsKey(linkedProjectId)) {
+                    return new Object[] { Boolean.TRUE, projFullName };
+                }
+
+                linkedProjectPath.put(linkedProjectId, projFullName);
+                Object[] cyclicLinkedProjectPresenceAndLastProjectInCycle = getCyclicProjectPresenceAndLastProjectInCycle(
+                        linkedProject, user, linkedProjectPath);
+                boolean isCyclicLinkedProjectPresent = (Boolean) cyclicLinkedProjectPresenceAndLastProjectInCycle[0];
+
+                if (isCyclicLinkedProjectPresent) {
+                    return cyclicLinkedProjectPresenceAndLastProjectInCycle;
+                }
+                linkedProjectPath.remove(linkedProjectId);
+            }
+        }
+        return new Object[] { Boolean.FALSE, null };
+   }
 }
