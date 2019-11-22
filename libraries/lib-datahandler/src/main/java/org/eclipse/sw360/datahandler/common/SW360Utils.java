@@ -23,6 +23,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
@@ -227,6 +230,18 @@ public class SW360Utils {
         }
 
         return getVersionedName(release.getName(), release.getVersion());
+    }
+
+    public static List<Attachment> getApprovedClxAttachmentForRelease(Release release) {
+        Predicate<Attachment> isApprovedCLI = attachment -> attachment.getCheckStatus().equals(CheckStatus.ACCEPTED)
+                && AttachmentType.COMPONENT_LICENSE_INFO_XML.equals(attachment.getAttachmentType());
+
+        return release.getAttachments().stream().filter(isApprovedCLI).collect(Collectors.toList());
+    }
+
+    public static Map<String, String> getReleaseIdtoAcceptedCLIMappings(Map<String, ObligationStatusInfo> obligationStatusMap) {
+        return obligationStatusMap.values().stream().flatMap(e -> e.getReleaseIdToAcceptedCLI().entrySet().stream())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (oldValue, newValue) -> oldValue));
     }
 
     public static String printFullname(Release release) {

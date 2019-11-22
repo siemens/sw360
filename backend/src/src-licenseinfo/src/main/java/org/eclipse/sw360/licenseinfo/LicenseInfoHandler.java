@@ -12,6 +12,7 @@ package org.eclipse.sw360.licenseinfo;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Enums;
+import com.google.common.base.Predicate;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
@@ -20,13 +21,17 @@ import com.google.common.collect.Sets;
 
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
 import org.eclipse.sw360.datahandler.db.AttachmentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
+import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
+import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.licenseinfo.outputGenerators.*;
@@ -40,6 +45,7 @@ import java.net.MalformedURLException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
@@ -64,21 +70,27 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
     protected List<LicenseInfoParser> parsers;
     protected List<OutputGenerator<?>> outputGenerators;
     protected ComponentDatabaseHandler componentDatabaseHandler;
+    protected ProjectDatabaseHandler projectDatabaseHandler;
     protected Cache<String, List<LicenseInfoParsingResult>> licenseInfoCache;
     protected Cache<String, List<ObligationParsingResult>> obligationCache;
+    protected Cache<String, LicenseInfoParsingResult> licenseObligationMappingCache;
 
     public LicenseInfoHandler() throws MalformedURLException {
         this(new AttachmentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS),
-                new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS));
+                new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS),
+                new ProjectDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS));
     }
 
     @VisibleForTesting
     protected LicenseInfoHandler(AttachmentDatabaseHandler attachmentDatabaseHandler,
-                              ComponentDatabaseHandler componentDatabaseHandler) throws MalformedURLException {
+                              ComponentDatabaseHandler componentDatabaseHandler, ProjectDatabaseHandler projectDatabaseHandler) throws MalformedURLException {
         this.componentDatabaseHandler = componentDatabaseHandler;
+        this.projectDatabaseHandler = projectDatabaseHandler;
         this.licenseInfoCache = CacheBuilder.newBuilder().expireAfterWrite(CACHE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                 .maximumSize(CACHE_MAX_ITEMS).build();
         this.obligationCache = CacheBuilder.newBuilder().expireAfterWrite(CACHE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+                .maximumSize(CACHE_MAX_ITEMS).build();
+        this.licenseObligationMappingCache = CacheBuilder.newBuilder().expireAfterWrite(CACHE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                 .maximumSize(CACHE_MAX_ITEMS).build();
 
         AttachmentContentProvider contentProvider = attachment -> attachmentDatabaseHandler.getAttachmentContent(attachment.getAttachmentContentId());
@@ -217,7 +229,174 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         }
     }
 
-    private List<ObligationParsingResult> getObligationsForAttachment(Release release, String attachmentContentId, User user)
+    @Override
+    public Map<Project, List<LicenseInfoParsingResult>> setProjectObligationStatus(Project project, List<LicenseInfoParsingResult> licenseResults, Map<String, String> excludedReleaseIdToAcceptedCLI) {
+
+        Map<String, ObligationStatusInfo> obligationStatusMap = project.isSetLinkedObligations() ? removeUnwantedObligations(project, excludedReleaseIdToAcceptedCLI) : Maps.newHashMap();
+        Map<Project, List<LicenseInfoParsingResult>> projectObligationMap = Maps.newHashMap();
+
+        // mapping obligations and it's status
+        for (LicenseInfoParsingResult result : licenseResults) {
+            Release release = result.getRelease();
+            LicenseInfo licenseInfo = result.getLicenseInfo();
+            licenseInfo.setLicenseNamesWithTexts(filterLicense(licenseInfo));
+            for (LicenseNameWithText license : licenseInfo.getLicenseNamesWithTexts()) {
+                String licenseName = license.getLicenseName();
+                license.getObligations().stream().forEach(obl -> {
+                    ObligationStatusInfo posi = obligationStatusMap.get(obl.getTopic());
+                    release.setAttachments(release.getAttachments().stream()
+                            .filter(a -> a.getAttachmentContentId().equals(result.getAttachmentContentId()))
+                            .collect(Collectors.toSet()));
+                    if (Objects.nonNull(posi)) {
+                        posi.setText(obl.getText());
+                        posi.addToLicenseIds(licenseName);
+                        posi.addToReleases(release);
+                        obl.setObligationStatusInfo(posi);
+                    } else {
+                        ObligationStatusInfo osi = new ObligationStatusInfo().setText(obl.getText())
+                                .setReleases(Sets.newHashSet(release)).setLicenseIds(Sets.newHashSet(licenseName));
+                        obligationStatusMap.put(obl.getTopic(), osi);
+                    }
+                });
+            }
+        }
+        project.setLinkedObligations(obligationStatusMap);
+        projectObligationMap.put(project, licenseResults);
+        return projectObligationMap;
+    }
+
+    private Map<String, ObligationStatusInfo> removeUnwantedObligations(Project project, Map<String, String> excludedReleaseIdToAcceptedCLI) {
+        if (!excludedReleaseIdToAcceptedCLI.isEmpty()) {
+            Map<String, ObligationStatusInfo> obligationStatusMap = project.getLinkedObligations().entrySet().stream().filter(entry -> {
+                ObligationStatusInfo osi = entry.getValue();
+                Map<String, String> currentReleaseIdToAcceptedCLI = osi.getReleaseIdToAcceptedCLI();
+                if (excludedReleaseIdToAcceptedCLI.equals(currentReleaseIdToAcceptedCLI)) {
+                    return false;
+                }
+                if (osi.isSetReleaseIdToAcceptedCLI()) {
+                    currentReleaseIdToAcceptedCLI.keySet().removeAll(excludedReleaseIdToAcceptedCLI.keySet());
+                    if (currentReleaseIdToAcceptedCLI.isEmpty()) {
+                        return false;
+                    }
+                }
+                return true;
+            }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            projectDatabaseHandler.updateProjectForObligations(project.getId(), obligationStatusMap);
+            return obligationStatusMap;
+        }
+        return project.getLinkedObligations();
+    }
+
+    private Set<LicenseNameWithText> filterLicense(LicenseInfo licenseInfo) {
+        // filtering all license without obligations and license name unknown or n/a
+        Predicate<LicenseNameWithText> filterLicense = license -> (license.isSetObligations()
+                && !(SW360Constants.LICENSE_NAME_UNKNOWN.equals(license.getLicenseName())
+                        && SW360Constants.NA.equalsIgnoreCase(license.getLicenseName())));
+
+        return licenseInfo.getLicenseNamesWithTexts().stream().filter(filterLicense).map(license -> {
+            // changing non-global license type as Others an global to Global
+            if (SW360Constants.LICENSE_TYPE_GLOBAL.equalsIgnoreCase(license.getType())) {
+                license.setType(SW360Constants.LICENSE_TYPE_GLOBAL);
+            } else {
+                license.setType(SW360Constants.LICENSE_TYPE_OTHERS);
+            }
+            return license;
+        }).collect(Collectors.toSet());
+    }
+
+    @Override
+    public LicenseInfoParsingResult createLicenseToObligationMapping(LicenseInfoParsingResult licenseResult, ObligationParsingResult obligationResult) {
+
+        LicenseInfoParsingResult cachedResults = licenseObligationMappingCache.getIfPresent(licenseResult.getAttachmentContentId());
+        if (cachedResults != null) {
+            return cachedResults;
+        }
+
+        Map<String, Set<Obligation>> licenseIdToObligations = obligationResult.getObligations().stream()
+                // filtering obligations with unknown topic
+                .filter(obligation -> !(SW360Constants.OBLIGATION_TOPIC_UNKNOWN.equals(obligation.getTopic())))
+                // sort the obligations by topic in ascending order
+                .sorted(Comparator.comparing(Obligation::getTopic, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.toList()).stream()
+                // create a Map<licenseId, Set<Obligation>>
+                .flatMap(obligation -> obligation.getLicenseIDs().stream()
+                        .map(id -> new AbstractMap.SimpleEntry<>(obligation, id)))
+                .collect(Collectors.groupingBy(Map.Entry::getValue,
+                        Collectors.mapping(Map.Entry::getKey, Collectors.toSet())));
+
+        LicenseInfo licenseInfo = licenseResult.getLicenseInfo();
+        licenseInfo.getLicenseNamesWithTexts()
+                .forEach(license -> license.setObligations(licenseIdToObligations.get(license.getLicenseName())));
+        licenseInfo.setTotalObligations(obligationResult.getObligationsSize());
+        licenseObligationMappingCache.put(licenseResult.getAttachmentContentId(), licenseResult);
+        return licenseResult;
+    }
+
+    /* TODO: This method will used once project obligations approach is fixed */
+    private Map<String, ObligationStatusInfo> createLicenseToObligationMappingForReport(Project project, List<LicenseInfoParsingResult> licenseResults,
+            List<ObligationParsingResult> obligationResults, Map<Release, Set<String>> releaseToSelectedAttachmentIds) {
+
+        Set<String> linkedReleaseIds = project.getReleaseIdToUsage().keySet();
+        Map<String, String> releaseIdToAcceptedCLI = Maps.newHashMap();
+
+        if (project.getLinkedObligationsSize() > 0) {
+            releaseIdToAcceptedCLI
+                    .putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(project.getLinkedObligations()));
+        }
+
+        Map<Release, Set<String>> filteredRelToSelAttIds = releaseToSelectedAttachmentIds.entrySet().stream()
+                .filter(e -> linkedReleaseIds.contains(e.getKey().getId()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        if (filteredRelToSelAttIds.isEmpty()) {
+            LOGGER.info("Attachment from linked releases is not selected while downloading the report.");
+            return null;
+        }
+
+        Map<String, LicenseInfoParsingResult> attachmentToLicenseMap = licenseResults.stream()
+                .filter(LicenseInfoParsingResult::isSetAttachmentContentId)
+                .filter(LicenseInfoParsingResult::isSetLicenseInfo).collect(Collectors.toList()).stream()
+                .collect(Collectors.toMap(LicenseInfoParsingResult::getAttachmentContentId, Function.identity()));
+
+        Map<String, ObligationParsingResult> attachmentToObligationMap = obligationResults.stream()
+                .filter(ObligationParsingResult::isSetAttachmentContentId).filter(o -> o.getObligationsSize() > 0)
+                .collect(Collectors.toList()).stream()
+                .collect(Collectors.toMap(ObligationParsingResult::getAttachmentContentId, Function.identity()));
+
+        List<LicenseInfoParsingResult> licenseParsingResults = new ArrayList<LicenseInfoParsingResult>();
+
+
+        for (Entry<Release, Set<String>> entry : filteredRelToSelAttIds.entrySet()) {
+            List<Attachment> filteredAttachments = SW360Utils.getApprovedClxAttachmentForRelease(entry.getKey());
+
+            if (filteredAttachments.size() == 1) {
+                final String approvedAttContentId = filteredAttachments.get(0).getAttachmentContentId();
+                final String releaseId = entry.getKey().getId();
+
+                if (releaseIdToAcceptedCLI.containsKey(releaseId)
+                        && releaseIdToAcceptedCLI.get(releaseId).equals(approvedAttContentId)) {
+                    releaseIdToAcceptedCLI.remove(releaseId);
+                }
+
+                for (String attachmentContentId : entry.getValue()) {
+                    LicenseInfoParsingResult licenseResult = attachmentToLicenseMap.get(attachmentContentId);
+                    ObligationParsingResult obligationResult = attachmentToObligationMap.get(attachmentContentId);
+                    if (attachmentContentId.equals(approvedAttContentId)
+                            && null != obligationResult && null != licenseResult) {
+                        licenseParsingResults.add(createLicenseToObligationMapping(licenseResult, obligationResult));
+                    }
+                }
+            }
+        }
+        if (licenseParsingResults.isEmpty()) {
+            return null;
+        }
+        return setProjectObligationStatus(project, licenseParsingResults, releaseIdToAcceptedCLI).keySet().iterator().next().getLinkedObligations();
+    }
+
+    @Override
+    public List<ObligationParsingResult> getObligationsForAttachment(Release release, String attachmentContentId, User user)
             throws TException {
         if (release == null) {
             return Collections.singletonList(new ObligationParsingResult()

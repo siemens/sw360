@@ -280,4 +280,11 @@ public class ProjectHandler implements ProjectService.Iface {
         return handler.checkIfInUse(projectId);
     }
 
+    @Override
+    public String getCyclicLinkedProjectPath(Project project, User user) throws TException {
+        assertNotNull(project);
+        assertUser(user);
+
+        return handler.getCyclicLinkedProjectPath(project, user);
+    }
 }

@@ -17,6 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.apache.thrift.TSerializer;
+import org.apache.thrift.protocol.TSimpleJSONProtocol;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
@@ -24,17 +27,23 @@ import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoFile;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
+import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
+import org.eclipse.sw360.rest.resourceserver.component.Sw360ComponentService;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
@@ -43,6 +52,7 @@ import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.json.GsonJsonParser;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
 import org.springframework.hateoas.Resource;
@@ -67,14 +77,21 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
 @BasePathAwareController
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class ProjectController implements ResourceProcessor<RepositoryLinksResource> {
     public static final String PROJECTS_URL = "/projects";
+    public static final String SW360_ATTACHMENT_USAGES = "sw360:attachmentUsages";
     private static final Logger log = Logger.getLogger(ProjectController.class);
+    private static final TSerializer THRIFT_JSON_SERIALIZER = new TSerializer(new TSimpleJSONProtocol.Factory());
 
     @NonNull
     private final Sw360ProjectService projectService;
@@ -99,6 +116,9 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 
     @NonNull
     private final RestControllerHelper restControllerHelper;
+
+    @NonNull
+    private final Sw360ComponentService componentService;
 
     @RequestMapping(value = PROJECTS_URL, method = RequestMethod.GET)
     public ResponseEntity<Resources<Resource<Project>>> getProjectsForUser(
@@ -190,11 +210,15 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
 
+        boolean isTransitive = Boolean.parseBoolean(transitive);
         final List<Resource<Release>> releaseResources = new ArrayList<>();
         for (final String releaseId : releaseIds) {
             final Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
             final Release embeddedRelease = restControllerHelper.convertToEmbeddedRelease(sw360Release);
-            final Resource<Release> releaseResource = new Resource<>(embeddedRelease);
+            final HalResource<Release> releaseResource = new HalResource<>(embeddedRelease);
+            if (isTransitive) {
+                projectService.addEmbeddedlinkedRelease(sw360Release, sw360User, releaseResource, releaseService);
+            }
             releaseResources.add(releaseResource);
         }
 
@@ -273,22 +297,44 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
 
-        final Map<String, Set<String>> selectedReleaseAndAttachmentIds = new HashMap<>();
-        for (final String releaseId : sw360Project.getReleaseIdToUsage().keySet()) {
-            final Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
-            if (release.isSetAttachments()) {
-                if (!selectedReleaseAndAttachmentIds.containsKey(releaseId)) {
-                    selectedReleaseAndAttachmentIds.put(releaseId, new HashSet<>());
-                }
-                final Set<Attachment> attachments = release.getAttachments();
-                for (final Attachment attachment : attachments) {
-                    selectedReleaseAndAttachmentIds.get(releaseId)
-                            .add(attachment.getAttachmentContentId());
-                }
-            }
-        }
+        List<ProjectLink> mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
+                projectService.filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
 
-        final Map<String, Set<LicenseNameWithText>> excludedLicenses = new HashMap<>(); // TODO: implement method to determine excluded licenses
+        List<AttachmentUsage> attchmntUsg = attachmentService.getAttachemntUsages(id);
+
+        Map<Source, Set<String>> releaseIdToExcludedLicenses = attchmntUsg.stream()
+                .collect(Collectors.toMap(AttachmentUsage::getOwner,
+                        x -> x.getUsageData().getLicenseInfo().getExcludedLicenseIds(), (li1, li2) -> li1));
+
+        Set<String> usedAttachmentContentIds = attchmntUsg.stream()
+                .map(AttachmentUsage::getAttachmentContentId).collect(Collectors.toSet());
+
+        final Map<String, Set<String>> selectedReleaseAndAttachmentIds = new HashMap<>();
+        final Map<String, Set<LicenseNameWithText>> excludedLicensesPerAttachments = new HashMap<>();
+
+
+        mappedProjectLinks.forEach(projectLink -> wrapTException(() -> {
+            projectLink.getLinkedReleases().stream().filter(ReleaseLink::isSetAttachments).forEach(releaseLink -> {
+                String releaseLinkId = releaseLink.getId();
+                Set<String> excludedLicenseIds = releaseIdToExcludedLicenses.get(Source.releaseId(releaseLinkId));
+
+                if (!selectedReleaseAndAttachmentIds.containsKey(releaseLinkId)) {
+                    selectedReleaseAndAttachmentIds.put(releaseLinkId, new HashSet<>());
+                }
+                final List<Attachment> attachments = releaseLink.getAttachments();
+                Release release = componentService.getReleaseById(releaseLinkId, sw360User);
+                for (final Attachment attachment : attachments) {
+                    String attachemntContentId = attachment.getAttachmentContentId();
+                    if (usedAttachmentContentIds.contains(attachemntContentId)) {
+                        List<LicenseInfoParsingResult> licenseInfoParsingResult = licenseInfoService
+                                .getLicenseInfoForAttachment(release, sw360User, attachemntContentId);
+                        excludedLicensesPerAttachments.put(attachemntContentId,
+                                getExcludedLicenses(excludedLicenseIds, licenseInfoParsingResult));
+                        selectedReleaseAndAttachmentIds.get(releaseLinkId).add(attachemntContentId);
+                    }
+                }
+            });
+        }));
 
         final String projectName = sw360Project.getName();
         final String projectVersion = sw360Project.getVersion();
@@ -299,11 +345,22 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 			StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
 			outputFormatInfo.getFileExtension());
 
-        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User, outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicenses, externalIds);
+        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User, outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicensesPerAttachments, externalIds);
         byte[] byteContent = licenseInfoFile.bufferForGeneratedOutput().array();
         response.setContentType(outputFormatInfo.getMimeType());
         response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
         FileCopyUtils.copy(byteContent, response.getOutputStream());
+    }
+
+    private Set<LicenseNameWithText> getExcludedLicenses(Set<String> excludedLicenseIds,
+            List<LicenseInfoParsingResult> licenseInfoParsingResult) {
+
+        Predicate<LicenseNameWithText> filteredLicense = licenseNameWithText -> excludedLicenseIds
+                .contains(licenseNameWithText.getLicenseName());
+        Function<LicenseInfo, Stream<LicenseNameWithText>> streamLicenseNameWithTexts = licenseInfo -> licenseInfo
+                .getLicenseNamesWithTexts().stream();
+        return licenseInfoParsingResult.stream().map(LicenseInfoParsingResult::getLicenseInfo)
+                .flatMap(streamLicenseNameWithTexts).filter(filteredLicense).collect(Collectors.toSet());
     }
 
     @RequestMapping(value = PROJECTS_URL + "/{id}/attachments", method = RequestMethod.GET)
@@ -407,6 +464,26 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
 
         Resources<Resource<Project>> resources = new Resources<>(projectResources);
         return new ResponseEntity<>(resources, HttpStatus.OK);
+    }
+
+    @RequestMapping(value = PROJECTS_URL + "/{id}/attachmentUsage", method = RequestMethod.GET)
+    public @ResponseBody ResponseEntity<Map<String, Object>> getAttachmentUsage(@PathVariable("id") String id)
+            throws TException {
+        List<AttachmentUsage> attachmentUsages = attachmentService.getAllAttachmentUsage(id);
+        String prefix = "{\"" + SW360_ATTACHMENT_USAGES + "\":[";
+        String serializedUsages = attachmentUsages.stream()
+                .map(usage -> wrapTException(() -> THRIFT_JSON_SERIALIZER.toString(usage)))
+                .collect(Collectors.joining(",", prefix, "]}"));
+        GsonJsonParser parser = new GsonJsonParser();
+        Map<String, Object> attachmentUsageMap = parser.parseMap(serializedUsages);
+        List<Map<String, Object>> listOfAttachmentUsages = (List<Map<String, Object>>) attachmentUsageMap
+                .get(SW360_ATTACHMENT_USAGES);
+        for (Map<String, Object> attachmentUsage : listOfAttachmentUsages) {
+            attachmentUsage.remove("revision");
+            attachmentUsage.remove("type");
+        }
+
+        return new ResponseEntity<>(attachmentUsageMap, HttpStatus.OK);
     }
 
     @Override
