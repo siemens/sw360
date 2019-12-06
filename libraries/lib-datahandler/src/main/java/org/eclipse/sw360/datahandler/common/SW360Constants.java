@@ -58,6 +58,7 @@ public class SW360Constants {
     public static final String TYPE_RELEASE = "release";
     public static final String TYPE_ATTACHMENT = "attachment";
     public static final String TYPE_PROJECT = "project";
+    public static final String TYPE_PROJECT_OBLIGATION = "projectObligation";
     public static final String TYPE_MODERATION = "moderation";
 
     public static final String SIEMENS_SVM_COMPONENT_ID = "com.siemens.svm.component.id";
