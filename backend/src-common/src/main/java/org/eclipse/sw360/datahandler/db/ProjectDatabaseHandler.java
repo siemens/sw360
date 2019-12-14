@@ -29,6 +29,7 @@ import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
+import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
@@ -92,6 +93,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final User EMPTY_USER = new User().setId("").setEmail("").setExternalid("").setDepartment("").setLastname("").setGivenname("");
 
     private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
+    private final ReleaseRelationsUsageRepository relUsageRepository;
     private final MailUtil mailUtil = new MailUtil();
 
     // this caching structure is only used for filling clearing state summaries and
@@ -128,6 +130,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         repository = new ProjectRepository(db);
         pvrRepository = new ProjectVulnerabilityRatingRepository(db);
         obligationRepository = new ProjectObligationRepository(db);
+        relUsageRepository = new ReleaseRelationsUsageRepository(db);
 
         // Create the moderator
         this.moderator = moderator;
@@ -176,9 +179,45 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     ////////////////////////////
     // ADD INDIVIDUAL OBJECTS //
     ////////////////////////////
+    public List<Project> getMyProjectsFull(User user, Map<String, Boolean> userRoles) {
+        String userEmail = user.getEmail();
+        List<Project> myProjectsFull = repository.getMyProjectsFull(userEmail);
+        if (userRoles != null && !userRoles.isEmpty()) {
+            Boolean creator = userRoles.get(Project._Fields.CREATED_BY.toString());
+            Boolean moderator = userRoles.get(Project._Fields.MODERATORS.toString());
+            Boolean contributor = userRoles.get(Project._Fields.CONTRIBUTORS.toString());
+            Boolean projectOwner = userRoles.get(Project._Fields.PROJECT_OWNER.toString());
+            Boolean leadArchitect = userRoles.get(Project._Fields.LEAD_ARCHITECT.toString());
+            Boolean projectResponsible = userRoles.get(Project._Fields.PROJECT_RESPONSIBLE.toString());
+            Boolean securityResponsible = userRoles.get(Project._Fields.SECURITY_RESPONSIBLES.toString());
 
-    public List<Project> getMyProjectsFull(String user) {
-        return repository.getMyProjectsFull(user);
+            myProjectsFull = myProjectsFull.stream().filter(ProjectPermissions.isVisible(user)::test)
+                    .filter(project -> {
+                        if (creator != null && creator && project.getCreatedBy().equals(userEmail)) {
+                            return true;
+                        } else if (moderator != null && moderator && project.getModerators().contains(userEmail)) {
+                            return true;
+                        } else if (contributor != null && contributor
+                                && project.getContributors().contains(userEmail)) {
+                            return true;
+                        } else if (projectOwner != null && projectOwner
+                                && project.getProjectOwner().equals(userEmail)) {
+                            return true;
+                        } else if (leadArchitect != null && leadArchitect
+                                && project.getLeadArchitect().equals(userEmail)) {
+                            return true;
+                        } else if (projectResponsible != null && projectResponsible
+                                && project.getProjectResponsible().equals(userEmail)) {
+                            return true;
+                        } else if (securityResponsible != null && securityResponsible
+                                && project.getSecurityResponsibles().contains(userEmail)) {
+                            return true;
+                        }
+
+                        return false;
+                    }).collect(Collectors.toList());
+        }
+        return myProjectsFull;
     }
 
     public AddDocumentRequestSummary addProject(Project project, User user) throws SW360Exception {
@@ -412,6 +451,21 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             obligationRepository.remove(project.getLinkedObligationId());
         }
         moderator.notifyModeratorOnDelete(project.getId());
+        deleteUsedReleaseRelations(project.getId());
+    }
+
+    private void deleteUsedReleaseRelations(String projectId) throws SW360Exception {
+        List<UsedReleaseRelations> usedReleaseRelations;
+        try {
+            usedReleaseRelations = nullToEmptyList(getUsedReleaseRelationsByProjectId(projectId));
+            if (CommonUtils.isNotEmpty(usedReleaseRelations)) {
+                for (UsedReleaseRelations usedReleaseRelation : usedReleaseRelations) {
+                    deleteReleaseRelationsUsage(usedReleaseRelation);
+                }
+            }
+        } catch (TException e) {
+            throw new SW360Exception(e.getMessage());
+        }
     }
 
     //////////////////////
@@ -1134,4 +1188,21 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         return new Object[] { Boolean.FALSE, null };
    }
+
+    public List<UsedReleaseRelations> getUsedReleaseRelationsByProjectId(String projectId) throws TException {
+        return relUsageRepository.getUsedRelationsByProjectId(projectId);
+    }
+
+    public void deleteReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        String usedReleaseRelationsId = usedReleaseRelations.getId();
+        relUsageRepository.remove(usedReleaseRelationsId);
+    }
+
+    public void addReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        relUsageRepository.add(usedReleaseRelations);
+    }
+
+    public void updateReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        relUsageRepository.update(usedReleaseRelations);
+    }
 }

@@ -225,7 +225,10 @@ public class PortalConstants {
     public static final String LINKED_OBLIGATIONS = "linkedObligations";
     public static final String APPROVED_OBLIGATIONS_COUNT = "approvedObligationsCount";
     public static final String EXCLUDED_RELEASES = "excludedReleases";
-
+    public static final String RELATIONSHIPS = "relations";
+    public static final String PROJECT_RELEASE_TO_RELATION = "projectReleaseToRelation";
+    public static final String PROJECT_USED_RELEASE_RELATIONS = "usedProjectReleaseRelations";
+    public static final String SELECTED_PROJECT_RELEASE_RELATIONS = "selectedProjectReleaseRelations";
 
     public static final String FOSSOLOGY_PORTLET_NAME = PORTLET_NAME_PREFIX + "fossology";
     public static final String USER_LIST = "userList";
@@ -447,6 +450,8 @@ public class PortalConstants {
     public static final String FOSSOLOGY_ACTION_STATUS = FOSSOLOGY_PREFIX + "status";
     public static final String FOSSOLOGY_ACTION_PROCESS = FOSSOLOGY_PREFIX + "process";
     public static final String FOSSOLOGY_ACTION_OUTDATED = FOSSOLOGY_PREFIX + "outdated";
+    public static final String FOSSOLOGY_ACTION_RELOAD_REPORT = FOSSOLOGY_PREFIX + "reload_report";
+    public static final String FOSSOLOGY_JOB_VIEW_LINK = "fossologyJobViewLink";
 
     public static final String RELEASES_AND_PROJECTS = "releasesAndProjects";
 

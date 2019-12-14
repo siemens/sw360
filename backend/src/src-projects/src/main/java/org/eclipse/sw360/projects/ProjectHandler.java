@@ -25,6 +25,9 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectObligation;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.projects.UsedReleaseRelations;
+import org.eclipse.sw360.datahandler.thrift.ThriftClients;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 
 import java.io.IOException;
@@ -66,10 +69,11 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<Project> getMyProjects(String user) throws TException {
-        assertNotEmpty(user);
+    public List<Project> getMyProjects(User user, Map<String, Boolean> userRoles) throws TException {
+        assertNotNull(user);
+        assertNotEmpty(user.getEmail());
 
-        return handler.getMyProjectsFull(user);
+        return handler.getMyProjectsFull(user, userRoles);
     }
 
     @Override
@@ -309,5 +313,29 @@ public class ProjectHandler implements ProjectService.Iface {
         assertId(obligation.getProjectId());
         assertUser(user);
         return handler.updateLinkedObligations(obligation, user);
+    }
+
+    public void deleteReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        assertNotNull(usedReleaseRelations);
+        handler.deleteReleaseRelationsUsage(usedReleaseRelations);
+    }
+
+    @Override
+    public void addReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        assertNotNull(usedReleaseRelations);
+        handler.addReleaseRelationsUsage(usedReleaseRelations);
+
+    }
+
+    @Override
+    public void updateReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
+        assertNotNull(usedReleaseRelations);
+        handler.updateReleaseRelationsUsage(usedReleaseRelations);
+    }
+
+    @Override
+    public List<UsedReleaseRelations> getUsedReleaseRelationsByProjectId(String projectId) throws TException {
+        assertNotNull(projectId);
+        return handler.getUsedReleaseRelationsByProjectId(projectId);
     }
 }
