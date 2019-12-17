@@ -310,18 +310,26 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         final String projectId = request.getParameter(PROJECT_ID);
         String outputGenerator = request.getParameter(PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT);
         String extIdsFromRequest = request.getParameter(PortalConstants.EXTERNAL_ID_SELECTED_KEYS);
+        List<String> selectedReleaseRelationships =  getSelectedReleaseRationships(request);
+        final Set<ReleaseRelationship> listOfSelectedRelationships = selectedReleaseRelationships.stream()
+                .map(rel -> ThriftEnumUtils.stringToEnum(rel, ReleaseRelationship.class)).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        final Set<String> listOfSelectedRelationshipsInString = listOfSelectedRelationships.stream().map(ReleaseRelationship::name)
+                .collect(Collectors.toSet());
 
         String externalIds = Optional.ofNullable(extIdsFromRequest).orElse(StringUtils.EMPTY);
 
         Set<String> selectedAttachmentIdsWithPath = Sets
                 .newHashSet(request.getParameterValues(PortalConstants.LICENSE_INFO_RELEASE_TO_ATTACHMENT));
+        Set<String> filteredSelectedAttachmentIdsWithPath = filterSelectedAttachmentIdsWithPath(selectedAttachmentIdsWithPath, listOfSelectedRelationshipsInString);
         final Map<String, Set<LicenseNameWithText>> excludedLicensesPerAttachmentIdWithPath = ProjectPortletUtils
-                .getExcludedLicensesPerAttachmentIdFromRequest(selectedAttachmentIdsWithPath, request);
+                .getExcludedLicensesPerAttachmentIdFromRequest(filteredSelectedAttachmentIdsWithPath, request);
 
         final Map<String, Set<String>> releaseIdsToSelectedAttachmentIds = new HashMap<>();
-        selectedAttachmentIdsWithPath.stream().forEach(selectedAttachmentIdWithPath -> {
+        filteredSelectedAttachmentIdsWithPath.stream().forEach(selectedAttachmentIdWithPath -> {
             String[] pathParts = selectedAttachmentIdWithPath.split(":");
-            String releaseId = pathParts[pathParts.length - 2];
+            String releaseId = pathParts[pathParts.length - 3];
             String attachmentId = pathParts[pathParts.length - 1];
             if (releaseIdsToSelectedAttachmentIds.containsKey(releaseId)) {
                 // since we have a set as value, we can just add without getting duplicates
@@ -352,13 +360,54 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             Project project = thriftClients.makeProjectClient().getProjectById(projectId, user);
             LicenseInfoFile licenseInfoFile = licenseInfoClient.getLicenseInfoFile(project, user, outputGenerator,
                     releaseIdsToSelectedAttachmentIds, excludedLicensesPerAttachmentId, externalIds);
-            saveLicenseInfoAttachmentUsages(project, user, selectedAttachmentIdsWithPath,
+            saveLicenseInfoAttachmentUsages(project, user, filteredSelectedAttachmentIdsWithPath,
                     excludedLicensesPerAttachmentIdWithPath);
+            saveSelectedReleaseRelations(projectId, listOfSelectedRelationships);
             sendLicenseInfoResponse(request, response, project, licenseInfoFile);
         } catch (TException e) {
             log.error("Error getting LicenseInfo file for project with id " + projectId + " and generator " + outputGenerator, e);
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE, Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
         }
+    }
+
+    private void saveSelectedReleaseRelations(String projectId, Set<ReleaseRelationship> listOfSelectedRelationships) {
+        UsedReleaseRelations usedReleaseRelation = new UsedReleaseRelations();
+        try {
+            ProjectService.Iface client = thriftClients.makeProjectClient();
+            List<UsedReleaseRelations> usedReleaseRelations = nullToEmptyList(
+                    client.getUsedReleaseRelationsByProjectId(projectId));
+            if (CommonUtils.isNotEmpty(usedReleaseRelations)) {
+                usedReleaseRelation = usedReleaseRelations.get(0)
+                        .setUsedReleaseRelations(listOfSelectedRelationships);
+                client.updateReleaseRelationsUsage(usedReleaseRelation);
+            } else {
+                usedReleaseRelation.setProjectId(projectId);
+                usedReleaseRelation.setUsedReleaseRelations(listOfSelectedRelationships);
+                client.addReleaseRelationsUsage(usedReleaseRelation);
+            }
+        } catch (TException exception) {
+            log.error("Error saving selected release relations", exception);
+        }
+    }
+
+    private Set<String> filterSelectedAttachmentIdsWithPath(Set<String> selectedAttachmentIdsWithPath,
+            Set<String> listOfSelectedRelationships) {
+        return selectedAttachmentIdsWithPath.stream().filter(selectedAttachmentIdWithPath -> {
+            String pathParts[] = selectedAttachmentIdWithPath.split(":");
+            String relation = pathParts[pathParts.length - 2];
+            return listOfSelectedRelationships.contains(relation);
+        }).collect(Collectors.toSet());
+    }
+
+    private List<String> getSelectedReleaseRationships(ResourceRequest request) {
+        List<String> selectedReleaseRelationships = Lists.newArrayList();
+        String relationshipsToBeIncluded = request.getParameter(PortalConstants.SELECTED_PROJECT_RELEASE_RELATIONS);
+
+        if (!CommonUtils.isNullEmptyOrWhitespace(relationshipsToBeIncluded)) {
+            selectedReleaseRelationships = Arrays.asList(relationshipsToBeIncluded.split(","));
+        }
+
+        return selectedReleaseRelationships;
     }
 
     private void sendLicenseInfoResponse(ResourceRequest request, ResourceResponse response, Project project, LicenseInfoFile licenseInfoFile) throws IOException {
@@ -388,8 +437,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                         .collect(Collectors.toSet());
                 LicenseInfoUsage licenseInfoUsage = new LicenseInfoUsage(licenseIds);
                 // until second last occurence of ":" (strip releaseId and attachmentId)
-                String projectPath = attachmentContentId.substring(0,
-                        attachmentContentId.lastIndexOf(":", attachmentContentId.lastIndexOf(":") - 1));
+                String splittedAttachmentContentId[] = attachmentContentId.split(":");
+                String projectPath = String.join(":", Arrays.copyOf(splittedAttachmentContentId, splittedAttachmentContentId.length-3));
                 licenseInfoUsage.setProjectPath(projectPath);
                 return UsageData.licenseInfo(licenseInfoUsage);
             };
@@ -992,6 +1041,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 }
 
                 request.setAttribute(PROJECT_LIST, mappedProjectLinks);
+                request.setAttribute(PortalConstants.RELATIONSHIPS, fetchReleaseRelationships(mappedProjectLinks));
+                request.setAttribute(PortalConstants.PROJECT_RELEASE_TO_RELATION, fetchProjectReleaseToRelation(mappedProjectLinks));
+                request.setAttribute(PortalConstants.PROJECT_USED_RELEASE_RELATIONS, fetchUsedReleaseRelationships(id));
                 addProjectBreadcrumb(request, response, project);
 
                 storePathsMapInRequest(request, mappedProjectLinks);
@@ -1001,6 +1053,41 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 setSW360SessionError(request, ErrorMessages.ERROR_GETTING_PROJECT);
             }
         }
+    }
+
+    private Set<ReleaseRelationship> fetchReleaseRelationships(List<ProjectLink> mappedProjectLinks) {
+        return mappedProjectLinks.stream().map(ProjectLink::getLinkedReleases).flatMap(List::stream)
+                .map(ReleaseLink::getReleaseRelationship).collect(Collectors.toSet());
+    }
+
+    private JSONObject fetchProjectReleaseToRelation(List<ProjectLink> mappedProjectLinks) {
+        Map<String, String> projectPathToReleaseToRelation = new HashMap<String, String>();
+        for (ProjectLink projectlink : mappedProjectLinks) {
+            if (projectlink.getLinkedReleasesSize() > 0) {
+                for (ReleaseLink relLink : projectlink.getLinkedReleases()) {
+                    projectPathToReleaseToRelation.put(projectlink.getId() + ":" + relLink.getId(),
+                            relLink.getReleaseRelationship().name());
+                }
+            }
+        }
+        JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+        jsonObject.put("projectReleaseToRel", projectPathToReleaseToRelation);
+        return jsonObject;
+    }
+
+    private Set<ReleaseRelationship> fetchUsedReleaseRelationships(String projectId) {
+        Set<ReleaseRelationship> usedReleaseRealations = Sets.newHashSet();
+        try {
+            ProjectService.Iface client = thriftClients.makeProjectClient();
+            List<UsedReleaseRelations> usedRelRelation = nullToEmptyList(
+                    client.getUsedReleaseRelationsByProjectId(projectId));
+            if (CommonUtils.isNotEmpty(usedRelRelation)) {
+                usedReleaseRealations = usedRelRelation.get(0).getUsedReleaseRelations();
+            }
+        } catch (TException exception) {
+            log.error("cannot retrieve information about release relations.", exception);
+        }
+        return usedReleaseRealations;
     }
 
     /**
@@ -1082,6 +1169,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 }
 
                 request.setAttribute(PROJECT_LIST, mappedProjectLinks);
+                request.setAttribute(PortalConstants.PROJECT_RELEASE_TO_RELATION, fetchProjectReleaseToRelation(mappedProjectLinks));
                 addProjectBreadcrumb(request, response, project);
                 storeAttachmentUsageCountInRequest(request, mappedProjectLinks, UsageData.sourcePackage(new SourcePackageUsage()));
             } catch (TException e) {
@@ -1695,7 +1783,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void serveProjectList(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
         HttpServletRequest originalServletRequest = PortalUtil.getOriginalServletRequest(PortalUtil.getHttpServletRequest(request));
         PaginationParameters paginationParameters = PaginationParser.parametersFrom(originalServletRequest);
-        handlePaginationSortOrder(request, paginationParameters);
+        PortletUtils.handlePaginationSortOrder(request, paginationParameters, projectFilteredFields, PROJECT_NO_SORT);
         List<Project> projectList = getFilteredProjectList(request);
 
         JSONArray jsonProjects = getProjectData(projectList, paginationParameters);
@@ -1711,20 +1799,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
     }
 
-    private void handlePaginationSortOrder(ResourceRequest request, PaginationParameters paginationParameters) {
-        if (!paginationParameters.getSortingColumn().isPresent()) {
-            for (Project._Fields filteredField : projectFilteredFields) {
-                if (!isNullOrEmpty(request.getParameter(filteredField.toString()))) {
-                    paginationParameters.setSortingColumn(Optional.of(PROJECT_NO_SORT));
-                    break;
-                }
-            }
-        }
-    }
-
     public JSONArray getProjectData(List<Project> projectList, PaginationParameters projectParameters) {
         List<Project> sortedProjects = sortProjectList(projectList, projectParameters);
-        int count = getProjectDataCount(projectParameters, projectList.size());
+        int count = PortletUtils.getProjectDataCount(projectParameters, projectList.size());
 
         JSONArray projectData = createJSONArray();
         for (int i = projectParameters.getDisplayStart(); i < count; i++) {
@@ -1747,14 +1824,6 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         return projectData;
     }
 
-    private int getProjectDataCount(PaginationParameters projectParameters, int maxSize) {
-        if (projectParameters.getDisplayLength() == -1) {
-            return maxSize;
-        } else {
-            return min(projectParameters.getDisplayStart() + projectParameters.getDisplayLength(), maxSize);
-        }
-    }
-
     private void setDefaultRequestAttributes(RenderRequest request) {
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
         request.setAttribute(DEFAULT_LICENSE_INFO_HEADER_TEXT, getProjectDefaultLicenseInfoHeaderText());
@@ -1766,10 +1835,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
         switch (projectParameters.getSortingColumn().orElse(PROJECT_DT_ROW_NAME)) {
             case PROJECT_DT_ROW_NAME:
-                Collections.sort(projectList, compareByName(isAsc));
+                Collections.sort(projectList, PortletUtils.compareByName(isAsc));
                 break;
             case PROJECT_DT_ROW_DESCRIPTION:
-                Collections.sort(projectList, compareByDescription(isAsc));
+                Collections.sort(projectList, PortletUtils.compareByDescription(isAsc));
                 break;
             case PROJECT_DT_ROW_RESPONSIBLE:
                 Collections.sort(projectList, compareByResponsible(isAsc));
@@ -1786,18 +1855,6 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
 
         return projectList;
-    }
-
-    private Comparator<Project> compareByName(boolean isAscending) {
-        Comparator<Project> comparator = Comparator.comparing(
-                p -> SW360Utils.printName(p).toLowerCase());
-        return isAscending ? comparator : comparator.reversed();
-    }
-
-    private Comparator<Project> compareByDescription(boolean isAscending) {
-        Comparator<Project> comparator = Comparator.comparing(
-                p -> nullToEmptyString(p.getDescription()));
-        return isAscending ? comparator : comparator.reversed();
     }
 
     private Comparator<Project> compareByResponsible(boolean isAscending) {

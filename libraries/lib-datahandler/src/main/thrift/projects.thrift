@@ -192,13 +192,21 @@ struct ObligationStatusInfo {
     9: optional map<string, string> releaseIdToAcceptedCLI
 }
 
+struct UsedReleaseRelations {
+    1: optional string id,
+    2: optional string revision,
+    3: optional string type = "usedReleaseRelation",
+    4: required string projectId,
+    5: optional set<ReleaseRelationship> usedReleaseRelations = [],
+}
+
 service ProjectService {
 
     // Summary getters
     /**
-     * get projects for user by emailadress
+     * get projects for user according to roles
      */
-    list<Project> getMyProjects(1: string user);
+    list<Project> getMyProjects(1: User user, 2:  map<string, bool> userRoles);
 
     /**
      * get all projects as project summaries which are visible to user
@@ -384,4 +392,24 @@ service ProjectService {
      * update linked obligations of a project
      */
     RequestStatus updateLinkedObligations(1: ProjectObligation obligation, 2: User user);
+
+    /**
+     * Deletes an UsedReleaseRelations object. The given usage object must exist in the database.
+     */
+    void deleteReleaseRelationsUsage(1: UsedReleaseRelations usedReleaseRelations);
+
+    /**
+     * Add an used release relations for a Project.
+     */
+    void addReleaseRelationsUsage(1: UsedReleaseRelations usedReleaseRelations);
+
+    /**
+     * Update an used release relations for a Project.
+     */
+    void updateReleaseRelationsUsage(1: UsedReleaseRelations usedReleaseRelations);
+
+    /**
+     * Get used release relations by project id
+     */
+    list<UsedReleaseRelations> getUsedReleaseRelationsByProjectId(1: string projectId);
 }
