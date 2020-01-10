@@ -22,6 +22,7 @@
 <%@ include file="/html/init.jsp" %>
 <%-- the following is needed by liferay to display error messages--%>
 <%@ include file="/html/utils/includes/errorKeyToMessage.jspf"%>
+<liferay-ui:error key="custom_error" message="${cyclicError}" embed="false"/>
 <%-- use require js on this page --%>
 <%@include file="/html/utils/includes/requirejs.jspf" %>
 
@@ -344,5 +345,10 @@
             $('#<%=Release._Fields.VENDOR_ID.toString()%>').val(beforeComma.trim());
             $('#<%=Release._Fields.VENDOR_ID.toString()%>Display').val(afterComma.trim());
         }
+
+        $("#clearVendor").click(function() {
+            $('#<%=Release._Fields.VENDOR_ID.toString()%>').val("");
+            $('#<%=Release._Fields.VENDOR_ID.toString()%>Display').val("").attr("placeholder", "Click to set vendor");
+        });
     });
 </script>

@@ -82,7 +82,6 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final int DELETION_SANITY_CHECK_THRESHOLD = 5;
     private static final String DUMMY_NEW_PROJECT_ID = "newproject";
     public static final int SVMML_JSON_LOG_CUTOFF_LENGTH = 3000;
-    private static final String SEPARATOR = " -> ";
 
     private final ProjectRepository repository;
     private final ProjectVulnerabilityRatingRepository pvrRepository;
@@ -170,7 +169,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         assertNotNull(project);
 
         if(!makePermission(project, user).isActionAllowed(RequestedAction.READ)) {
-            throw fail("User " + user + " is not allowed to view the requested project " + project + "!");
+            throw fail(403, "User: %s is not allowed to view the requested project: %s", user.getEmail(), project.getId());
         }
 
         return project;
@@ -737,21 +736,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public String getCyclicLinkedProjectPath(Project project, User user) throws TException {
-        Map<String, String> linkedProjectPath = new LinkedHashMap<>();
-        String firstProjFullName = SW360Utils.printName(project);
-        linkedProjectPath.put(project.getId(), firstProjFullName);
-        Object[] cyclicLinkedProjectPresenceAndLastProjectInCycle = getCyclicProjectPresenceAndLastProjectInCycle(
-                project, user, linkedProjectPath);
-        String cyclicHierarchy = "";
-        boolean isCyclicLinkedProjectPresent = (Boolean) cyclicLinkedProjectPresenceAndLastProjectInCycle[0];
-        if (isCyclicLinkedProjectPresent) {
-            String[] arrayOfProjectpath = linkedProjectPath.values().toArray(new String[0]);
-            String lastProjInCycle = (String) cyclicLinkedProjectPresenceAndLastProjectInCycle[1];
-            cyclicHierarchy = String.join(SEPARATOR, arrayOfProjectpath);
-            cyclicHierarchy = cyclicHierarchy.concat(SEPARATOR).concat(lastProjInCycle);
-        }
-
-        return cyclicHierarchy;
+        return AttachmentAwareDatabaseHandler.getCyclicLinkedPath(project, this, user);
     }
 
     private void releaseIdToProjects(Project project, User user, Set<String> visitedProjectIds, Multimap<String, ProjectWithReleaseRelationTuple> releaseIdToProjects) throws SW360Exception {
@@ -951,7 +936,6 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 SW360Constants.NOTIFICATION_CLASS_PROJECT, Project._Fields.ROLES.toString(),
                 project.getName(), project.getVersion());
     }
-
 
     /**
      * CAUTION!
@@ -1160,34 +1144,6 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 });
         return gidByEmail;
     }
-
-    private Object[] getCyclicProjectPresenceAndLastProjectInCycle(Project project, User user,
-            Map<String, String> linkedProjectPath) throws TException {
-        Map<String, ProjectRelationship> linkedProjects = project.getLinkedProjects();
-        if (linkedProjects != null) {
-            Iterator<String> linkedProjectIterator = linkedProjects.keySet().iterator();
-
-            while (linkedProjectIterator.hasNext()) {
-                String linkedProjectId = linkedProjectIterator.next();
-                Project linkedProject = getProjectById(linkedProjectId, user);
-                String projFullName = SW360Utils.printName(linkedProject);
-                if (linkedProjectPath.containsKey(linkedProjectId)) {
-                    return new Object[] { Boolean.TRUE, projFullName };
-                }
-
-                linkedProjectPath.put(linkedProjectId, projFullName);
-                Object[] cyclicLinkedProjectPresenceAndLastProjectInCycle = getCyclicProjectPresenceAndLastProjectInCycle(
-                        linkedProject, user, linkedProjectPath);
-                boolean isCyclicLinkedProjectPresent = (Boolean) cyclicLinkedProjectPresenceAndLastProjectInCycle[0];
-
-                if (isCyclicLinkedProjectPresent) {
-                    return cyclicLinkedProjectPresenceAndLastProjectInCycle;
-                }
-                linkedProjectPath.remove(linkedProjectId);
-            }
-        }
-        return new Object[] { Boolean.FALSE, null };
-   }
 
     public List<UsedReleaseRelations> getUsedReleaseRelationsByProjectId(String projectId) throws TException {
         return relUsageRepository.getUsedRelationsByProjectId(projectId);
