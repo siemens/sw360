@@ -19,7 +19,6 @@ import com.google.common.collect.*;
 import com.liferay.portal.kernel.json.*;
 import com.liferay.portal.kernel.model.Organization;
 import com.liferay.portal.kernel.portlet.PortletResponseUtil;
-import com.liferay.portal.kernel.servlet.SessionErrors;
 import com.liferay.portal.kernel.servlet.SessionMessages;
 import com.liferay.portal.kernel.util.PortalUtil;
 
@@ -311,6 +310,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         String outputGenerator = request.getParameter(PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT);
         String extIdsFromRequest = request.getParameter(PortalConstants.EXTERNAL_ID_SELECTED_KEYS);
         List<String> selectedReleaseRelationships =  getSelectedReleaseRationships(request);
+        String[] selectedAttachmentIdsWithPathArray = request.getParameterValues(PortalConstants.LICENSE_INFO_RELEASE_TO_ATTACHMENT);
         final Set<ReleaseRelationship> listOfSelectedRelationships = selectedReleaseRelationships.stream()
                 .map(rel -> ThriftEnumUtils.stringToEnum(rel, ReleaseRelationship.class)).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -320,8 +320,11 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
         String externalIds = Optional.ofNullable(extIdsFromRequest).orElse(StringUtils.EMPTY);
 
-        Set<String> selectedAttachmentIdsWithPath = Sets
-                .newHashSet(request.getParameterValues(PortalConstants.LICENSE_INFO_RELEASE_TO_ATTACHMENT));
+        Set<String> selectedAttachmentIdsWithPath = Sets.newHashSet();
+        if (null != selectedAttachmentIdsWithPathArray) {
+            selectedAttachmentIdsWithPath = Sets.newHashSet(selectedAttachmentIdsWithPathArray);
+        }
+
         Set<String> filteredSelectedAttachmentIdsWithPath = filterSelectedAttachmentIdsWithPath(selectedAttachmentIdsWithPath, listOfSelectedRelationshipsInString);
         final Map<String, Set<LicenseNameWithText>> excludedLicensesPerAttachmentIdWithPath = ProjectPortletUtils
                 .getExcludedLicensesPerAttachmentIdFromRequest(filteredSelectedAttachmentIdsWithPath, request);
@@ -998,6 +1001,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 if (PortalConstants.IS_PROJECT_OBLIGATIONS_ENABLED && project.getReleaseIdToUsageSize() > 0) {
                     request.setAttribute(OBLIGATION_DATA, loadLinkedObligations(request, project));
                 }
+            } catch (SW360Exception sw360Exp) {
+                setSessionErrorBasedOnErrorCode(request, sw360Exp.getErrorCode());
             } catch (TException e) {
                 log.error("Error fetching project from backend!", e);
                 setSW360SessionError(request, ErrorMessages.ERROR_GETTING_PROJECT);
@@ -1305,6 +1310,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 project = client.getProjectByIdForEdit(id, user);
                 usingProjects = client.searchLinkingProjects(id, user);
                 allUsingProjectCount = client.getCountByProjectId(id);
+            } catch (SW360Exception sw360Exp) {
+                setSessionErrorBasedOnErrorCode(request, sw360Exp.getErrorCode());
+                return;
             } catch (TException e) {
                 log.error("Something went wrong with fetching the project", e);
                 setSW360SessionError(request, ErrorMessages.ERROR_GETTING_PROJECT);
@@ -1417,7 +1425,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
                 String cyclicLinkedProjectPath = client.getCyclicLinkedProjectPath(project, user);
                 if (!isNullEmptyOrWhitespace(cyclicLinkedProjectPath)) {
-                    addErrorMessages(cyclicLinkedProjectPath, request, response);
+                    FossologyAwarePortlet.addCustomErrorMessage(CYCLIC_LINKED_PROJECT + cyclicLinkedProjectPath,
+                            PAGENAME_EDIT, request, response);
                     response.setRenderParameter(PROJECT_ID, id);
                     return;
                 }
@@ -1444,7 +1453,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
                 String cyclicLinkedProjectPath = client.getCyclicLinkedProjectPath(project, user);
                 if (!isNullEmptyOrWhitespace(cyclicLinkedProjectPath)) {
-                    addErrorMessages(cyclicLinkedProjectPath, request, response);
+                    FossologyAwarePortlet.addCustomErrorMessage(CYCLIC_LINKED_PROJECT + cyclicLinkedProjectPath,
+                            PAGENAME_EDIT, request, response);
                     prepareRequestForEditAfterDuplicateError(request, project, user);
                     return;
                 }
@@ -1867,15 +1877,5 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Comparator<Project> comparator = Comparator.comparing(
                 p -> nullToEmptyString(p.getState()));
         return isAscending ? comparator : comparator.reversed();
-    }
-
-    private void addErrorMessages(String cyclicHierarchy, ActionRequest request, ActionResponse response) {
-        SessionErrors.add(request, "custom_error");
-        request.setAttribute("cyclicError", CYCLIC_LINKED_PROJECT + cyclicHierarchy);
-        SessionMessages.add(request,
-                PortalUtil.getPortletId(request) + SessionMessages.KEY_SUFFIX_HIDE_DEFAULT_ERROR_MESSAGE);
-        SessionMessages.add(request,
-                PortalUtil.getPortletId(request) + SessionMessages.KEY_SUFFIX_HIDE_DEFAULT_SUCCESS_MESSAGE);
-        response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
     }
 }

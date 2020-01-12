@@ -1594,6 +1594,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return release;
     }
 
+    public String getCyclicLinkedReleasePath(Release release, User user) throws TException {
+        return getCyclicLinkedPath(release, this, user);
+    }
+
     public List<Component> searchComponentByNameForExport(String name) {
         return componentRepository.searchByNameForExport(name);
     }
