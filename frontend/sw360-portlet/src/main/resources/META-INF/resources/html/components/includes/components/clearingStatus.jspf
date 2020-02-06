@@ -1,26 +1,16 @@
 <%--
   ~ Copyright Siemens AG, 2013-2017, 2019. Part of the SW360 Portal Project.
   ~
-  ~ SPDX-License-Identifier: EPL-1.0
+  ~ This program and the accompanying materials are made
+  ~ available under the terms of the Eclipse Public License 2.0
+  ~ which is available at https://www.eclipse.org/legal/epl-2.0/
   ~
-  ~ All rights reserved. This program and the accompanying materials
-  ~ are made available under the terms of the Eclipse Public License v1.0
-  ~ which accompanies this distribution, and is available at
-  ~ http://www.eclipse.org/legal/epl-v10.html
+  ~ SPDX-License-Identifier: EPL-2.0
   --%>
 <%@ page import="org.eclipse.sw360.portal.common.page.PortletReleasePage,org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType" %>
 <%@ page import="org.eclipse.sw360.portal.common.FossologyConnectionHelper" %>
 <portlet:resourceURL var="deleteReleaseAjaxURL">
     <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.DELETE_RELEASE%>'/>
-</portlet:resourceURL>
-<portlet:resourceURL var="sw360ComponentUrl">
-    <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.CODESCOOP_ACTION_COMPONENT%>'/>
-</portlet:resourceURL>
-<portlet:resourceURL var="sw360ReleasesUrl">
-    <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.CODESCOOP_ACTION_RELEASES%>'/>
-</portlet:resourceURL>
-<portlet:resourceURL var="sw360PurlUrl">
-    <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.CODESCOOP_ACTION_PURL%>'/>
 </portlet:resourceURL>
 <portlet:renderURL var="addReleaseURL">
     <portlet:param name="<%=PortalConstants.COMPONENT_ID%>" value="${component.id}"/>
@@ -242,22 +232,3 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
     }
 });
 </script>
-
-
-<core_rt:if test="${codescoopActive}">
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            require(['modules/codeScoop' ], function(codeScoop) {
-                var api = new codeScoop();
-                api.activateMissedReleases(
-                    releaseData,
-                    "componentOverview",
-                    "releaseAggregateTable",
-                    '<portlet:renderURL ><portlet:param name="<%=PortalConstants.COMPONENT_ID%>" value="${component.id}"/><portlet:param name="<%=PortalConstants.PAGENAME%>" value="<%=PortalConstants.PAGENAME_EDIT_RELEASE%>"/></portlet:renderURL>',
-                    "<%=sw360ComponentUrl%>",
-                    "<%=sw360ReleasesUrl%>",
-                    "<%=sw360PurlUrl%>");
-            });
-        });
-    </script>
-</core_rt:if>

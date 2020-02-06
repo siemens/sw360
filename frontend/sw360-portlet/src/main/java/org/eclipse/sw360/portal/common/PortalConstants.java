@@ -2,12 +2,11 @@
  * Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
  * With contributions by Bosch Software Innovations GmbH, 2016.
  *
- * SPDX-License-Identifier: EPL-1.0
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
  *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * SPDX-License-Identifier: EPL-2.0
  */
 package org.eclipse.sw360.portal.common;
 
@@ -534,15 +533,6 @@ public class PortalConstants {
     public static final String API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS;
     public static final String API_TOKEN_HASH_SALT;
     public static final String API_TOKEN_ID = "tokenId";
-
-    // CodeScoop integration
-    public static final String CODESCOOP_ACTIVE = "codescoopActive";
-    public static final String CODESCOOP_ACTION = "codescoop_action_";
-    public static final String CODESCOOP_ACTION_COMPOSITE = CODESCOOP_ACTION + "composite";
-    public static final String CODESCOOP_ACTION_COMPONENT = CODESCOOP_ACTION + "component";
-    public static final String CODESCOOP_ACTION_RELEASES = CODESCOOP_ACTION + "releases";
-    public static final String CODESCOOP_ACTION_AUTOCOMPLETE = CODESCOOP_ACTION + "autocomplete";
-    public static final String CODESCOOP_ACTION_PURL = CODESCOOP_ACTION + "purl";
 
     public static final String WRITE_ACCESS_USER = "writeAccessUser";
 

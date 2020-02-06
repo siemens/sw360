@@ -3,10 +3,11 @@
 # Copyright Bosch Software Innovations GmbH, 2017.
 # Part of the SW360 Portal Project.
 #
-# All rights reserved. This configuration file is provided to you under the
-# terms and conditions of the Eclipse Distribution License v1.0 which
-# accompanies this distribution, and is available at
-# http://www.eclipse.org/org/documents/edl-v10.php
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
 #
 # initial author: maximilian.huber@tngtech.com
 # -----------------------------------------------------------------------------
@@ -33,16 +34,20 @@ before_install:
   - sudo apt-get install -y couchdb
   - sudo service couchdb restart
   - ./scripts/install-thrift.sh --no-cleanup
-install: mvn dependency:resolve || true
 
-env: MVN_ARGS="package"
-script: mvn --fail-at-end $MVN_ARGS
+env:
+  GIT_COMMIT_COUNT="$(git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)"
+  MVN_ARGS="package"
+install:
+  mvn dependency:resolve || true
+script:
+  mvn --fail-at-end $MVN_ARGS
 
 matrix:
   include:
-    - name: mvn package
+    - name: mvn package -Pci -Dcount=$GIT_COMMIT_COUNT
       env: MVN_ARGS="package"
-    - name: mvn validate
+    - name: mvn validate -Pci -Dcount=$GIT_COMMIT_COUNT
       env: MVN_ARGS="validate"
       before_install:
     - name: mvn dependency:analyze
@@ -59,4 +64,3 @@ matrix:
     #   script: scripts/compileWithDocker.sh
   allow_failures:
     - name: mvn dependency:analyze
-

@@ -3,12 +3,11 @@
  * With modifications by Bosch Software Innovations GmbH, 2016.
  * With modifications by Verifa Oy, 2018.
  *
- * SPDX-License-Identifier: EPL-1.0
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
  *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * SPDX-License-Identifier: EPL-2.0
  */
 package org.eclipse.sw360.datahandler.thrift;
 
@@ -19,7 +18,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentService;
-import org.eclipse.sw360.datahandler.thrift.codescoop.CodescoopService;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
@@ -79,7 +77,6 @@ public class ThriftClients {
     private static final String SCHEDULE_SERVICE_URL = "/schedule/thrift";
     private static final String VM_SERVICE_URL = "/vmcomponents/thrift";
     private static final String WSIMPORT_SERVICE_URL = "/wsimport/thrift";
-    private static final String CODESCOOP_SERVICE_URL = "/codescoop/thrift";
 
     // A service which has to be scheduled by the scheduler should be registered here!
     // names of services that can be scheduled by the schedule service, i.e. that have an "update" method
@@ -196,9 +193,5 @@ public class ThriftClients {
 
     public ProjectImportService.Iface makeWsImportClient() {
         return new ProjectImportService.Client(makeProtocol(BACKEND_URL, WSIMPORT_SERVICE_URL));
-    }
-
-    public CodescoopService.Iface makeCodescoopClient() {
-        return new CodescoopService.Client(makeProtocol(BACKEND_URL, CODESCOOP_SERVICE_URL));
     }
 }

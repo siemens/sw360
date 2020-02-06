@@ -2,12 +2,11 @@
   ~ Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
   ~ With modifications by Bosch Software Innovations GmbH, 2016.
   ~
-  ~ SPDX-License-Identifier: EPL-1.0
+  ~ This program and the accompanying materials are made
+  ~ available under the terms of the Eclipse Public License 2.0
+  ~ which is available at https://www.eclipse.org/legal/epl-2.0/
   ~
-  ~ All rights reserved. This program and the accompanying materials
-  ~ are made available under the terms of the Eclipse Public License v1.0
-  ~ which accompanies this distribution, and is available at
-  ~ http://www.eclipse.org/legal/epl-v10.html
+  ~ SPDX-License-Identifier: EPL-2.0
   --%>
 <%@ page import="com.liferay.portal.kernel.portlet.PortletURLFactoryUtil" %>
 <%@ page import="javax.portlet.PortletRequest" %>
@@ -63,10 +62,6 @@
     <portlet:param name="<%=PortalConstants.PAGENAME%>" value="<%=PortalConstants.FRIENDLY_URL_PLACEHOLDER_PAGENAME%>"/>
     <portlet:param name="<%=PortalConstants.LICENSE_ID%>" value="<%=PortalConstants.FRIENDLY_URL_PLACEHOLDER_ID%>"/>
 </liferay-portlet:renderURL>
-
-<portlet:resourceURL var="sw360CompositeUrl">
-    <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.CODESCOOP_ACTION_COMPOSITE%>'/>
-</portlet:resourceURL>
 
 <div class="container" style="display: none;">
 	<div class="row">
@@ -175,25 +170,6 @@
     var dataGetter = function(field) {
     };
 </script>
-
-<core_rt:if test="${codescoopActive}">
-    <script>
-        window.codescoopEnabled = true;
-        document.addEventListener("DOMContentLoaded", function() {
-            require(['modules/codeScoop' ], function(codeScoop) {
-                var api = new codeScoop();
-                api.activateIndexes("componentsTable", "<%=sw360ComponentsURL%>", "<%=sw360CompositeUrl%>");
-                renderCallback = api._update_indexes;
-                dataGetter = api._get_composite_data_item;
-            });
-            document
-                .getElementById("componentsTable")
-                .getElementsByTagName("tfoot")[0]
-                .getElementsByTagName("th")[0]
-                .setAttribute("colspan", 10)
-        });
-    </script>
-</core_rt:if>
 <script>
     AUI().use('liferay-portlet-url', function () {
         var PortletURL = Liferay.PortletURL;
@@ -245,49 +221,20 @@
 
             // create and render data table
             function createComponentsTable() {
-                var columnDefs =  [];
-                var columns = [
+                let columns = [
                     {"title": "Vendor", data: "vndrs"},
                     {"title": "Component Name", data: "name", render: {display: renderComponentNameLink}},
                     {"title": "Main Licenses", data: "lics", render: {display: renderLicenseLink}},
                     {"title": "Component Type", data: "cType"},
                     {"title": "Actions", data: "id", render: {display: renderComponentActions}, className: 'two actions', orderable: false }
                 ];
-                var printColumns = [0, 1, 2, 3];
-
-                if (window.codescoopEnabled) {
-                    columns = [
-                        {"title": "Logo", data: function(row, type, val, meta){
-                                return dataGetter(row.DT_RowId, 'logo');
-                            }},
-                        {"title": "Vendor", data: "vndrs"},
-                        {"title": "Component Name", data: "name", render: {display: renderComponentNameLink}},
-                        {"title": "Main Licenses", data: "lics", render: {display: renderLicenseLink}},
-                        {"title": "Rate", data: function(row, type, val, meta){
-                                return dataGetter(row.DT_RowId, 'rate');
-                            }},
-                        {"title": "Interest", data: function(row, type, val, meta){
-                                return dataGetter(row.DT_RowId, 'index', 'interest');
-                            }},
-                        {"title": "Activity", data: function(row, type, val, meta){
-                                return dataGetter(row.DT_RowId, 'index', 'activity');
-                            }},
-                        {"title": "Health", data: function(row, type, val, meta){
-                                return dataGetter(row.DT_RowId, 'index', 'health');
-                            }},
-                        {"title": "Component Type", data: "cType"},
-                        {"title": "Actions", data: "id", render: {display: renderComponentActions}, className: 'two actions', orderable: false }
-                    ];
-                    columnDefs = [{ "orderable": false, "targets": [0, 4, 5, 6 ,7] }];
-                    printColumns = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-                }
-
+                let printColumns = [0, 1, 2, 3];
                 var componentsTable = datatables.create('#componentsTable', {
                     bServerSide: true,
                     sAjaxSource: '<%=sw360ComponentsURL%>',
 
                     columns: columns,
-                    columnDefs: columnDefs,
+                    columnDefs: [],
                     drawCallback: renderCallback,
                     initComplete: datatables.showPageContainer,
                     order: [

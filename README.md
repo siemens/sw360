@@ -1,4 +1,8 @@
+[![Eclipse Public License 2.0](https://img.shields.io/badge/license-EPL--2.0-green.svg "Eclipse Public License 2.0")](LICENSE)
 [![Build Status](https://travis-ci.org/eclipse/sw360.svg?branch=master)](https://travis-ci.org/eclipse/sw360)
+[![Slack Channel](https://img.shields.io/badge/slack-sw360chat-blue.svg?longCache=true&logo=slack)](https://join.slack.com/t/sw360chat/shared_invite/enQtNzg5NDQxMTQyNjA5LThiMjBlNTRmOWI0ZjJhYjc0OTk3ODM4MjBmOGRhMWRmN2QzOGVmMzQwYzAzN2JkMmVkZTI1ZjRhNmJlNTY4ZGI)
+[![Changelog](https://badgen.net/badge/changelog/%E2%98%85/blue)](https://github.com/eclipse/sw360/blob/master/CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-7.0.1-blue)](https://github.com/eclipse/sw360/releases/tag/sw360-7.0.1-M1)
 
 ### SW360 Portal
 
@@ -75,7 +79,7 @@ The software is tested with
 
 ### PROBLEMS
 
-Running with the tested software shows no problems if you encounter some please report them at: 
+Running with the tested software shows no problems if you encounter some please report them at:
 
 https://github.com/eclipse/sw360/issues
 
@@ -103,14 +107,14 @@ Actually, there is a hierarchy of maven files, in general
 2. to run all targets including build the .war file at the end
   - `mvn install`
 
-  this needs a couchdb running on the host on port 5984
+  this needs a couchdb running on the host on port 5984. To start such a couchdb via docker one can use the script `scripts/startCouchdbForTests.sh`
 
 3. to install without running the tests
   - `mvn install -DskipTests`
 
 For deployment run the command
 ```
-mvn install -Dbase.deploy.dir=<SOME_ABSOLUTE_PATH> -P deploy
+mvn package -P deploy -Dbase.deploy.dir=. -Dliferay.deploy.dir=${LIFERAY_INSTALL}/deploy -Dbackend.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -Drest.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -DskipTests
 ```
 which copies the artifacts depending on their type to the following folders:
   - backend: `<SOME_ABSOLUTE_PATH>/tomcat`
@@ -166,12 +170,10 @@ are excluded from the WAR file while packaging. Using below configuration,
 
 ### License
 
+SPDX-License-Identifier: EPL-2.0
 
-SPDX Short Identifier: http://spdx.org/licenses/EPL-1.0
+This program and the accompanying materials are made
+available under the terms of the Eclipse Public License 2.0
+which is available at https://www.eclipse.org/legal/epl-2.0/
 
-SPDX-License-Identifier: EPL-1.0
-
-All rights reserved. This program and the accompanying materials
-are made available under the terms of the Eclipse Public License v1.0
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/epl-v10.html
+SPDX-License-Identifier: EPL-2.0
