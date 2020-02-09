@@ -1,12 +1,11 @@
 <%--
   ~ Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
   ~
-  ~ SPDX-License-Identifier: EPL-1.0
+  ~ This program and the accompanying materials are made
+  ~ available under the terms of the Eclipse Public License 2.0
+  ~ which is available at https://www.eclipse.org/legal/epl-2.0/
   ~
-  ~ All rights reserved. This program and the accompanying materials
-  ~ are made available under the terms of the Eclipse Public License v1.0
-  ~ which accompanies this distribution, and is available at
-  ~ http://www.eclipse.org/legal/epl-v10.html
+  ~ SPDX-License-Identifier: EPL-2.0
   --%>
 <%@ page import="com.liferay.portal.kernel.portlet.PortletURLFactoryUtil" %>
 <%@ page import="javax.portlet.PortletRequest" %>
@@ -229,12 +228,6 @@
     <core_rt:set var="enableSearchForReleasesFromLinkedProjects" value="${false}" scope="request"/>
     <jsp:include page="/html/utils/includes/searchReleases.jsp" />
 </core_rt:if>
-
-<c:if test="${codescoopActive}">
-    <script>
-        var sw360Purl = "${componentpurl}";
-    </script>
-</c:if>
 
 <script>
     require(['jquery', 'components/includes/vendors/searchVendor', 'modules/autocomplete', 'modules/dialog', 'modules/listgroup', 'modules/validation' ], function($, vendorsearch, autocomplete, dialog, listgroup, validation) {

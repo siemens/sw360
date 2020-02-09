@@ -2,12 +2,11 @@
  * Copyright Siemens AG, 2013-2019. Part of the SW360 Portal Project.
  * With contributions by Bosch Software Innovations GmbH, 2016.
  *
- * SPDX-License-Identifier: EPL-1.0
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
  *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * SPDX-License-Identifier: EPL-2.0
  */
 package org.eclipse.sw360.portal.portlets.components;
 
@@ -39,7 +38,6 @@ import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentService;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
-import org.eclipse.sw360.datahandler.thrift.codescoop.CodescoopService;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.VulnerabilityUpdateStatus;
@@ -218,8 +216,6 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             writeSpdxLicenseInfoIntoRelease(request, response);
         } else if (isGenericAction(action)) {
             dealWithGenericAction(request, response, action);
-        } else if (action.contains(PortalConstants.CODESCOOP_ACTION)) {
-            serveCodescoop(action, request, response);
         }
     }
 
@@ -496,38 +492,6 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         serveReleaseSearch(request, response, searchText);
     }
 
-    private void serveCodescoop(String action, ResourceRequest request, ResourceResponse response) throws PortletException {
-        try {
-            ResourceRequestWrapper wrapper = new ResourceRequestWrapper(request);
-            BufferedReader streamReader = wrapper.getReader();
-            StringBuilder responseStrBuilder = new StringBuilder();
-            String inputStr;
-            while ((inputStr = streamReader.readLine()) != null) {
-                responseStrBuilder.append(inputStr);
-            }
-            log.info("requested data : " + responseStrBuilder.toString());
-            CodescoopService.Iface codescoopClient = thriftClients.makeCodescoopClient();
-
-            String responseJson = null;
-            if (CODESCOOP_ACTION_COMPOSITE.equals(action)) {
-                responseJson = codescoopClient.proceedComponentsCompositeJson(responseStrBuilder.toString());
-            } else if (CODESCOOP_ACTION_COMPONENT.equals(action)) {
-                responseJson = codescoopClient.proceedComponentsJson(responseStrBuilder.toString());
-            } else if (CODESCOOP_ACTION_RELEASES.equals(action)) {
-                responseJson = codescoopClient.proceedComponentReleasesJson(responseStrBuilder.toString());
-            } else if (CODESCOOP_ACTION_AUTOCOMPLETE.equals(action)) {
-                responseJson = codescoopClient.proceedAutocompleteJson(responseStrBuilder.toString());
-            } else if (CODESCOOP_ACTION_PURL.equals(action)) {
-                responseJson = codescoopClient.proceedComponentsPurlJson(responseStrBuilder.toString());
-            }
-            writeJsonResponse(responseJson, response);
-        } catch (Exception e) {
-            response.setProperty(ResourceResponse.HTTP_STATUS_CODE, "500");
-            log.error("Error serveCodescoop", e);
-            throw new PortletException(e.getMessage(), e);
-        }
-    }
-
     private void writeJsonResponse(String json, ResourceResponse response) throws IOException {
         byte[] bytes = json.getBytes(Charset.forName("UTF-8"));
         response.setContentType(ContentTypes.APPLICATION_JSON);
@@ -630,14 +594,6 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     @Override
     public void doView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
         String pageName = request.getParameter(PAGENAME);
-
-        try {
-            CodescoopService.Iface codescoopClient = thriftClients.makeCodescoopClient();
-            request.setAttribute(PortalConstants.CODESCOOP_ACTIVE, codescoopClient.isEnabled());
-        } catch (TException e) {
-            log.debug("CodescoopService has not connected", e);
-            request.setAttribute(PortalConstants.CODESCOOP_ACTIVE, false);
-        }
 
         if (PAGENAME_DETAIL.equals(pageName)) {
             prepareDetailView(request, response);

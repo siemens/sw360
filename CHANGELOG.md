@@ -2,7 +2,52 @@
 
 This is the changelog file of the sw360 software. It starts with the first release being provided at eclipse/sw360. For older releases, please refer to the first project location:
 
-https://github.com/sw360/sw360portal
+https://github.com/eclipse/sw360
+
+## sw360-7.0.1-M1
+
+After tagging 7.0.0, we found two bugs to be corrected to provide a sound SW360. Therefore, here a new tagged version of sw360. Everyone should use 7.0.1-M1 instead of 7.0.0.
+
+Adding rolling version since last tag will prepare automated tagging with incrementing patch level, retaining manual tagging for major and minor version only.
+
+### Corrections
+
+* `0dcd109` fix(ProjectUI: fixed blank / non-responsive screen on project
+* `da677b5` fix(ui): fix issue #762
+
+### Infrastructure
+
+* `a37e24d` chore(readme): adding some more badges
+* `f1a7c63`feat(chore): adding rolling versions based on commit count 
+
+## sw360-7.0.0-M1
+
+The main reason for release version 7 is to have the license upgrade from EPL-1.0 to EPL-2.0. All contributing parties have submitted their consent by e-mail and on most cases also approved the referring pull request (https://github.com/eclipse/sw360/pull/756).
+
+Another change which justifies a major version jump is the required view update in the couchdb. Please see https://github.com/eclipse/sw360/blob/master/scripts/migrations/README.md for more information when migrating from an older version. The view update allows users to configure the `My Projects` portlet.
+
+### New Features
+
+* `9b92795` feat(docs): relicensing from EPL-1.0 to EPL-2.0
+* `66a4126` feat(Component/ReleaseUI): Added button to remove selected vendor for component and release
+* `860aa3e` feat(ProjectMigration): script to migrate a project field to new value
+* `bd99641` feat(REST): Add parameter to GET release by name
+* `322c45d` feat(WelcomePageUI): display configurable content for guidelines on welcome page
+* `abac231` feat(fossology-pull-report): Added the button to pull the already generated report from fossology
+* `062c899` feat(HomePageUI): Listing of MyProjects is made configurable
+* `9849cb0` feat(licenseinfo): Added filter to exclude releases based on selected relationship
+
+### Corrections
+
+* `2a52475` fix(ProjectUI): Show proper error msg ,when loading of project fails due to access or dependency not found
+* `752bd78` fix(ProjectUI): fixed 'Project is temporarily unavailable' issue due to obligation feature
+* `b32afd5` fix(ReleaseUI/REST): prevent cyclic link in release
+* `0d2647d` fix(licenseinfo): White page while downloading license disclosure
+
+### Infrastructure
+
+* `d22aaaf` test: add script to start temporary couchdb with docker
+* `df54014` chore(cleanup): drop unused and outdated code related to the codescoop integration
 
 ## sw360-6.0.0-M1
 
@@ -375,11 +420,8 @@ Because of changes in the couchdb schema you likely need to run a migration scri
 
 ## License
 
-SPDX Short Identifier: http://spdx.org/licenses/EPL-1.0
+This program and the accompanying materials are made
+available under the terms of the Eclipse Public License 2.0
+which is available at https://www.eclipse.org/legal/epl-2.0/
 
-SPDX-License-Identifier: EPL-1.0
-
-All rights reserved. This program and the accompanying materials
-are made available under the terms of the Eclipse Public License v1.0
-which accompanies this distribution, and is available at
-http://www.eclipse.org/legal/epl-v10.html
+SPDX-License-Identifier: EPL-2.0
