@@ -31,6 +31,7 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -76,17 +77,15 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         Component component = sw360ComponentClient.getComponentById(componentId, sw360User);
         Set<String> releaseIds = SW360Utils.getReleaseIds(component.getReleases());
-        Set<Project> usedByProjects = projectService.getProjectsByReleaseIds(releaseIds, sw360User);
 
-        return usedByProjects;
+        return projectService.getProjectsByReleaseIds(releaseIds, sw360User);
     }
 
     public Set<Component> getUsingComponentsForComponent(String componentId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         Component component = sw360ComponentClient.getComponentById(componentId, sw360User);
         Set<String> releaseIds = SW360Utils.getReleaseIds(component.getReleases());
-        Set<Component> usingComponentsForComponent = sw360ComponentClient.getUsingComponentsForComponent(releaseIds);
-        return usingComponentsForComponent;
+        return sw360ComponentClient.getUsingComponentsForComponent(releaseIds);
     }
 
     @Override
@@ -109,6 +108,8 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
             return component;
         } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.DUPLICATE) {
             throw new DataIntegrityViolationException("sw360 component with name '" + component.getName() + "' already exists.");
+        } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.INVALID_INPUT) {
+            throw new HttpMessageNotReadableException("Dependent document Id/ids not valid.");
         }
         return null;
     }
@@ -116,7 +117,9 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     public RequestStatus updateComponent(Component component, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         RequestStatus requestStatus = sw360ComponentClient.updateComponent(component, sw360User);
-        if (requestStatus != RequestStatus.SUCCESS) {
+        if (requestStatus == RequestStatus.INVALID_INPUT) {
+            throw new HttpMessageNotReadableException("Dependent document Id/ids not valid.");
+        } else if (requestStatus != RequestStatus.SUCCESS) {
             throw new RuntimeException("sw360 component with name '" + component.getName() + " cannot be updated.");
         }
         return requestStatus;

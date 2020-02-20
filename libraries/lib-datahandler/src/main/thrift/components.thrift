@@ -24,6 +24,7 @@ typedef sw360.DocumentState DocumentState
 typedef sw360.ReleaseRelationship ReleaseRelationship
 typedef sw360.MainlineState MainlineState
 typedef sw360.ProjectReleaseRelationship ProjectReleaseRelationship
+typedef sw360.SW360Exception SW360Exception
 typedef attachments.Attachment Attachment
 typedef attachments.FilledAttachment FilledAttachment
 typedef users.User User
@@ -275,6 +276,7 @@ enum ComponentType {
     FREESOFTWARE = 3, //freeware
     INNER_SOURCE = 4, //internal software with source open for customers within own company
     SERVICE = 5,
+    CODE_SNIPPET = 6,
 }
 
 struct Component {
@@ -487,7 +489,7 @@ service ComponentService {
     /**
       * get release from database filled with vendor and permissions for user
       **/
-    Release getReleaseById(1: string id, 2: User user);
+    Release getReleaseById(1: string id, 2: User user) throws (1: SW360Exception exp);
 
      /**
        * get release from database filled with vendor and permissions for user
@@ -713,4 +715,9 @@ service ComponentService {
      * get the cyclic hierarchy of linkedReleases
      */
     string getCyclicLinkedReleasePath(1: Release release, 2: User user);
+
+    /**
+     * parse a bom file and write the information to SW360
+     **/
+    RequestSummary importBomFromAttachmentContent(1: User user, 2:string attachmentContentId);
 }

@@ -161,7 +161,7 @@ public class ComponentHandler implements ComponentService.Iface {
     }
 
     @Override
-    public Release getReleaseById(String id, User user) throws TException {
+    public Release getReleaseById(String id, User user) throws SW360Exception {
         assertId(id);
         assertUser(user);
 
@@ -501,5 +501,12 @@ public class ComponentHandler implements ComponentService.Iface {
         assertUser(user);
 
         return handler.getCyclicLinkedReleasePath(release, user);
+    }
+
+    @Override
+    public RequestSummary importBomFromAttachmentContent(User user, String attachmentContentId) throws TException {
+        assertNotNull(attachmentContentId);
+        assertUser(user);
+        return handler.importBomFromAttachmentContent(user, attachmentContentId);
     }
 }
