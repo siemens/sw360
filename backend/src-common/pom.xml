@@ -40,7 +40,7 @@
             </plugin>
         </plugins>
     </build>
-        <dependencies>
+    <dependencies>
         <dependency>
             <groupId>com.liferay.portal</groupId>
             <artifactId>portal-service</artifactId>
@@ -51,6 +51,23 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpmime</artifactId>
             <version>4.3.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.spdx</groupId>
+            <artifactId>spdx-tools</artifactId>
+            <version>2.1.0</version>
+            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.commons</groupId>
+                    <artifactId>commons-lang3</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.8.1</version>
         </dependency>
     </dependencies>
 </project>

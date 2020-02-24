@@ -15,9 +15,11 @@ import com.google.common.collect.*;
 import org.eclipse.sw360.common.utils.BackendUtils;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.Duration;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
+import org.eclipse.sw360.datahandler.couchdb.AttachmentStreamConnector;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.entitlement.ComponentModerator;
 import org.eclipse.sw360.datahandler.entitlement.ReleaseModerator;
@@ -25,6 +27,7 @@ import org.eclipse.sw360.datahandler.permissions.DocumentPermissions;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentService;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
@@ -46,11 +49,15 @@ import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.spdx.SpdxBOMImporter;
+import org.eclipse.sw360.spdx.SpdxBOMImporterSink;
 import org.ektorp.DocumentOperationResult;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
+import org.spdx.rdfparser.InvalidSPDXAnalysisException;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -253,7 +260,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         Release release = releaseRepository.get(id);
 
         if (release == null) {
-            throw fail("Could not fetch release from database! id=" + id);
+            throw fail(404, "Could not fetch release from database! id=" + id);
         }
 
         vendorRepository.fillVendor(release, vendorCache);
@@ -288,12 +295,22 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
      */
     public AddDocumentRequestSummary addComponent(Component component, String user) throws SW360Exception {
         if(isDuplicate(component)) {
-            return new AddDocumentRequestSummary()
+            final AddDocumentRequestSummary addDocumentRequestSummary = new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.DUPLICATE);
+            Set<String> duplicates = componentRepository.getComponentIdsByName(component.getName());
+            if (duplicates.size() == 1) {
+                duplicates.forEach(addDocumentRequestSummary::setId);
+            }
+            return addDocumentRequestSummary;
         }
         if(component.getName().trim().length() == 0) {
             return new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.NAMINGERROR);
+        }
+
+        if (!isDependenciesExistInComponent(component)) {
+            return new AddDocumentRequestSummary()
+                    .setRequestStatus(AddDocumentRequestStatus.INVALID_INPUT);
         }
         // Prepare the component
         prepareComponent(component);
@@ -317,8 +334,20 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Prepare the release and get underlying component ID
         prepareRelease(release);
         if(isDuplicate(release)) {
-            return new AddDocumentRequestSummary()
+            final AddDocumentRequestSummary addDocumentRequestSummary = new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.DUPLICATE);
+            List<Release> duplicates = releaseRepository.searchByNameAndVersion(release.getName(), release.getVersion());
+            if (duplicates.size() == 1) {
+                duplicates.stream()
+                        .map(Release::getId)
+                        .forEach(addDocumentRequestSummary::setId);
+            }
+            return addDocumentRequestSummary;
+        }
+
+        if (!isDependenciesExistsInRelease(release)) {
+            return new AddDocumentRequestSummary()
+                    .setRequestStatus(AddDocumentRequestStatus.INVALID_INPUT);
         }
 
         String componentId = release.getComponentId();
@@ -433,6 +462,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         if (changeWouldResultInDuplicate(actual, component)) {
             return RequestStatus.DUPLICATE;
+        } else if (!isDependenciesExistInComponent(component)){
+            return RequestStatus.INVALID_INPUT;
         } else if (makePermission(actual, user).isActionAllowed(RequestedAction.WRITE)) {
             // Nested releases and attachments should not be updated by this method
             boolean isComponentNameChanged = false;
@@ -454,6 +485,38 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         return RequestStatus.SUCCESS;
 
+    }
+
+    private boolean isDependenciesExistInComponent(Component component) {
+        boolean isValidDependentIds = true;
+        if (component.isSetReleaseIds()) {
+            Set<String> releaseIds = component.getReleaseIds();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(releaseIds, releaseRepository);
+        }
+
+        if (isValidDependentIds && component.isSetDefaultVendorId()) {
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(component.getDefaultVendorId()), vendorRepository);
+        }
+        return isValidDependentIds;
+    }
+
+    private boolean isDependenciesExistsInRelease(Release release) {
+        boolean isValidDependentIds = true;
+        if (release.isSetComponentId()) {
+            String componentId = release.getComponentId();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(componentId), componentRepository);
+        }
+
+        if (isValidDependentIds && release.isSetReleaseIdToRelationship()) {
+            Set<String> releaseIds = release.getReleaseIdToRelationship().keySet();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(releaseIds), releaseRepository);
+        }
+
+        if (isValidDependentIds && release.isSetVendorId()) {
+            String vendorId = release.getVendorId();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(vendorId), vendorRepository);
+        }
+        return isValidDependentIds;
     }
 
     private void updateComponentDependentFieldsForRelease(Component component) {
@@ -700,6 +763,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return RequestStatus.SUCCESS;
         } else if (changeWouldResultInDuplicate(actual, release)) {
             return RequestStatus.DUPLICATE;
+        }  else if (!isDependenciesExistsInRelease(release)) {
+            return RequestStatus.INVALID_INPUT;
         } else {
             DocumentPermissions<Release> permissions = makePermission(actual, user);
             boolean hasChangesInEccFields = hasChangesInEccFields(release, actual);
@@ -1594,7 +1659,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public String getCyclicLinkedReleasePath(Release release, User user) throws TException {
-        return getCyclicLinkedPath(release, this, user);
+        return DatabaseHandlerUtil.getCyclicLinkedPath(release, this, user);
     }
 
     public List<Component> searchComponentByNameForExport(String name) {
@@ -1833,5 +1898,20 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     public ComponentDatabaseHandler setSvmConnector(SvmConnector svmConnector) {
         this.svmConnector = svmConnector;
         return this;
+    }
+
+    public RequestSummary importBomFromAttachmentContent(User user, String attachmentContentId) throws SW360Exception {
+        final AttachmentContent attachmentContent = attachmentConnector.getAttachmentContent(attachmentContentId);
+        final Duration timeout = Duration.durationOf(30, TimeUnit.SECONDS);
+        try {
+            final AttachmentStreamConnector attachmentStreamConnector = new AttachmentStreamConnector(timeout);
+            try (final InputStream inputStream = attachmentStreamConnector.unsafeGetAttachmentStream(attachmentContent)) {
+                final SpdxBOMImporterSink spdxBOMImporterSink = new SpdxBOMImporterSink(user, null, this);
+                final SpdxBOMImporter spdxBOMImporter = new SpdxBOMImporter(spdxBOMImporterSink);
+                return spdxBOMImporter.importSpdxBOMAsRelease(inputStream, attachmentContent);
+            }
+        } catch (InvalidSPDXAnalysisException | IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
     }
 }

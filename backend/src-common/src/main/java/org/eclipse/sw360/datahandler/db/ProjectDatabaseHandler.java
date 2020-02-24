@@ -25,11 +25,13 @@ import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.businessrules.ReleaseClearingStateSummaryComputer;
 import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
+import org.eclipse.sw360.datahandler.couchdb.AttachmentStreamConnector;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
 import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
@@ -43,10 +45,14 @@ import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.spdx.SpdxBOMImporter;
+import org.eclipse.sw360.spdx.SpdxBOMImporterSink;
 import org.ektorp.http.HttpClient;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
+import org.spdx.rdfparser.InvalidSPDXAnalysisException;
+
 import java.net.MalformedURLException;
 import java.time.Instant;
 import java.util.*;
@@ -92,6 +98,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
     private final ReleaseRelationsUsageRepository relUsageRepository;
+    private final ReleaseRepository releaseRepository;
+    private final VendorRepository vendorRepository;
     private final MailUtil mailUtil = new MailUtil();
 
     // this caching structure is only used for filling clearing state summaries and
@@ -129,6 +137,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         pvrRepository = new ProjectVulnerabilityRatingRepository(db);
         obligationRepository = new ProjectObligationRepository(db);
         relUsageRepository = new ReleaseRelationsUsageRepository(db);
+        vendorRepository = new VendorRepository(db);
+        releaseRepository = new ReleaseRepository(db, vendorRepository);
 
         // Create the moderator
         this.moderator = moderator;
@@ -222,8 +232,20 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Prepare project for database
         prepareProject(project);
         if(isDuplicate(project)) {
-            return new AddDocumentRequestSummary()
+            final AddDocumentRequestSummary addDocumentRequestSummary = new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.DUPLICATE);
+            List<Project> duplicates = repository.searchByNameAndVersion(project.getName(), project.getVersion());
+            if (duplicates.size() == 1) {
+                duplicates.stream()
+                        .map(Project::getId)
+                        .forEach(addDocumentRequestSummary::setId);
+            }
+            return addDocumentRequestSummary;
+        }
+
+        if (!isDependenciesExists(project, user)) {
+            return new AddDocumentRequestSummary()
+                    .setRequestStatus(AddDocumentRequestStatus.INVALID_INPUT);
         }
 
         // Save creating user
@@ -259,6 +281,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return RequestStatus.CLOSED_UPDATE_NOT_ALLOWED;
         } else if (!changePassesSanityCheck(project, actual)){
             return RequestStatus.FAILED_SANITY_CHECK;
+        } else if (!isDependenciesExists(project, user)) {
+            return RequestStatus.INVALID_INPUT;
         } else if (makePermission(actual, user).isActionAllowed(RequestedAction.WRITE)) {
             copyImmutableFields(project,actual);
             project.setAttachments( getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), project.getAttachments()) );
@@ -273,6 +297,41 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         } else {
             return moderator.updateProject(project, user);
         }
+    }
+
+    private boolean isDependenciesExists(Project project, User user) {
+        boolean isValidDependentIds = true;
+        if (project.isSetReleaseIdToUsage()) {
+            Set<String> releaseIds = project.getReleaseIdToUsage().keySet();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(releaseIds, releaseRepository);
+        }
+
+        if (isValidDependentIds && project.isSetLinkedProjects()) {
+            Set<String> projectIds = project.getLinkedProjects().keySet();
+            isValidDependentIds =  DatabaseHandlerUtil.isAllIdInSetExists(projectIds, repository) && verifyLinkedProjectsAreAccessible(projectIds, user);
+        }
+
+        if (isValidDependentIds && project.isSetLinkedObligationId()) {
+            String obligationId = project.getLinkedObligationId();
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(obligationId), obligationRepository);
+        }
+        return isValidDependentIds;
+    }
+
+    private boolean verifyLinkedProjectsAreAccessible(Set<String> linkedProjectIds, User user) {
+        long nonAccessibleProjectIdsCount = 0;
+        if (linkedProjectIds != null) {
+            nonAccessibleProjectIdsCount = linkedProjectIds.stream().filter(id -> {
+                Project project = repository.get(id);
+                return !PermissionUtils.makePermission(project, user).isActionAllowed(RequestedAction.READ);
+            }).count();
+        }
+
+        if (nonAccessibleProjectIdsCount > 0)
+            return false;
+
+        return true;
+
     }
 
     public ProjectObligation getLinkedObligations(String obligationId, User user) throws TException {
@@ -698,7 +757,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     public List<ReleaseClearingStatusData> getReleaseClearingStatuses(String projectId, User user) throws SW360Exception {
         Project project = getProjectById(projectId, user);
         SetMultimap<String, ProjectWithReleaseRelationTuple> releaseIdsToProject = releaseIdToProjects(project, user);
-        List<Release> releasesById = componentDatabaseHandler.getReleasesForClearingStateSummary(releaseIdsToProject.keySet());
+        List<Release> releasesById = componentDatabaseHandler.getDetailedReleasesForExport(releaseIdsToProject.keySet());
         Map<String, Component> componentsById = ThriftUtils.getIdMap(
                 componentDatabaseHandler.getComponentsShort(
                         releasesById.stream().map(Release::getComponentId).collect(Collectors.toSet())));
@@ -735,7 +794,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public String getCyclicLinkedProjectPath(Project project, User user) throws TException {
-        return AttachmentAwareDatabaseHandler.getCyclicLinkedPath(project, this, user);
+        return DatabaseHandlerUtil.getCyclicLinkedPath(project, this, user);
     }
 
     private void releaseIdToProjects(Project project, User user, Set<String> visitedProjectIds, Multimap<String, ProjectWithReleaseRelationTuple> releaseIdToProjects) throws SW360Exception {
@@ -1159,5 +1218,20 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public void updateReleaseRelationsUsage(UsedReleaseRelations usedReleaseRelations) throws TException {
         relUsageRepository.update(usedReleaseRelations);
+    }
+
+    public RequestSummary importBomFromAttachmentContent(User user, String attachmentContentId) throws SW360Exception {
+        final AttachmentContent attachmentContent = attachmentConnector.getAttachmentContent(attachmentContentId);
+        final Duration timeout = Duration.durationOf(30, TimeUnit.SECONDS);
+        try {
+            final AttachmentStreamConnector attachmentStreamConnector = new AttachmentStreamConnector(timeout);
+            try (final InputStream inputStream = attachmentStreamConnector.unsafeGetAttachmentStream(attachmentContent)) {
+                final SpdxBOMImporterSink spdxBOMImporterSink = new SpdxBOMImporterSink(user, this, componentDatabaseHandler);
+                final SpdxBOMImporter spdxBOMImporter = new SpdxBOMImporter(spdxBOMImporterSink);
+                return spdxBOMImporter.importSpdxBOMAsProject(inputStream, attachmentContent);
+            }
+        } catch (InvalidSPDXAnalysisException | IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
     }
 }
