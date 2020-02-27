@@ -37,6 +37,10 @@
         </developer>
     </developers>
 
+    <properties>
+        <artifact.deploy.dir>${backend.deploy.dir}</artifact.deploy.dir>
+    </properties>
+
     <build>
         <finalName>vmcomponents</finalName>
 
