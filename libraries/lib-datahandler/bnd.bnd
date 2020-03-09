@@ -19,6 +19,7 @@ Export-Package: \
 	com.github.ldriscoll.ektorplucene.*, \
 	org.apache.thrift.*, \
 	org.eclipse.sw360.datahandler.*, \
+        com.siemens.sw360.datahandler.*, \
 	org.ektorp.*
 
 Import-Package: \
