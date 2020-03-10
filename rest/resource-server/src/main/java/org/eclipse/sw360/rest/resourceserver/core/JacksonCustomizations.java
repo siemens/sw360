@@ -160,7 +160,8 @@ class JacksonCustomizations {
                 "setLinkedObligationId",
                 "linkedObligationId",
                 "clearingRequestId",
-                "setClearingRequestId"
+                "setClearingRequestId",
+                "setBusinessArea"
         })
         static abstract class ProjectMixin extends Project {
 

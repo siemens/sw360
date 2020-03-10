@@ -9,7 +9,10 @@
  */
 package org.eclipse.sw360.common.utils;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 
@@ -18,10 +21,16 @@ public class BackendUtils {
     private static final String PROPERTIES_FILE_PATH = "/sw360.properties";
     protected static final Properties loadedProperties;
     public static final Boolean MAINLINE_STATE_ENABLED_FOR_USER;
+    public static final Map<String, Set<String>> DEPARTMENT_TO_BA_BL_MAP;
 
     static {
         loadedProperties = CommonUtils.loadProperties(BackendUtils.class, PROPERTIES_FILE_PATH);
         MAINLINE_STATE_ENABLED_FOR_USER = Boolean.parseBoolean(loadedProperties.getProperty("mainline.state.enabled.for.user", "false"));
+        DEPARTMENT_TO_BA_BL_MAP = new HashMap<String, Set<String>>();
+        Set<String> departments = CommonUtils.splitToSet(loadedProperties.getProperty("department.with.business.area", "DEPARTMENT"));
+        departments.forEach(dep -> {
+            DEPARTMENT_TO_BA_BL_MAP.putIfAbsent(dep, CommonUtils.splitToSet(loadedProperties.getProperty(dep+".business.area", "BA 1,BA 2, BA 3")));
+        });
     }
 
     protected BackendUtils() {

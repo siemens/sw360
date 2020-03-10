@@ -82,6 +82,10 @@
         <td><sw360:out value="${project.businessUnit}"/></td>
     </tr>
     <tr>
+        <td>Business area:</td>
+        <td><sw360:out value="${project.businessArea}"/></td>
+    </tr>
+    <tr>
         <td>Project responsible:</td>
         <td><sw360:DisplayUserEmail email="${project.projectResponsible}"/></td>
     </tr>

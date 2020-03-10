@@ -88,6 +88,7 @@ struct Project {
     11: optional string createdOn, // Creation date YYYY-MM-dd
     12: optional string businessUnit,
     13: optional ProjectState state = ProjectState.ACTIVE,
+    14: optional string businessArea,
     15: optional ProjectType projectType = ProjectType.CUSTOMER,
     16: optional string tag,// user defined tags
     17: optional ProjectClearingState clearingState,

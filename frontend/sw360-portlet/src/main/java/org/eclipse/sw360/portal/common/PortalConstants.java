@@ -43,6 +43,7 @@ public class PortalConstants {
     public static final Set<String> PROJECT_OBLIGATIONS_ACTION_SET;
     public static final Boolean IS_PROJECT_OBLIGATIONS_ENABLED;
     public static final Boolean CUSTOM_WELCOME_PAGE_GUIDELINE;
+    public static final Map<String, Set<String>> DEPARTMENT_TO_BA_BL_MAP;
 
     // DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING !!!
     // - friendly url mapping files must be changed
@@ -558,6 +559,11 @@ public class PortalConstants {
         PROJECT_OBLIGATIONS_ACTION_SET = CommonUtils.splitToSet(props.getProperty("project.obligation.actions", "Action 1,Action 2,Action 3"));
         IS_PROJECT_OBLIGATIONS_ENABLED = Boolean.parseBoolean(props.getProperty("project.obligations.enabled", "true"));
         CUSTOM_WELCOME_PAGE_GUIDELINE = Boolean.parseBoolean(props.getProperty("custom.welcome.page.guideline", "false"));
+        DEPARTMENT_TO_BA_BL_MAP = new HashMap<String, Set<String>>();
+        Set<String> departments = CommonUtils.splitToSet(props.getProperty("department.with.business.area", "DEPARTMENT"));
+        departments.forEach(dep -> {
+            DEPARTMENT_TO_BA_BL_MAP.putIfAbsent(dep, CommonUtils.splitToSet(props.getProperty(dep + ".business.area", "BA 1,BA 2, BA 3")));
+        });
         // SW360 REST API Constants
         API_TOKEN_ENABLE_GENERATOR = Boolean.parseBoolean(props.getProperty("rest.apitoken.generator.enable", "false"));
         API_TOKEN_MAX_VALIDITY_READ_IN_DAYS = props.getProperty("rest.apitoken.read.validity.days", "90");

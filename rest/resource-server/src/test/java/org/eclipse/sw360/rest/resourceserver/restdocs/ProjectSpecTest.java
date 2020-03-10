@@ -140,6 +140,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project.setCreatedBy("admin@sw360.org");
         project.setModerators(new HashSet<>(Arrays.asList("admin@sw360.org", "jane@sw360.org")));
         project.setBusinessUnit("sw360 AR");
+        project.setBusinessArea("sw360 BABL");
         project.setExternalIds(Collections.singletonMap("mainline-id-project", "515432"));
         project.setOwnerAccountingUnit("4822");
         project.setOwnerCountry("DE");
@@ -184,6 +185,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project2.setCreatedOn("2016-12-17");
         project2.setCreatedBy("john@sw360.org");
         project2.setBusinessUnit("sw360 EX DF");
+        project2.setBusinessArea("sw360 BABL");
         project2.setOwnerAccountingUnit("5661");
         project2.setOwnerCountry("FR");
         project2.setDeliveryStart("2018-05-01");
@@ -403,6 +405,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("domain").description("The domain, possible values are:"  + Sw360ResourceServer.DOMAIN.toString()),
                                 fieldWithPath("visibility").description("The project visibility, possible values are: " + Arrays.asList(Visibility.values())),
                                 fieldWithPath("businessUnit").description("The business unit this project belongs to"),
+                                fieldWithPath("businessArea").description("The business area / business line this project belongs to"),
                                 fieldWithPath("externalIds").description("When projects are imported from other tools, the external ids can be stored here"),
                                 fieldWithPath("additionalData").description("A place to store additional data used by external tools"),
                                 fieldWithPath("ownerAccountingUnit").description("The owner accounting unit of the project"),
@@ -717,6 +720,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         fieldWithPath("visibility").description("The project visibility, possible values are: "
                                 + Arrays.asList(Visibility.values())),
                         fieldWithPath("businessUnit").description("The business unit this project belongs to"),
+                        fieldWithPath("businessArea").description("The business area / business line this project belongs to"),
                         fieldWithPath("externalIds").description(
                                 "When projects are imported from other tools, the external ids can be stored here"),
                         fieldWithPath("additionalData").description("A place to store additional data used by external tools"),

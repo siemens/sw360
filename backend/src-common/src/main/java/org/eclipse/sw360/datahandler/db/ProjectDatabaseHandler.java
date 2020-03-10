@@ -323,6 +323,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                         .forEach(addDocumentRequestSummary::setId);
             }
             return addDocumentRequestSummary;
+        } else if (!validateBusinessArea(project)) {
+            return new AddDocumentRequestSummary().setRequestStatus(AddDocumentRequestStatus.FAILURE);
         }
 
         if (!isDependenciesExists(project, user)) {
@@ -373,6 +375,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return RequestStatus.FAILED_SANITY_CHECK;
         } else if (!isDependenciesExists(project, user)) {
             return RequestStatus.INVALID_INPUT;
+        } else if (!validateBusinessArea(project)) {
+            return RequestStatus.FAILURE;
         } else if (isWriteActionAllowedOnProject(project, user)) {
             copyImmutableFields(project,actual);
             project.setAttachments( getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), project.getAttachments()) );
@@ -428,6 +432,13 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         return true;
 
+    }
+
+    private boolean validateBusinessArea(Project project) {
+        if (BackendUtils.DEPARTMENT_TO_BA_BL_MAP.containsKey(project.getBusinessUnit())) {
+            return BackendUtils.DEPARTMENT_TO_BA_BL_MAP.get(project.getBusinessUnit()).contains(project.getBusinessArea());
+        }
+        return true;
     }
 
     public ProjectObligation getLinkedObligations(String obligationId, User user) throws TException {

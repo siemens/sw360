@@ -17,6 +17,8 @@
 
 <core_rt:set var="clearingTeamsStringSet" value='<%=PortalConstants.SET_CLEARING_TEAMS_STRING%>'/>
 <core_rt:set var="preferredCountryCodes" value='<%=PortalConstants.PREFERRED_COUNTRY_CODES%>'/>
+<core_rt:set var="departmentToBaBlMap" value='<%=PortalConstants.DEPARTMENT_TO_BA_BL_MAP%>'/>
+<core_rt:set var="isBaPresent" value='${not empty departmentToBaBlMap and departmentToBaBlMap.containsKey(project.businessUnit)}'/>
 <core_rt:set var="domain" value='<%=PortalConstants.DOMAIN%>'/>
 
 <table class="table edit-table three-columns" id="ProjectBasicInfo">
@@ -256,7 +258,29 @@
             <sw360:DisplayUserEdit emails="${project.securityResponsibles}" id="<%=Project._Fields.SECURITY_RESPONSIBLES.toString()%>"
                                 description="Security Responsibles" multiUsers="true"/>
         </td>
-        <td></td>
+        <td>
+        <core_rt:if test="${not empty departmentToBaBlMap and departmentToBaBlMap.containsKey(project.businessUnit)}">
+            <div class="form-group">
+                <label class="mandatory" for="group">Business area / line</label>
+                <select id="group" class="form-control" name="<portlet:namespace/><%=Project._Fields.BUSINESS_AREA%>" required >
+                    <option value>-- Select Business Area --</option>
+                    <core_rt:forEach items="${departmentToBaBlMap[project.businessUnit]}" var="entry">
+                        <c:choose>
+                            <c:when test="${entry eq project.businessArea}">
+                                <option selected="selected" value="<sw360:out value="${entry}"/>" class="textlabel stackedLabel"> ${entry} </option>
+                            </c:when>
+                            <c:otherwise>
+                                <option value="<sw360:out value="${entry}"/>" class="textlabel stackedLabel"> ${entry} </option>
+                            </c:otherwise>
+                        </c:choose>
+                    </core_rt:forEach>
+                </select>
+                <div class="invalid-feedback">
+                        Please select business area!
+                </div>
+            </div>
+        </core_rt:if>
+        </td>
         <td></td>
     </tr>
 </table>
