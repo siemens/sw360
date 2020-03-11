@@ -37,10 +37,13 @@ build_sw360:
   - echo 'couch_db_database = datahandlertestdb' >> /databasetest.properties
   - cp -f /databasetest.properties libraries/lib-datahandler/src/test/resources/databasetest.properties
   - workdir=$(pwd)
-  - mkdir -p packages/deploy
-  - mkdir -p packages/webapps
-  - mvn --batch-mode clean package -P deploy -Dbase.deploy.dir=. -Dliferay.deploy.dir=${LIFERAY_INSTALL}/deploy -Dbackend.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -Drest.deploy.dir=${LIFERAY_INSTALL}/tomcat-9.0.17/webapps -Dmaven.repo.local=.m2/repository
-  - tar -czvf packages.tar.gz packages
+  - mkdir -p ${GITLAB_PACKAGE_PATH}/deploy
+  - mkdir -p ${GITLAB_PACKAGE_PATH}/webapps
+  - mkdir -p ${GITLAB_PACKAGE_PATH}/sources
+  - git checkout ${CI_COMMIT_REF_NAME}
+  - GIT_COMMIT_COUNT="$(git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)"
+  - mvn --batch-mode clean package -P ci,deploy,copyDependencies -Dcount=$GIT_COMMIT_COUNT -DpackagePath=${GITLAB_PACKAGE_PATH}/sources -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/webapps -Dmaven.repo.local=.m2/repository
+  - tar -czvf packages.tar.gz ${GITLAB_PACKAGE_PATH}
   - mkdir -p ~/.ssh
   - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
   - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
@@ -86,8 +89,8 @@ deploy_sw360:
   - rsync -htzv -e "ssh" ./packages.tar.gz ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER}:${DEPLOY_STORE_PATH}/packages.tar.gz
   - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "tar -xzvf ${DEPLOY_STORE_PATH}/packages.tar.gz -C ${DEPLOY_STORE_PATH}"
   # logging in, install the wars and restart tomcat
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/*.war ${SSH_LIFERAY_DEPLOY_PATH}"
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/*.war ${SSH_LIFERAY_WEBAPP_PATH}"
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/* ${SSH_LIFERAY_DEPLOY_PATH}"
+  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/* ${SSH_LIFERAY_WEBAPP_PATH}"
   - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "rm -rf ${DEPLOY_STORE_PATH}/packages/"
   - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh"
   - (sleep 1m && ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/startup.sh")
