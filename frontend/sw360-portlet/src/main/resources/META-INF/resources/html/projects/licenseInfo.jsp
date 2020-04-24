@@ -41,8 +41,8 @@
 <core_rt:if test="${empty attributeNotFoundException}">
     <div class="container" style="display: none;">
 	<div class="row">
-            <div class="col portlet-title left text-truncate" title="Generate License Information">
-                Generate License Information
+            <div class="col portlet-title left text-truncate" title="<liferay-ui:message key="generate.license.information" />">
+                <liferay-ui:message key="generate.license.information" />
             </div>
             <div class="col portlet-title text-truncate" title="${sw360:printProjectName(project)}">
                 <sw360:ProjectName project="${project}"/>
@@ -50,7 +50,7 @@
         </div>
         <div class="row">
             <div class="col" >
-            <button id="selectVariantAndDownload" type="button" class="btn btn-primary">Download</button>
+            <button id="selectVariantAndDownload" type="button" class="btn btn-primary"><liferay-ui:message key="download" /></button>
                 <form id="downloadLicenseInfoForm" class="form-inline" name="downloadLicenseInfoForm" action="<%=downloadLicenseInfoURL%>" method="post">
                     <%@include file="/html/projects/includes/attachmentSelectTable.jspf" %>
                 </form>
@@ -66,7 +66,7 @@
   <!-- <div class="modal-dialog" role="document"> -->
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Select Other Options</h5>
+        <h5 class="modal-title"><liferay-ui:message key="select.other.options" /></h5>
         <button id="closeModalButton" type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -90,9 +90,26 @@
                             </c:forEach>
                         </div>
                     </c:if>
+                    <c:if test="${not empty linkedProjectRelation}">
+                        <div class="form-group form-check">
+                            <label for="projectRelation"
+                                class="font-weight-bold h3">Uncheck Linked Project
+                                Relationships to be excluded:</label>
+                            <c:forEach var="projectRelation" items="${linkedProjectRelation}">
+                                <div class="checkbox form-check">
+                                    <label> <input name="projectRelationSelection" type="checkbox"
+                                        <c:if test = "${usedLinkedProjectRelation == null}">checked="checked"</c:if>
+                                        <c:if test = "${usedLinkedProjectRelation != null and (fn:contains(usedLinkedProjectRelation, projectRelation))}">checked="checked"</c:if>
+                                        value="${projectRelation}">
+                                        <sw360:DisplayEnum value='${projectRelation}' bare="true" /> </input>
+                                    </label>
+                                </div>
+                            </c:forEach>
+                        </div>
+                    </c:if>
 						<c:if test="${not empty externalIds}">
 								<div class="form-group form-check">
-									<label for="externalIdLabel" class="font-weight-bold h3">Select the external Ids:</label>
+									<label for="externalIdLabel" class="font-weight-bold h3"><liferay-ui:message key="select.the.external.ids" />:</label>
 							        <c:forEach var="extId" items="${externalIds}">
 									   <div class="checkbox form-check">
 										  <label><input id="<%=PortalConstants.EXTERNAL_ID_SELECTED_KEYS%>" name="externalIdsSelection" type="checkbox" value="${extId}">
@@ -102,13 +119,13 @@
 								</div>
 						</c:if>
 					<div class="form-group form-check">
-						<label for="outputFormatLabel" class="licenseInfoOpFormat font-weight-bold h3">Select output format and variant:</label>
+						<label for="outputFormatLabel" class="licenseInfoOpFormat font-weight-bold h3"><liferay-ui:message key="select.output.format.and.variant" />:</label>
 						<sw360:DisplayOutputFormats options='${licenseInfoOutputFormats}' />
 					</div>
 	  </div>
       <div class="modal-footer">
-        <button id="downloadFileModal" type="button" value="Download" class="btn btn-primary">Download</button>
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button id="downloadFileModal" type="button" value="Download" class="btn btn-primary"><liferay-ui:message key="download" /></button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal"><liferay-ui:message key="close" /></button>
       </div>
     </div>
   </div>
@@ -128,6 +145,7 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
         var licenseInfoSelectedOutputFormat = $('input[name="outputFormat"]:checked').val();
         var externalIds = [];
         var releaseRelations = [];
+        var selectedProjectRelations = [];
         $.each($("input[name='externalIdsSelection']:checked"), function(){
             externalIds.push($(this).val());
         });
@@ -138,13 +156,23 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
         });
         var releaseRelationsHidden = releaseRelations.join();
 
+        $.each($("input[name='projectRelationSelection']:checked"), function(){
+            selectedProjectRelations.push($(this).val());
+        });
+        var selectedProjectRelationsHidden = selectedProjectRelations.join();
+
         $('#downloadLicenseInfoForm').append('<input id="extIdHidden" type="hidden" name="<portlet:namespace/><%=PortalConstants.EXTERNAL_ID_SELECTED_KEYS%>"/>');
         $('#downloadLicenseInfoForm').append('<input id="licensInfoFileFormat" type="hidden" name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT%>"/>');
         $('#downloadLicenseInfoForm').append('<input id="releaseRelationship" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELEASE_RELATIONS%>"/>');
+        $('#downloadLicenseInfoForm').append('<input id="selectedProjectRelations" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELATIONS%>"/>');
+        $('#downloadLicenseInfoForm').append('<input id="isSubProjPresent" type="hidden" name="<portlet:namespace/><%=PortalConstants.IS_LINKED_PROJECT_PRESENT%>"/>');
+
 
         $("#extIdHidden").val(extIdsHidden);
         $("#licensInfoFileFormat").val(licenseInfoSelectedOutputFormat);
         $("#releaseRelationship").val(releaseRelationsHidden);
+        $("#selectedProjectRelations").val(selectedProjectRelationsHidden);
+        $("#isSubProjPresent").val(${not empty linkedProjectRelation});
 
         $('#downloadLicenseInfoForm').submit();
     }

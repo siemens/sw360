@@ -31,8 +31,9 @@ while read file ; do
     failure=true
 done <<< "$(git ls-files \
     | grep -Ev '\.(csv|rdf|ent|dtd|lar|png|gif|psd|ico|jpg|docx|gitignore|cert|jks|spdx|rdf)' \
-    | grep -Ev '(LICENSE|NOTICE|README|CHANGELOG)' \
-    | grep -v 'id_rsa')"
+    | grep -Ev '(LICENSE|NOTICE|README|CHANGELOG|Language|Language_vi)' \
+    | grep -v 'id_rsa' \
+    | grep -Ev '*/asciidoc/*')"
 
 if [ "$failure" = true ]; then
     echo "test failed"

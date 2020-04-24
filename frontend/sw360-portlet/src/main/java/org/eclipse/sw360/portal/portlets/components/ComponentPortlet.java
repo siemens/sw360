@@ -27,7 +27,9 @@ import com.liferay.portal.kernel.servlet.SessionMessages;
 import com.liferay.portal.kernel.theme.ThemeDisplay;
 import com.liferay.portal.kernel.util.ContentTypes;
 import com.liferay.portal.kernel.util.PortalUtil;
+import com.liferay.portal.kernel.util.ResourceBundleUtil;
 import com.liferay.portal.kernel.util.WebKeys;
+import com.liferay.portal.kernel.language.LanguageUtil;
 
 import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
@@ -61,7 +63,6 @@ import org.eclipse.sw360.portal.portlets.FossologyAwarePortlet;
 import org.eclipse.sw360.portal.portlets.projects.ProjectPortletUtils;
 import org.eclipse.sw360.portal.users.LifeRayUserSession;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
-
 import org.apache.log4j.Logger;
 import org.apache.thrift.TEnum;
 import org.apache.thrift.TException;
@@ -106,7 +107,7 @@ import static org.eclipse.sw360.portal.common.PortletUtils.getVerificationState;
         "javax.portlet.display-name=Components",
         "javax.portlet.info.short-title=Components",
         "javax.portlet.info.title=Components",
-
+        "javax.portlet.resource-bundle=content.Language",
         "javax.portlet.init-param.view-template=/html/components/view.jsp",
     },
     service = Portlet.class,
@@ -526,6 +527,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void loadSpdxLicenseInfo(ResourceRequest request, ResourceResponse response) {
+        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+
         User user = UserCacheHolder.getUserFromRequest(request);
         String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
         String attachmentContentId = request.getParameter(PortalConstants.ATTACHMENT_ID);
@@ -562,7 +565,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             JsonGenerator jsonGenerator = JSON_FACTORY.createGenerator(response.getWriter());
             jsonGenerator.writeStartObject();
             if (concludedLicenseIds.size() > 0) {
-                jsonGenerator.writeStringField(LICENSE_PREFIX, "Concluded License Ids:");
+                jsonGenerator.writeStringField(LICENSE_PREFIX, LanguageUtil.get(resourceBundle,"concluded.license.ids"));
                 jsonGenerator.writeArrayFieldStart("licenseIds");
                 concludedLicenseIds.forEach(licenseId -> {
                     try {
@@ -573,7 +576,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 });
                 jsonGenerator.writeEndArray();
             } else if (licenseWithText != null) {
-                jsonGenerator.writeStringField(LICENSE_PREFIX, "Main License Id:");
+                jsonGenerator.writeStringField(LICENSE_PREFIX, LanguageUtil.get(resourceBundle,"main.license.id"));
                 jsonGenerator.writeArrayFieldStart("licenseIds");
                 jsonGenerator.writeString(licenseWithText.getLicenseSpdxId());
                 jsonGenerator.writeEndArray();
@@ -647,6 +650,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareComponentEdit(RenderRequest request) {
+        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+
         String id = request.getParameter(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
@@ -675,12 +680,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(COMPONENT, component);
                 setUsingDocs(request, user, null, component.getReleaseIds());
                 setAttachmentsInRequest(request, component);
-                SessionMessages.add(request, "request_processed", "New Component");
+                SessionMessages.add(request, "request_processed", LanguageUtil.get(resourceBundle,"new.component"));
             }
         }
     }
 
     private void prepareReleaseEdit(RenderRequest request, RenderResponse response) throws PortletException {
+        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+
         String id = request.getParameter(COMPONENT_ID);
         String releaseId = request.getParameter(RELEASE_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
@@ -726,7 +733,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     putDirectlyLinkedReleaseRelationsInRequest(request, release);
                     setAttachmentsInRequest(request, release);
                     setUsingDocs(request, null, user, client);
-                    SessionMessages.add(request, "request_processed", "New Release");
+                    SessionMessages.add(request, "request_processed", LanguageUtil.get(resourceBundle,"new.license"));
                 }
             }
 
@@ -1523,8 +1530,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
                 RequestStatus requestStatus = client.updateComponent(component, user);
                 setSessionMessage(request, requestStatus, "Component", "update", component.getName());
-                if (RequestStatus.DUPLICATE.equals(requestStatus)) {
-                    setSW360SessionError(request, ErrorMessages.COMPONENT_DUPLICATE);
+                if (RequestStatus.DUPLICATE.equals(requestStatus) || RequestStatus.NAMINGERROR.equals(requestStatus)) {
+                    if(RequestStatus.DUPLICATE.equals(requestStatus))
+                        setSW360SessionError(request, ErrorMessages.COMPONENT_DUPLICATE);
+                    else if(RequestStatus.NAMINGERROR.equals(requestStatus))
+                        setSW360SessionError(request, ErrorMessages.COMPONENT_NAMING_ERROR);
                     response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
                     request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
                     request.setAttribute(DOCUMENT_ID, id);
@@ -1607,8 +1617,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
                     RequestStatus requestStatus = client.updateRelease(release, user);
                     setSessionMessage(request, requestStatus, "Release", "update", printName(release));
-                    if (RequestStatus.DUPLICATE.equals(requestStatus)) {
-                        setSW360SessionError(request, ErrorMessages.RELEASE_DUPLICATE);
+                    if (RequestStatus.DUPLICATE.equals(requestStatus) || RequestStatus.NAMINGERROR.equals(requestStatus)) {
+                        if(RequestStatus.DUPLICATE.equals(requestStatus))
+                            setSW360SessionError(request, ErrorMessages.RELEASE_DUPLICATE);
+                        else if(RequestStatus.NAMINGERROR.equals(requestStatus))
+                            setSW360SessionError(request, ErrorMessages.RELEASE_NAME_VERSION_ERROR);
                         response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
                         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
                         response.setRenderParameter(COMPONENT_ID, id);
@@ -1660,6 +1673,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                             break;
                         case DUPLICATE:
                             setSW360SessionError(request, ErrorMessages.RELEASE_DUPLICATE);
+                            response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
+                            prepareRequestForReleaseEditAfterDuplicateError(request, release);
+                            break;
+                        case NAMINGERROR:
+                            setSW360SessionError(request, ErrorMessages.RELEASE_NAME_VERSION_ERROR);
                             response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
                             prepareRequestForReleaseEditAfterDuplicateError(request, release);
                             break;
