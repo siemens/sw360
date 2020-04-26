@@ -52,6 +52,7 @@ Import-Package: \
 	com.liferay.portal.kernel.theme, \
 	com.liferay.portal.kernel.util, \
 	com.liferay.portal.kernel.upload, \
+	com.liferay.portal.kernel.language.*, \
 	com.liferay.taglib.*, \
 	javax.portlet, \
 	javax.servlet, \
@@ -68,6 +69,7 @@ Import-Package: \
 	org.eclipse.sw360.importer.*, \
 	org.ektorp.*, \
 	org.osgi.service.cm, \
+	org.osgi.service.component.*, \
 	org.slf4j
 
 Conditional-Package: \

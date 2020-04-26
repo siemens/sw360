@@ -60,6 +60,8 @@ public class ComponentDatabaseHandlerTest {
     private static final String email1 = "cedric.bodet@tngtech.com";
     private static final String email2 = "johannes.najjar@tngtech.com";
 
+    private static final String category = "Mobile";
+
     private static final User user1 = new User().setEmail(email1).setDepartment("AB CD EF").setId("481489458");
     private static final User user2 = new User().setEmail(email2).setDepartment("AB CD EF").setId("4786487647680");
 
@@ -99,15 +101,18 @@ public class ComponentDatabaseHandlerTest {
         Component component1 = new Component().setId("C1").setName("component1").setDescription("d1").setCreatedBy(email1).setMainLicenseIds(new HashSet<>(Arrays.asList("lic1"))).setCreatedOn("2017-07-20");
         component1.addToReleaseIds("R1A");
         component1.addToReleaseIds("R1B");
+        component1.addToCategories(category);
         components.add(component1);
         Component component2 = new Component().setId("C2").setName("component2").setDescription("d2").setCreatedBy(email2).setMainLicenseIds(new HashSet<>(Arrays.asList("lic2"))).setCreatedOn("2017-07-21");
         component2.addToReleaseIds("R2A");
         component2.addToReleaseIds("R2B");
         component2.addToReleaseIds("R2C");
+        component2.addToCategories(category);
         components.add(component2);
         Component component3 = new Component().setId("C3").setName("component3").setDescription("d3").setCreatedBy(email1).setMainLicenseIds(new HashSet<>(Arrays.asList("lic3"))).setCreatedOn("2017-07-22");
         component3.addToSubscribers(email1);
         component3.addToLanguages("E");
+        component3.addToCategories(category);
         components.add(component3);
 
         releases = new ArrayList<>();
@@ -168,7 +173,7 @@ public class ComponentDatabaseHandlerTest {
     @Test
     public void testGetComponentByReleaseId() throws Exception {
         Component component = new Component().setId("Linking").setName("Linking").setDescription("d1").setCreatedBy(email1);
-
+        component.addToCategories(category);
         final HashMap<String, ReleaseRelationship> releaseLink = new HashMap<>();
 
         releaseLink.put("R1A", ReleaseRelationship.CONTAINED);
@@ -189,7 +194,7 @@ public class ComponentDatabaseHandlerTest {
     @Test
     public void testGetComponentByReleaseIds() throws Exception {
         Component component = new Component().setId("Linking").setName("Linking").setDescription("d1").setCreatedBy(email1);
-
+        component.addToCategories(category);
         final HashMap<String, ReleaseRelationship> releaseLink = new HashMap<>();
 
         releaseLink.put("R1A", ReleaseRelationship.CONTAINED);
@@ -498,6 +503,7 @@ public class ComponentDatabaseHandlerTest {
     @Test
     public void testDontDeleteComponentWithReleaseContained() throws Exception {
         Component component = new Component().setId("Del").setName("delete").setDescription("d1").setCreatedBy(email1);
+        component.addToCategories(category);
         Release release = new Release().setId("DelR").setComponentId("Del").setName("delete Release").setVersion("1.0").setCreatedBy(email1).setVendorId("V1").setClearingState(ClearingState.NEW_CLEARING);
 
         handler.addComponent(component, email1);
@@ -589,6 +595,7 @@ public class ComponentDatabaseHandlerTest {
     @Test
     public void testAddComponent() throws Exception {
         Component expected = new Component().setName("NEW_CLEARING");
+        expected.addToCategories(category);
         Release release = new Release().setName("REL").setVersion("VER");
         expected.addToReleases(release);
 
@@ -628,6 +635,7 @@ public class ComponentDatabaseHandlerTest {
 
         {
             Component component = new Component().setId(componentId).setName("component4").setDescription("d4").setCreatedBy(email1);
+            component.addToCategories(category);
             handler.addComponent(component, email1);
         }
 
@@ -676,6 +684,7 @@ public class ComponentDatabaseHandlerTest {
 
         {
             Component component = new Component().setId(componentId).setName("component4").setDescription("d4").setCreatedBy(email1);
+            component.addToCategories(category);
             handler.addComponent(component, email1);
         }
 
