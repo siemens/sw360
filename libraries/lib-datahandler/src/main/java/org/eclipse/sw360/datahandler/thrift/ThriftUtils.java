@@ -19,6 +19,7 @@ import org.eclipse.sw360.datahandler.couchdb.AttachmentContentWrapper;
 import org.eclipse.sw360.datahandler.couchdb.DocumentWrapper;
 import org.eclipse.sw360.datahandler.couchdb.deserializer.UsageDataDeserializer;
 import org.eclipse.sw360.datahandler.thrift.attachments.*;
+import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
@@ -64,6 +65,7 @@ public class ThriftUtils {
             .add(Vulnerability.class, ReleaseVulnerabilityRelation.class, ProjectVulnerabilityRating.class) // Vulnerability Service
 //            .add(Vulnerability.class, ReleaseVulnerabilityRelation.class) // Vulnerability Service
             .add(VMPriority.class, VMAction.class, VMComponent.class, VMProcessReporting.class, VMMatch.class) // Vulnerability Monitoring service
+            .add(ChangeLogs.class) // Changelog Service
             .build();
 
     public static final List<Class<?>> THRIFT_NESTED_CLASSES = ImmutableList.<Class<?>>builder()

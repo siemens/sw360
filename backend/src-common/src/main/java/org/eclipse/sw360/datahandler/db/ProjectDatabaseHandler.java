@@ -24,6 +24,7 @@ import org.eclipse.sw360.common.utils.BackendUtils;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.businessrules.ReleaseClearingStateSummaryComputer;
 import org.eclipse.sw360.datahandler.common.*;
+import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentStreamConnector;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
@@ -31,7 +32,10 @@ import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
 import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
+import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
+import org.eclipse.sw360.datahandler.thrift.changelogs.Operation;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
@@ -55,6 +59,7 @@ import org.spdx.rdfparser.InvalidSPDXAnalysisException;
 
 import java.net.MalformedURLException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -351,6 +356,9 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         // Add project to database and return ID
         repository.add(project);
+
+        DatabaseHandlerUtil.addChangeLogs(project, null, user.getEmail(), Operation.CREATE, null, Lists.newArrayList(),
+                null, null);
         sendMailNotificationsForNewProject(project, user.getEmail());
         return new AddDocumentRequestSummary().setId(project.getId()).setRequestStatus(AddDocumentRequestStatus.SUCCESS);
     }
@@ -392,6 +400,13 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             updateProjectDependentLinkedFields(project, actual);
             repository.update(project);
 
+            List<ChangeLogs> referenceDocLogList=new LinkedList<>();
+            Set<Attachment> attachmentsAfter = project.getAttachments();
+            Set<Attachment> attachmentsBefore = actual.getAttachments();
+            DatabaseHandlerUtil.populateChangeLogsForAttachmentsDeleted(attachmentsBefore, attachmentsAfter,
+                    referenceDocLogList, user.getEmail(), project.getId(), Operation.PROJECT_UPDATE,
+                    attachmentConnector, false);
+
             //clean up attachments in database
             attachmentConnector.deleteAttachmentDifference(actual.getAttachments(), project.getAttachments());
 
@@ -399,6 +414,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 addCommentToClearingRequest(project, actual, user);
             }
             sendMailNotificationsForProjectUpdate(project, user.getEmail());
+            DatabaseHandlerUtil.addChangeLogs(project, actual, user.getEmail(), Operation.UPDATE, attachmentConnector,
+                    referenceDocLogList, null, null);
             return RequestStatus.SUCCESS;
         } else {
             return moderator.updateProject(project, user);
@@ -470,13 +487,22 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         Project project = getProjectById(obligation.getProjectId(), user);
         project.setLinkedObligationId(obligation.getId());
         repository.update(project);
+        project.unsetLinkedObligationId();
+        DatabaseHandlerUtil.addChangeLogs(obligation, null, user.getEmail(), Operation.CREATE, attachmentConnector,
+                Lists.newArrayList(), obligation.getProjectId(), Operation.PROJECT_UPDATE);
+        DatabaseHandlerUtil.addChangeLogs(getProjectById(obligation.getProjectId(), user), project, user.getEmail(),
+                Operation.UPDATE, attachmentConnector, Lists.newArrayList(), null, Operation.OBLIGATION_ADD);
+
         return RequestStatus.SUCCESS;
     }
 
     public RequestStatus updateLinkedObligations(ProjectObligation obligation, User user) throws TException {
         Project project = getProjectById(obligation.getProjectId(), user);
+        ProjectObligation projectObligationbefore=obligationRepository.get(obligation.getId());
         if (isWriteActionAllowedOnProject(project, user)) {
             obligationRepository.update(obligation);
+            DatabaseHandlerUtil.addChangeLogs(obligation, projectObligationbefore, user.getEmail(), Operation.UPDATE,
+                    attachmentConnector, Lists.newArrayList(), obligation.getProjectId(), Operation.PROJECT_UPDATE);
             return RequestStatus.SUCCESS;
         }
         return RequestStatus.FAILURE;
@@ -620,6 +646,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Remove the project if the user is allowed to do it by himself
         if (makePermission(project, user).isActionAllowed(RequestedAction.DELETE)) {
             removeProjectAndCleanUp(project, user);
+            DatabaseHandlerUtil.addChangeLogs(null, project, user.getEmail(), Operation.DELETE, attachmentConnector,
+                    Lists.newArrayList(), null, null);
             return RequestStatus.SUCCESS;
         } else {
             return moderator.deleteProject(project, user);
