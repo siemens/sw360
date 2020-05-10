@@ -392,7 +392,8 @@ public class ComponentDatabaseHandlerTest {
 
         ReleaseLink releaseLinkR1A = createReleaseLinkTo(r1A)
                 .setReleaseRelationship(ReleaseRelationship.REFERRED)
-                .setNodeId("R1A");
+                .setNodeId("R1A")
+                .setClearingState(ClearingState.NEW_CLEARING);
 
         stripRandomPartsOfNodeIds(linkedReleases);
 
@@ -445,7 +446,8 @@ public class ComponentDatabaseHandlerTest {
 
         ReleaseLink releaseLinkR1A = createReleaseLinkTo(r1A)
                 .setReleaseRelationship(ReleaseRelationship.REFERRED)
-                .setNodeId("R1A");
+                .setNodeId("R1A")
+                .setClearingState(ClearingState.NEW_CLEARING);
 
         stripRandomPartsOfNodeIds(linkedReleases);
         assertThat(linkedReleases, contains(releaseLinkR1A));
