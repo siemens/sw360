@@ -22,6 +22,7 @@
     <jsp:useBean id="documentType" type="java.lang.String" scope="request" />
     <jsp:useBean id="documentID" class="java.lang.String" scope="request" />
 </core_rt:catch>
+<jsp:useBean id="srcToCli" type="java.util.Map<java.lang.String, java.lang.String>" scope="request"/>
 
 <%--for javascript library loading --%>
 <%@ include file="/html/utils/includes/requirejs.jspf" %>
@@ -81,12 +82,17 @@
             require(['jquery', 'bridges/datatables', 'modules/dialog' ], function($, datatables, dialog) {
                 var attachmentJSON = [];
                 var usageLinks;
+                var srcCli;
 
                 /* Print all attachment table data as array into the html page */
                 <core_rt:forEach items="${attachments}" var="attachment">
                     usageLinks = [];
+                    srcCli = [];
                     <core_rt:forEach items="${attachmentUsages[attachment.attachmentContentId]}" var="project">
                     usageLinks.push("<sw360:DisplayProjectLink project="${project}"/>");
+                    </core_rt:forEach>
+                    <core_rt:forEach items="${srcToCli[attachment.attachmentContentId]}" var="cli">
+                    srcCli.push("${cli.filename}");
                     </core_rt:forEach>
                     attachmentJSON.push({
                         "fileName": "<sw360:out value="${attachment.filename}"/>",
@@ -103,7 +109,8 @@
                         "uploadedComment": "<core_rt:if test="${not empty attachment.createdComment}">Comment: <sw360:DisplayEllipsisString value="${attachment.createdComment}"/></core_rt:if>",
                         "checkedOn": "<sw360:out value="${attachment.checkedOn}"/>",
                         "checkedComment": "<core_rt:if test="${not empty attachment.checkedComment}">Comment: <sw360:DisplayEllipsisString value="${attachment.checkedComment}"/></core_rt:if>",
-                        "checkStatus": "<sw360:out value="${attachment.checkStatus}"/>"
+                        "checkStatus": "<sw360:out value="${attachment.checkStatus}"/>",
+                        "linkedCli": {clis: srcCli}
                     });
                 </core_rt:forEach>
 
@@ -202,7 +209,7 @@
                                 '<span class="dataTableChildRowCell" style="padding-right: 30px; width: 22%;">' + rowData.checkedOn + ' ' + rowData.checkedComment + '</span>';
                     }
                     childHtmlString += '' +
-                                '<span class="dataTableChildRowCell" style="padding-right: 30px; width: 16%;"/>'+
+                                '<span class="dataTableChildRowCell" style="padding-right: 30px; width: 16%;">' + rowData.linkedCli.clis.join(", ") + '</span>';
                             '</div>';
                     return childHtmlString;
                 }

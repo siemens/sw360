@@ -15,7 +15,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -31,6 +33,8 @@ import org.eclipse.sw360.datahandler.thrift.ThriftUtils;
 import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.portal.common.AttachmentPortletUtils;
@@ -112,10 +116,48 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
         uploadHistoryPerUserEmailAndDocumentId = new HashMap<>();
     }
 
-
     private void setAttachmentsInRequest(PortletRequest request, Set<Attachment> attachments, Source owner) {
+        setAttachmentsInRequest(request, attachments, owner, null);
+    }
+
+    private void setAttachmentsInRequest(PortletRequest request, Set<Attachment> attachments, Source owner, Release release) {
         Set<Attachment> atts = CommonUtils.nullToEmptySet(attachments);
         request.setAttribute(ATTACHMENTS, atts);
+        User user = UserCacheHolder.getUserFromRequest(request);
+        Map<String, List<Attachment>> sourceIdToCli = Maps.newHashMap();
+        if (null != release) {
+            Predicate<Attachment> isCLI = attachment -> AttachmentType.COMPONENT_LICENSE_INFO_XML.equals(attachment.getAttachmentType());
+            Set<Attachment> cliFiles = atts.stream().filter(isCLI).collect(Collectors.toSet());
+            Long sourceCount = atts.stream().filter(a -> AttachmentType.SOURCE.equals(a.getAttachmentType()) || AttachmentType.SOURCE_SELF.equals(a.getAttachmentType())).count();
+            if (sourceCount > 0 && cliFiles.size() > 0) {
+                LicenseInfoService.Iface licenseInfoClient = thriftClients.makeLicenseInfoClient();
+                Map<String, Attachment> attachmentsBySha1 = atts.stream().collect(Collectors.toMap(Attachment::getSha1, e -> e, (oldValue, newValue) -> newValue));
+                for (Attachment att : cliFiles) {
+                    try {
+                        List<LicenseInfoParsingResult> licenseInfoResult = licenseInfoClient.getLicenseInfoForAttachment(release, att.getAttachmentContentId(), user);
+                        LicenseInfoParsingResult result = licenseInfoResult.get(0);
+                        if (null != result && null != result.getLicenseInfo()) {
+                            String sha1 = result.getLicenseInfo().getSha1Hash();
+                            Attachment at = attachmentsBySha1.get(sha1);
+                            if (null != at) {
+                                String contentId = at.getAttachmentContentId();
+                                if (sourceIdToCli.containsKey(contentId)) {
+                                    List<Attachment> atList = sourceIdToCli.get(contentId);
+                                    atList.add(att);
+                                    // sourceIdToCli.put(contentId, atList);
+                                } else {
+                                    sourceIdToCli.put(contentId, Lists.newArrayList(att));
+                                }
+                            }
+                        }
+                    } catch (TException e) {
+                        log.error("Failed to parse License Info!", e);
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        request.setAttribute("srcToCli", sourceIdToCli);
         if (owner == null) {
             setEmptyUsages(request);
             return;
@@ -124,7 +166,6 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
 
         Set<String> attachmentContentIds = atts.stream().map(Attachment::getAttachmentContentId).collect(Collectors.toSet());
         try {
-            User user = UserCacheHolder.getUserFromRequest(request);
             Map<String, List<AttachmentUsage>> attachmentUsagesByContentId =
                     client.getAttachmentsUsages(owner, attachmentContentIds, null)
                             .stream()
@@ -184,7 +225,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     }
 
     protected void setAttachmentsInRequest(PortletRequest request, Release release) {
-        setAttachmentsInRequest(request, release.getAttachments(), release.getId() == null ? null : Source.releaseId(release.getId()));
+        setAttachmentsInRequest(request, release.getAttachments(), release.getId() == null ? null : Source.releaseId(release.getId()), release);
     }
 
     protected void setAttachmentsInRequest(PortletRequest request, Project project) {
