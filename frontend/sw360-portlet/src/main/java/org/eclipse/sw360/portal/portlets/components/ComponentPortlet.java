@@ -666,6 +666,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
                 Component component = client.getComponentByIdForEdit(id, user);
 
+                PortletUtils.setCustomFieldsEdit(request, user, component);
+
                 request.setAttribute(COMPONENT, component);
                 request.setAttribute(DOCUMENT_ID, id);
 
@@ -684,6 +686,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             if(request.getAttribute(COMPONENT) == null) {
                 Component component = new Component();
                 request.setAttribute(COMPONENT, component);
+                PortletUtils.setCustomFieldsEdit(request, user, component);
                 setUsingDocs(request, user, null, component.getReleaseIds());
                 setAttachmentsInRequest(request, component);
                 SessionMessages.add(request, "request_processed", LanguageUtil.get(resourceBundle,"new.component"));
@@ -743,7 +746,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 }
             }
 
-
+            PortletUtils.setCustomFieldsEdit(request, user, release);
             addComponentBreadcrumb(request, response, component);
             if (!isNullOrEmpty(release.getId())) { //Otherwise the link is meaningless
                 addReleaseBreadcrumb(request, response, release);
@@ -781,6 +784,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             String emailFromRequest = LifeRayUserSession.getEmailFromRequest(request);
 
             Release release = PortletUtils.cloneRelease(emailFromRequest, client.getReleaseById(releaseId, user));
+
+            PortletUtils.setCustomFieldsEdit(request, user, release);
 
             if (isNullOrEmpty(id)) {
                 id = release.getComponentId();
@@ -1185,6 +1190,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
                 Component component = client.getComponentById(id, user);
 
+                PortletUtils.setCustomFieldsDisplay(request, user, component);
                 request.setAttribute(COMPONENT, component);
                 request.setAttribute(DOCUMENT_ID, id);
                 request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
@@ -1255,6 +1261,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     fossologyJobsViewLink = createFossologyJobViewLink(processStep, configKeyToValues,
                             fossologyJobsViewLink);
                 }
+
+                PortletUtils.setCustomFieldsDisplay(request, user, release);
 
                 request.setAttribute(FOSSOLOGY_JOB_VIEW_LINK, fossologyJobsViewLink);
                 request.setAttribute(RELEASE_ID, releaseId);
