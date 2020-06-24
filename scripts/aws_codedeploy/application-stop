@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# -----------------------------------------------------------------------------
+#
+# Copyright Siemens AG, 2014-2015. Part of the SW360 Portal Project.
+#
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+# script to stop and clean tomcat
+#
+# -----------------------------------------------------------------------------
+
+stop_tomcat() {
+    echo "Stoping tomcat ..."
+    sudo -u siemagrant sh ${SSH_DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh
+    sudo -u siemagrant sleep 1m 
+    sudo -u siemagrant pkill -9 -f tomcat
+}
+
+clean_tomcat() {
+    echo "Clean tomcat ..."
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/attachments.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/attachments/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization/ ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization.war
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/components.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/components/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/cvesearch.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/cvesearch/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/fossology.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/fossology/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/licenses.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/licenses/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/licenseinfo.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/licenseinfo/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/moderation.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/moderation/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/resource.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/resource/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/search.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/search/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/schedule.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/schedule/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vulnerabilities.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vulnerabilities/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/wsimport.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/wsimport/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/users.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/users/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vendors.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vendors/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/projects.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/projects/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/changelogs.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/changelogs/
+    sudo -u siemagrant rm -rf ${SSH_LIFERAY_DEPLOY_PATH}/*
+}
+
+main() {
+    SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-portal-7.2.0-ga1/tomcat-9.0.17"
+    SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-portal-7.2.0-ga1/deploy"
+    stop_tomcat
+    clean_tomcat
+}
+
+main
+

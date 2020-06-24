@@ -1,0 +1,13 @@
+version: 0.0
+os: linux
+files:
+  - source: packages
+    destination: /tmp/sw360_codedeploy/packages
+hooks:
+  ApplicationStop:
+    - location: scripts/application-stop
+      runas: root
+  AfterInstall:
+    - location: scripts/application-start
+      runas: root
+
