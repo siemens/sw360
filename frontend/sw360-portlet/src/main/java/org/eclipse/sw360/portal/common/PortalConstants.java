@@ -82,6 +82,10 @@ public class PortalConstants {
     public static final String VIEW_SIZE = "viewSize";
     public static final String TOTAL_ROWS = "totalRows";
     public static final String RESULT = "result";
+    public static final String DATE_RANGE = "dateRange";
+    public static final String END_DATE = "endDate";
+    public static final String EPOCH_DATE = "1970-01-01";
+    public static final String TO = "TO";
 
     public static final String IS_USER_AT_LEAST_CLEARING_ADMIN = "isUserAtLeastClearingAdmin";
     public static final String IS_USER_AT_LEAST_ECC_ADMIN = "isUserAtLeastECCAdmin";
@@ -96,8 +100,8 @@ public class PortalConstants {
     public static final String LICENSE_TEXT = "licenseText";
     public static final String LICENSE_LIST = "licenseList";
     public static final String ACTUAL_LICENSE = "actual_license";
-    public static final String ADDED_TODOS_FROM_MODERATION_REQUEST = "added_todos_from_moderation_request";
-    public static final String DB_TODOS_FROM_MODERATION_REQUEST = "db_todos_from_moderation_request";
+    public static final String ADDED_TODOS_FROM_MODERATION_REQUEST = "added_obligations_from_moderation_request";
+    public static final String DB_TODOS_FROM_MODERATION_REQUEST = "db_obligations_from_moderation_request";
     public static final String MODERATION_LICENSE_DETAIL = "moderationLicenseDetail";
     public static final String LICENSE_TYPE_CHOICE = "licenseTypeChoice";
     public static final String LICENSE_TYPE_GLOBAL = "global";
@@ -177,9 +181,9 @@ public class PortalConstants {
     public static final String VENDOR_TARGET_ID = "vendorTargetId";
     public static final String PAGENAME_MERGE_VENDOR = "mergeVendor";
 
-    //! Specialized keys for todos
-    public static final String TODO_LIST = "todoList";
-    public static final String TODO_ID = "todoId";
+    //! Specialized keys for obligations
+    public static final String TODO_LIST = "obligList";
+    public static final String TODO_ID = "obligId";
 
     //! Specialized keys for obligations
     public static final String OBLIGATION_ID = "obligationId";
@@ -233,6 +237,7 @@ public class PortalConstants {
     public static final String PROJECT_TYPE;
     public static final String EXTENDED_EXCEL_EXPORT = "extendedExcelExport";
     public static final String PROJECT_WITH_SUBPROJECT = "projectWithSubproject";
+    public static final String PREPARE_LICENSEINFO_OBL_TAB = "prepareLicenseinfoOblTab";
     public static final String PROJECT_NOT_FOUND = "projectNotFound";
     public static final String PAGENAME_LICENSE_INFO = "generateLicenseInfo";
     public static final String PAGENAME_SOURCE_CODE_BUNDLE = "generateSourceCodeBundle";
@@ -242,6 +247,8 @@ public class PortalConstants {
     public static final String DEFAULT_LICENSE_INFO_HEADER_TEXT_FOR_DISPALY = "--default text--";
     public static final String DEFAULT_OBLIGATIONS_TEXT_FOR_DISPALY = "--default text--";
     public static final String PROJECT_OBLIGATIONS = "projectObligations";
+    public static final String ORGANISATION_OBLIGATIONS = "organisationObligations";
+    public static final String COMPONENT_OBLIGATIONS = "componentObligations";
     public static final Set<String> PROJECT_EXTERNAL_ID_KEYS;
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES = "selectedAttachmentUsages";
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES_SHADOWS = "selectedAttachmentUsagesShadows";
@@ -503,7 +510,7 @@ public class PortalConstants {
     // vendor actions
     public static final String REMOVE_VENDOR = "remove_vendor";
 
-    // todo actions
+    // oblig actions
     public static final String REMOVE_TODO = "removeTodo";
 
     // user actions

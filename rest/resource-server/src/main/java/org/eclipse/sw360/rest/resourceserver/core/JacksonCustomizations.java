@@ -163,7 +163,6 @@ class JacksonCustomizations {
                 "setAdditionalData",
                 "setLinkedObligationId",
                 "linkedObligationId",
-                "clearingRequestId",
                 "setClearingRequestId",
                 "todosIterator"
         })
@@ -202,6 +201,10 @@ class JacksonCustomizations {
             @Override
             @JsonProperty(access = Access.WRITE_ONLY)
             abstract public String getLeadArchitect();
+
+            @Override
+            @JsonProperty(access = Access.READ_ONLY)
+            abstract public String getClearingRequestId();
         }
 
 	static abstract class EmbeddedProjectMixin extends ProjectMixin {
@@ -484,8 +487,8 @@ class JacksonCustomizations {
                 "GPLv2Compat",
                 "GPLv3Compat",
                 "reviewdate",
-                "todos",
-                "todoDatabaseIds",
+                "obligations",
+                "obligationDatabaseIds",
                 "risks",
                 "riskDatabaseIds",
                 "documentState",
@@ -499,9 +502,9 @@ class JacksonCustomizations {
                 "permissionsSize",
                 "setLicenseTypeDatabaseId",
                 "setExternalLicenseLink",
-                "todoDatabaseIdsSize",
-                "todoDatabaseIdsIterator",
-                "setTodoDatabaseIds",
+                "obligationDatabaseIdsSize",
+                "obligationDatabaseIdsIterator",
+                "setObligationDatabaseIds",
                 "riskDatabaseIdsSize",
                 "riskDatabaseIdsIterator",
                 "setRiskDatabaseIds",
@@ -514,9 +517,9 @@ class JacksonCustomizations {
                 "gplv3Compat",
                 "setGPLv3Compat",
                 "setReviewdate",
-                "todosSize",
-                "todosIterator",
-                "setTodos",
+                "obligationsSize",
+                "obligationsIterator",
+                "setObligations",
                 "risksSize",
                 "risksIterator",
                 "setRisks",

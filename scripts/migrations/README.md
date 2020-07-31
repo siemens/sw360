@@ -45,8 +45,14 @@ To migrate it is recommended to do this in the following order:
 ### 8.2.0 -> 9.0.0
 - `017_update_empty_release_clearing_state_to_default_NEW_CLEARING.py`
 
-### 9.0.0 -> 9.1.0
+### 9.0.0 -> 10.0.0
 - `018_remove_unwanted_field_from_clearing_request.py`
+
+### 10.1.0 -> 11.0.0
+- `019_update_byExternalIds_component_view.py`
+- `020_update_byExternalIds_release_view.py`
+- `021_update_byexternalids_project_view.py`
+- `022_migrate_todo_to_obligation.py`
 
 ## Optional usage
 - `009_overwrite_release_name_with_component_name.py`
