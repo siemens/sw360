@@ -18,6 +18,7 @@ import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.*;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.moderation.DocumentType;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
@@ -53,10 +54,22 @@ public class ThriftEnumUtils {
             .put(ComponentType.CODE_SNIPPET, "Code Snippet")
             .build();
 
+    private static final ImmutableMap<ObligationType, String> MAP_OBLIGATION_TYPE_STRING = ImmutableMap.<ObligationType, String>builder()
+            .put(ObligationType.ORGANISATION_OBLIGATION, "Organisation Obligation")
+            .put(ObligationType.COMPONENT_OBLIGATION, "Component Obligation")
+            .put(ObligationType.PRODUCT_OBLIGATION, "Product Obligation")
+            .build();
+
     private static final ImmutableMap<Ternary,String> MAP_TERNARY_STRING = ImmutableMap.of(
             Ternary.UNDEFINED, "undefined",
             Ternary.NO, "no",
             Ternary.YES, "yes");
+
+    private static final ImmutableMap<DateRange, String> MAP_DATE_RANGE_STRING = ImmutableMap.of(
+            DateRange.EQUAL, "=",
+            DateRange.LESS_THAN_OR_EQUAL_TO, "<=",
+            DateRange.GREATER_THAN_OR_EQUAL_TO, ">=",
+            DateRange.BETWEEN, "Between");
 
     private static final ImmutableMap<ProjectType, String> MAP_PROJECT_TYPE_STRING = ImmutableMap.of(
             ProjectType.CUSTOMER, "Customer Project" ,
@@ -271,6 +284,7 @@ public class ThriftEnumUtils {
             MAP_ENUMTYPE_MAP = ImmutableMap.<Class<? extends TEnum>, Map<? extends TEnum, String>>builder()
             .put(ComponentType.class, MAP_COMPONENT_TYPE_STRING)
             .put(Ternary.class, MAP_TERNARY_STRING)
+            .put(DateRange.class, MAP_DATE_RANGE_STRING)
             .put(ProjectType.class, MAP_PROJECT_TYPE_STRING)
             .put(AttachmentType.class, MAP_ATTACHMENT_TYPE_STRING)
             .put(ClearingState.class, MAP_CLEARING_STATUS_STRING)
@@ -292,6 +306,7 @@ public class ThriftEnumUtils {
             .put(DocumentType.class, MAP_DOCUMENT_TYPE_STRING)
             .put(ObligationStatus.class, MAP_OBLIGATION_STATUS_STRING)
             .put(ClearingRequestState.class, MAP_CLEARING_REQUEST_STATE_STRING)
+            .put(ObligationType.class, MAP_OBLIGATION_TYPE_STRING)
             .build();
 
     public static String enumToString(TEnum value) {

@@ -9,6 +9,8 @@
  */
 package org.eclipse.sw360.portal.common;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.liferay.portal.kernel.json.JSONArray;
@@ -28,6 +30,8 @@ import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.UpdateType;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.VulnerabilityUpdateStatus;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
+import org.eclipse.sw360.datahandler.thrift.licenses.Obligations;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectState;
@@ -65,6 +69,7 @@ public class PortletUtils {
 
     private static final Logger LOGGER = Logger.getLogger(PortletUtils.class);
     private static final String TEMPLATE_FILE = "/welcomePageGuideline.html";
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static ChangeLogsPortletUtils changeLogsPortletUtils = null;
 
     private PortletUtils() {
@@ -120,6 +125,10 @@ public class PortletUtils {
         return  ECCStatus.findByValue(parseInt(enumNumber));
     }
 
+    public static ObligationType getObligationTypeFromString(String enumNumber) {
+        return  ObligationType.findByValue(parseInt(enumNumber));
+    }
+
     public static <U extends TFieldIdEnum, T extends TBase<T, U>> void setFieldValue(PortletRequest request, T instance, U field, FieldMetaData fieldMetaData, String prefix) {
 
         String value = request.getParameter(prefix + field.toString());
@@ -169,6 +178,8 @@ public class PortletUtils {
             return getUserGroupFromString(value);
         else if (field == EccInformation._Fields.ECC_STATUS)
             return getEccStatusFromString(value);
+        else if (field == Obligations._Fields.OBLIGATION_TYPE)
+            return getObligationTypeFromString(value);
         else {
             LOGGER.error("Missing case in enumFromString, unknown field was " + field.toString());
             return null;
@@ -369,6 +380,26 @@ public class PortletUtils {
         return customMap;
     }
 
+    public static Map<String,String> getMapWithJoinedValueFromRequest(PortletRequest request, String key, String value) {
+        Map<String, Set<String>> customMap = getCustomMapFromRequest(request, key, value);
+        return customMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> {
+                            try {
+                                if(isNotEmpty(e.getValue()) && e.getValue().size() == 1) {
+                                    return e.getValue().stream()
+                                            .findFirst()
+                                            .orElse("");
+                                }
+                                return getObjectMapper().writeValueAsString(e.getValue());
+                            } catch (JsonProcessingException ex) {
+                                return e.getValue().stream()
+                                        .findFirst()
+                                        .orElse("");
+                            }
+                        }));
+    }
+
     public static Map<String,String> getMapFromRequest(PortletRequest request, String key, String value) {
         Map<String, Set<String>> customMap = getCustomMapFromRequest(request, key, value);
         return customMap.entrySet().stream()
@@ -379,7 +410,7 @@ public class PortletUtils {
     }
 
     public static Map<String,String> getExternalIdMapFromRequest(PortletRequest request) {
-        return getMapFromRequest(request, PortalConstants.EXTERNAL_ID_KEY, PortalConstants.EXTERNAL_ID_VALUE);
+        return getMapWithJoinedValueFromRequest(request, PortalConstants.EXTERNAL_ID_KEY, PortalConstants.EXTERNAL_ID_VALUE);
     }
 
     public static Map<String,String> getAdditionalDataMapFromRequest(PortletRequest request) {
@@ -487,5 +518,9 @@ public class PortletUtils {
             changeLogsPortletUtils = new ChangeLogsPortletUtils(clients);
         }
         return changeLogsPortletUtils;
+    }
+
+    public static ObjectMapper getObjectMapper() {
+        return objectMapper;
     }
 }

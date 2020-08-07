@@ -587,7 +587,6 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     	if (isNullOrEmpty(mimetype)) {
     		mimetype = URLConnection.guessContentTypeFromName(filename);
     	}
-
         PortletResponseUtil.sendFile(request, response, filename, licenseInfoFile.getGeneratedOutput(), mimetype);
     }
 
@@ -1161,6 +1160,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 PortletUtils.setCustomFieldsDisplay(request, user, project);
                 addProjectBreadcrumb(request, response, project);
                 request.setAttribute(PROJECT_OBLIGATIONS, SW360Utils.getProjectObligations(project));
+                request.setAttribute(COMPONENT_OBLIGATIONS, SW360Utils.getComponentObligations(project));
+                request.setAttribute(ORGANISATION_OBLIGATIONS, SW360Utils.getOrganisationObligations(project));
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? "Yes" : "No");
 
                 if (PortalConstants.IS_PROJECT_OBLIGATIONS_ENABLED && project.getReleaseIdToUsageSize() > 0) {
@@ -1184,6 +1185,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         request.setAttribute(PortalConstants.SW360_USER, user);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
         request.setAttribute(PROJECT_LINK_TABLE_MODE, PROJECT_LINK_TABLE_MODE_LICENSE_INFO);
+        request.setAttribute("onlyClearingReport", request.getParameter(PortalConstants.PREPARE_LICENSEINFO_OBL_TAB));
 
         if (id != null) {
             try {
@@ -1515,6 +1517,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             request.setAttribute(PROJECT, project);
             request.setAttribute(DOCUMENT_ID, id);
             request.setAttribute(PROJECT_OBLIGATIONS, SW360Utils.getProjectObligations(project));
+            request.setAttribute(ORGANISATION_OBLIGATIONS, SW360Utils.getOrganisationObligations(project));
+            request.setAttribute(COMPONENT_OBLIGATIONS, SW360Utils.getComponentObligations(project));
 
             setAttachmentsInRequest(request, project);
             try {
