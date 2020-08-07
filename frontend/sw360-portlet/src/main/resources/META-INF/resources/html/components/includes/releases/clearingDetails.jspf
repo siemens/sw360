@@ -29,8 +29,8 @@
         data-attachment-name-parameter-name="<%=PortalConstants.ATTACHMENT_NAME%>"
         data-spdx-license-info-parameter-name="<%=PortalConstants.SPDX_LICENSE_INFO%>">
     <colgroup>
-        <col style="width: 60%;"/>
-        <col style="width: 5.1rem;"/>
+        <col style="width: 40%;"/>
+        <col style="width: 20%;"/>
         <col style="width: 40%;"/>
     </colgroup>
     <thead>

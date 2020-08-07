@@ -48,6 +48,8 @@ import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
@@ -1358,6 +1360,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     id = release.getComponentId();
                 }
 
+                addPackagesToRequest(request, releaseId);
                 putVulnerabilitiesInRequestRelease(request, releaseId, user);
                 request.setAttribute(VULNERABILITY_VERIFICATION_EDITABLE, PermissionUtils.isUserAtLeast(UserGroup.SECURITY_ADMIN, user));
             }
@@ -1377,6 +1380,19 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     }
 
+    private void addPackagesToRequest(RenderRequest request, String releaseId) {
+        Set<Package> packages;
+        try {
+            PackageService.Iface packageClient = thriftClients.makePackageClient();
+            packages = packageClient.getPackagesByReleaseIds(Sets.newHashSet(releaseId));
+
+        } catch (TException e) {
+            log.error("Could not get Packages from backend ", e);
+            packages = Collections.emptySet();
+        }
+        request.setAttribute(PACKAGES, packages);
+    }
+    
     private String createFossologyJobViewLink(ExternalToolProcessStep processStep,
             Map<String, Set<String>> configKeyToValues, String fossologyJobsViewLink) {
         String uploadId = null;

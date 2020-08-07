@@ -41,6 +41,8 @@ import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.VulnerabilityUpdateStatus;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -78,7 +80,6 @@ import java.util.Map.Entry;
 import java.util.function.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -1266,8 +1267,11 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 request.setAttribute(ORGANISATION_OBLIGATIONS, SW360Utils.getOrganisationObligations(project));
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
 
-                if (PortalConstants.IS_PROJECT_OBLIGATIONS_ENABLED && project.getReleaseIdToUsageSize() > 0) {
+                if (project.getReleaseIdToUsageSize() > 0) {
+                    addPackagesToRequest(request, project.getReleaseIdToUsage().keySet());
+                    if (PortalConstants.IS_PROJECT_OBLIGATIONS_ENABLED) {
                     request.setAttribute(OBLIGATION_DATA, loadLinkedObligations(request, project));
+                    }
                 }
             } catch (SW360Exception sw360Exp) {
                 setSessionErrorBasedOnErrorCode(request, sw360Exp.getErrorCode());
@@ -1276,6 +1280,19 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 setSW360SessionError(request, ErrorMessages.ERROR_GETTING_PROJECT);
             }
         }
+    }
+
+    private void addPackagesToRequest(RenderRequest request, Set<String> releaseIds) {
+        Set<Package> packages;
+        try {
+            PackageService.Iface packageClient = thriftClients.makePackageClient();
+            packages = packageClient.getPackagesByReleaseIds(releaseIds);
+
+        } catch (TException e) {
+            log.error("Could not get Packages from backend ", e);
+            packages = Collections.emptySet();
+        }
+        request.setAttribute(PACKAGES, packages);
     }
 
     private void prepareLicenseInfo(RenderRequest request, RenderResponse response) throws IOException, PortletException {

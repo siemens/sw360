@@ -13,8 +13,6 @@ package org.eclipse.sw360.portal.common;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -91,6 +89,15 @@ public class PortalConstants {
     public static final String IS_USER_AT_LEAST_ECC_ADMIN = "isUserAtLeastECCAdmin";
     public static final String IS_USER_ADMIN = "isUserAdmin";
     public static final String IS_CLEARING_EXPERT = "isClearingExpert";
+
+    //! Specialized keys for packages
+    public static final String PACKAGE = "package";
+    public static final String PACKAGES = "packages";
+    public static final String PACKAGES_PORTLET_NAME = PORTLET_NAME_PREFIX + PACKAGES;
+    public static final String PACKAGE_ID = "packageId";
+    public static final String IMPORT_PACKAGES = "importPackages";
+    public static final String PACKAGE_LIST = "packageList";
+    public static final String LOAD_PACKAGE_LIST = "loadPackageList";
 
     //! Specialized keys for licenses
     public static final String LICENSES_PORTLET_NAME = PORTLET_NAME_PREFIX + "licenses";

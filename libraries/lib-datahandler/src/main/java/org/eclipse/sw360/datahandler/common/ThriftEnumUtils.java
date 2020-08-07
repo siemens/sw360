@@ -20,6 +20,7 @@ import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.moderation.DocumentType;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageManagerType;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityRatingForProject;
@@ -280,6 +281,18 @@ public class ThriftEnumUtils {
             .put(ClearingRequestState.CLOSED, "Closed")
             .build();
 
+    private static final ImmutableMap<PackageManagerType, String> MAP_PACKAGE_MANAGER_TYPE_STRING = ImmutableMap.<PackageManagerType, String>builder()
+            .put(PackageManagerType.NUGET, "NuGet")
+            .put(PackageManagerType.NPM, "Npm")
+            .put(PackageManagerType.PIP, "Pip")
+            .put(PackageManagerType.PIP_ENV, "PipEnv")
+            .put(PackageManagerType.DOT_NET, "DotNet")
+            .put(PackageManagerType.MAVEN, "Maven")
+            .put(PackageManagerType.GRADLE, "Gradle")
+            .put(PackageManagerType.COMPOSER, "Composer")
+            .put(PackageManagerType.SBT, "Sbt")
+            .build();
+
     public static final ImmutableMap<Class<? extends TEnum>, Map<? extends TEnum, String>>
             MAP_ENUMTYPE_MAP = ImmutableMap.<Class<? extends TEnum>, Map<? extends TEnum, String>>builder()
             .put(ComponentType.class, MAP_COMPONENT_TYPE_STRING)
@@ -307,6 +320,7 @@ public class ThriftEnumUtils {
             .put(ObligationStatus.class, MAP_OBLIGATION_STATUS_STRING)
             .put(ClearingRequestState.class, MAP_CLEARING_REQUEST_STATE_STRING)
             .put(ObligationType.class, MAP_OBLIGATION_TYPE_STRING)
+            .put(PackageManagerType.class, MAP_PACKAGE_MANAGER_TYPE_STRING)
             .build();
 
     public static String enumToString(TEnum value) {
@@ -318,13 +332,21 @@ public class ThriftEnumUtils {
         return out;
     }
 
-     public static  <T extends Enum<T>> T  stringToEnum(String in, Class<T> clazz){
-         for (T t : clazz.getEnumConstants()) {
-             if(t.name().equals(in)) return t;
-         }
+    public static  <T extends Enum<T>> T  stringToEnum(String in, Class<T> clazz){
+        for (T t : clazz.getEnumConstants()) {
+            if(t.name().equals(in)) return t;
+        }
 
-         return null;
-     }
+        return null;
+    }
+
+    public static  <T extends Enum<T>> T  stringIgnoreCaseToEnum(String in, Class<T> clazz){
+        for (T t : clazz.getEnumConstants()) {
+            if(t.name().equalsIgnoreCase(in)) return t;
+        }
+        return null;
+    }
+
     public static  <T extends Enum<T>> T  enumByString(String in, Class<T> clazz){
         Map<? extends TEnum, String> map = MAP_ENUMTYPE_MAP.get(clazz);
         for (T t : clazz.getEnumConstants()) {
