@@ -15,12 +15,15 @@ import org.apache.thrift.TBase;
 import org.apache.thrift.TFieldIdEnum;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
+import org.eclipse.sw360.datahandler.thrift.projects.Project;
 
 import java.util.*;
 
 public class ResourceComparatorGenerator<T> {
 
     private static final Map<Component._Fields, Comparator<Component>> componentMap = generateComponentMap();
+    
+    private static final Map<Project._Fields, Comparator<Project>> projectMap = generateProjectMap();
 
     private static Map<Component._Fields, Comparator<Component>> generateComponentMap() {
         Map<Component._Fields, Comparator<Component>> componentMap = new HashMap<>();
@@ -30,11 +33,21 @@ public class ResourceComparatorGenerator<T> {
         componentMap.put(Component._Fields.COMPONENT_TYPE, Comparator.comparing(c -> Optional.ofNullable(c.getComponentType()).map(Object::toString).orElse(null), Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(componentMap);
     }
+    
+    private static Map<Project._Fields, Comparator<Project>> generateProjectMap() {
+        Map<Project._Fields, Comparator<Project>> projectMap = new HashMap<>();
+        projectMap.put(Project._Fields.NAME, Comparator.comparing(Project::getName, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+//        componentMap.put(Project._Fields.CREATED_ON, Comparator.comparing(Component::getCreatedOn, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+//        componentMap.put(Project._Fields.CREATED_BY, Comparator.comparing(Component::getCreatedBy, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        return Collections.unmodifiableMap(projectMap);
+    }
 
     public Comparator<T> generateComparator(String type) throws ResourceClassNotFoundException {
         switch (type) {
             case SW360Constants.TYPE_COMPONENT:
                 return (Comparator<T>)defaultComponentComparator();
+            case SW360Constants.TYPE_PROJECT:
+                return (Comparator<T>)defaultProjectComparator();
             default:
                 throw new ResourceClassNotFoundException("No default comparator for resource class with name " + type);
         }
@@ -83,6 +96,10 @@ public class ResourceComparatorGenerator<T> {
 
     private Comparator<Component> defaultComponentComparator() {
         return componentMap.get(Component._Fields.NAME);
+    }
+    
+    private Comparator<Project> defaultProjectComparator() {
+        return projectMap.get(Project._Fields.NAME);
     }
 
 }
