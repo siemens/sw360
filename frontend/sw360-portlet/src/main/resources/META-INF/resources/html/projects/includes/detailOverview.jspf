@@ -84,6 +84,9 @@
 									<liferay-ui:message key="edit.project" />
 								</button>
 							</div>
+                                                        <div class="btn-group" role="group">
+                                                            <button type="button" class="btn btn-secondary" id="linkToProjectButton"><liferay-ui:message key="link.to.projects" /></button>
+                                                        </div>
 							<div class="list-group-companion" data-belong-to="tab-clearingStatus">
 								<div class="nav nav-pills justify-content-center bg-light font-weight-bold d-inline-flex" id="pills-tab" role="tablist">
 									<a class="nav-item nav-link active" id="pills-tree-tab" data-toggle="pill" href="#pills-treeView" role="tab" aria-controls="pills-treeView" aria-selected="true">
@@ -255,6 +258,8 @@
 </div>
 <%@ include file="/html/utils/includes/pageSpinner.jspf" %>
 
+<jsp:include page="/html/projects/includes/searchProjects.jsp" />
+
 <div class="dialogs auto-dialogs"></div>
 
 <%--for javascript library loading --%>
@@ -262,7 +267,10 @@
 <script>
 	document.title = $("<span></span>").html("<sw360:ProjectName project="${project}"/> - " + document.title).text();
 
-	require(['jquery', 'modules/listgroup'], function($, listgroup) {
+	require(['jquery', 'modules/listgroup', 'utils/link'], function($, listgroup, linkutil) {
 		listgroup.initialize('detailTab', $('#detailTab').data('initial-tab') || 'tab-Summary');
+	    if (window.history.replaceState) {
+	        window.history.replaceState(null, document.title, linkutil.to('project', 'show', "${project.id}"));
+	    }
 	});
 </script>

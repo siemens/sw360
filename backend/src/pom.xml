@@ -2,6 +2,7 @@
 <!--
   ~ Copyright Siemens AG, 2013-2016. Part of the SW360 Portal Project.
   ~ With modifications by Bosch Software Innovations GmbH, 2016.
+  ~ With modifications by Bosch.IO GmbH, 2020.
   ~ With modifacations by Verifa Oy, 2018.
   ~
   ~ This program and the accompanying materials are made
@@ -41,6 +42,7 @@
         <module>src-schedule</module>
         <module>src-wsimport</module>
         <module>src-changelogs</module>
+        <module>src-health</module>
     </modules>
 
     <dependencies>

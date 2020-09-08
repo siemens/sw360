@@ -24,7 +24,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
@@ -39,9 +40,12 @@ import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.COTSDetai
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ClearingInformationMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.EccInformationMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ObligationStatusInfoMixin;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectReleaseRelationshipMixin;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectTodoMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.RepositoryMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.VendorMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseRepository;
+import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
@@ -59,6 +63,7 @@ import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectObligation;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectTodo;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 
@@ -72,7 +77,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 
 public class DatabaseHandlerUtil {
-    private static final Logger log = Logger.getLogger(DatabaseHandlerUtil.class);
+    private static final Logger log = LogManager.getLogger(DatabaseHandlerUtil.class);
     private static final String SEPARATOR = " -> ";
     private static ChangeLogsRepository changeLogRepository = getChangeLogsRepository();
     private static ObjectMapper mapper = initAndGetObjectMapper();
@@ -683,6 +688,8 @@ public class DatabaseHandlerUtil {
             mapper.addMixInAnnotations(EccInformation.class, EccInformationMixin.class);
             mapper.addMixInAnnotations(Vendor.class, VendorMixin.class);
             mapper.addMixInAnnotations(Repository.class, RepositoryMixin.class);
+            mapper.addMixInAnnotations(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
+            mapper.addMixInAnnotations(ProjectTodo.class, ProjectTodoMixin.class);
         }
         return mapper;
     }
