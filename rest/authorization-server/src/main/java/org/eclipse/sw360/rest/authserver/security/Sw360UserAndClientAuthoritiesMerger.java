@@ -14,7 +14,8 @@ import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.provider.ClientDetails;
@@ -32,7 +33,7 @@ import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.R
  */
 public class Sw360UserAndClientAuthoritiesMerger {
 
-    private final Logger log = Logger.getLogger(this.getClass());
+    private final Logger log = LogManager.getLogger(this.getClass());
 
     public List<GrantedAuthority> mergeAuthoritiesOf(User user, ClientDetails clientDetails) {
         List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
