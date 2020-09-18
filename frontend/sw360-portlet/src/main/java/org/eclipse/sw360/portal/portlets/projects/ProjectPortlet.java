@@ -2051,7 +2051,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
                     List<ObligationParsingResult> obligationResults = licenseClient.getObligationsForAttachment(release, attachmentContentId, user);
 
-                    if (CommonUtils.allAreNotEmpty(licenseResults, obligationResults) && obligationResults.get(0).getObligationsSize() > 0) {
+                    if (CommonUtils.allAreNotEmpty(licenseResults, obligationResults) && obligationResults.get(0).getObligationsAtProjectSize() > 0) {
                         licenseInfoWithObligations.add(licenseClient.createLicenseToObligationMapping(licenseResults.get(0), obligationResults.get(0)));
                     }
                 } catch (TException exception) {
@@ -2083,7 +2083,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     private List<LicenseInfoParsingResult> filterAndSortLicenseInfo(List<LicenseInfoParsingResult> licenseInfos) {
         // filtering all license without obligations and license name unknown or n/a
-        Predicate<LicenseNameWithText> filterLicense = license -> (license.isSetObligations()
+        Predicate<LicenseNameWithText> filterLicense = license -> (license.isSetObligationsAtProject()
                 && !(SW360Constants.LICENSE_NAME_UNKNOWN.equals(license.getLicenseName())
                         && SW360Constants.NA.equalsIgnoreCase(license.getLicenseName())));
 
@@ -2132,6 +2132,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
 
         List<ProjectLink> mappedProjectLinks = createLinkedProjects(project, user);
+        mappedProjectLinks = sortProjectLink(mappedProjectLinks);
         request.setAttribute(PROJECT_LIST, mappedProjectLinks);
         request.setAttribute("projectReleaseRelation", project.getReleaseIdToUsage());
         Set<String> releaseIds = mappedProjectLinks.stream().map(ProjectLink::getLinkedReleases)
