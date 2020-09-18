@@ -26,7 +26,8 @@ import org.eclipse.sw360.portal.common.UsedAsLiferayAction;
 import org.eclipse.sw360.portal.portlets.Sw360Portlet;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
@@ -59,7 +60,7 @@ import static org.eclipse.sw360.portal.common.PortalConstants.LICENSE_ADMIN_PORT
     configurationPolicy = ConfigurationPolicy.REQUIRE
 )
 public class LicenseAdminPortlet extends Sw360Portlet {
-    private static final Logger log = Logger.getLogger(LicenseAdminPortlet.class);
+    private static final Logger log = LogManager.getLogger(LicenseAdminPortlet.class);
 
     @Override
     public void serveResource(ResourceRequest request, ResourceResponse response) throws PortletException {
@@ -146,23 +147,5 @@ public class LicenseAdminPortlet extends Sw360Portlet {
     private InputStream getInputStreamFromRequest(PortletRequest request, String fileUploadFormId) throws IOException {
         final UploadPortletRequest uploadPortletRequest = PortalUtil.getUploadPortletRequest(request);
         return uploadPortletRequest.getFileAsStream(fileUploadFormId);
-    }
-
-    public void backUpLicenses(ResourceRequest request, ResourceResponse response) throws IOException, TException {
-        final LicenseService.Iface licenseClient = thriftClients.makeLicenseClient();
-        Map<String, InputStream> fileNameToStreams = (new LicsExporter(licenseClient)).getFilenameToCSVStreams();
-
-        final ByteArrayOutputStream outB = new ByteArrayOutputStream();
-        final ZipOutputStream zipOutputStream = new ZipOutputStream(outB);
-
-        for (Map.Entry<String, InputStream> entry : fileNameToStreams.entrySet()) {
-            ZipTools.addToZip(zipOutputStream, entry.getKey(), entry.getValue());
-        }
-
-        zipOutputStream.flush();
-        zipOutputStream.close(); // this closes outB
-
-        final ByteArrayInputStream zipFile = new ByteArrayInputStream(outB.toByteArray());
-        PortletResponseUtil.sendFile(request, response, "LicensesBackup.lics", zipFile, "application/zip");
     }
 }

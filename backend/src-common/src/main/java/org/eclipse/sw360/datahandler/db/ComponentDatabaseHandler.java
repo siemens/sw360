@@ -50,7 +50,8 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityCheckSt
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityService;
 import org.eclipse.sw360.mail.MailConstants;
 import org.eclipse.sw360.mail.MailUtil;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.spdx.SpdxBOMImporter;
 import org.eclipse.sw360.spdx.SpdxBOMImporterSink;
@@ -91,9 +92,10 @@ import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareRelease
  */
 public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
-    private static final Logger log = Logger.getLogger(ComponentDatabaseHandler.class);
+    private static final Logger log = LogManager.getLogger(ComponentDatabaseHandler.class);
     private static final String ECC_AUTOSET_COMMENT = "automatically set";
     private static final String ECC_AUTOSET_VALUE = "N";
+    private static final String DEFAULT_CATEGORY = "Default_Category";
 
     /**
      * Connection to the couchDB database
@@ -337,7 +339,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         removeLeadingTrailingWhitespace(component);
         Set<String> categories = component.getCategories();
         if (categories == null || categories.isEmpty()) {
-            return new AddDocumentRequestSummary().setRequestStatus(AddDocumentRequestStatus.NAMINGERROR);
+            component.setCategories(ImmutableSet.of(DEFAULT_CATEGORY));
         }
 
         // Prepare the component
@@ -504,7 +506,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         Set<String> categories = component.getCategories();
         if (categories == null || categories.isEmpty()) {
-            return RequestStatus.NAMINGERROR;
+            component.setCategories(ImmutableSet.of(DEFAULT_CATEGORY));
         }
         // Prepare component for database
         prepareComponent(component);
@@ -1595,6 +1597,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             ProjectReleaseRelationship rel = (ProjectReleaseRelationship) relation;
             releaseLink.setReleaseRelationship(rel.getReleaseRelation());
             releaseLink.setMainlineState(rel.getMainlineState());
+            releaseLink.setComment(rel.getComment());
         } else if (relation instanceof ReleaseRelationship) {
             releaseLink.setReleaseRelationship((ReleaseRelationship) relation);
         } else {

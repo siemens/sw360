@@ -9,12 +9,15 @@
  */
 package org.eclipse.sw360.rest.authserver.security.basicauth;
 
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer;
 import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthoritiesCalculator;
 import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -48,7 +51,7 @@ import java.util.Optional;
  */
 public class Sw360LiferayAuthenticationProvider implements AuthenticationProvider {
 
-    private final Logger log = Logger.getLogger(this.getClass());
+    private final Logger log = LogManager.getLogger(this.getClass());
 
     private static final String SUPPORTED_GRANT_TYPE = "password";
 
@@ -106,7 +109,10 @@ public class Sw360LiferayAuthenticationProvider implements AuthenticationProvide
 
     private boolean liferayAuthCheckRequest(String route, String userParam, String user, String password) {
         String liferayParameterURL = "/api/jsonws/user/%s?companyId=%s&%s=%s";
-        String url = sw360PortalServerURL + String.format(liferayParameterURL, route, sw360LiferayCompanyId, userParam, user);
+        String companyId = CommonUtils.isNotNullEmptyOrWhitespace(Sw360AuthorizationServer.SW360_LIFERAY_COMPANY_ID)
+                ? Sw360AuthorizationServer.SW360_LIFERAY_COMPANY_ID
+                : sw360LiferayCompanyId;
+        String url = sw360PortalServerURL + String.format(liferayParameterURL, route, companyId, userParam, user);
         String encodedPassword;
 
         try {

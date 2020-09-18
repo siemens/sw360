@@ -9,12 +9,17 @@
  */
 package org.eclipse.sw360.datahandler.couchdb.lucene;
 
+import com.github.ldriscoll.ektorplucene.EktorpLuceneObjectMapperFactory;
 import com.github.ldriscoll.ektorplucene.LuceneAwareCouchDbConnector;
 import com.github.ldriscoll.ektorplucene.LuceneQuery;
 import com.github.ldriscoll.ektorplucene.LuceneResult;
 import com.github.ldriscoll.ektorplucene.util.IndexUploader;
 import com.google.common.base.Joiner;
-import org.apache.log4j.Logger;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
@@ -22,13 +27,15 @@ import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.ektorp.DbAccessException;
 import org.ektorp.http.HttpClient;
-
+import org.ektorp.http.URI;
+import org.ektorp.support.DesignDocument;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -42,7 +49,7 @@ import static com.google.common.base.Strings.nullToEmpty;
  */
 public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
 
-    private static final Logger log = Logger.getLogger(LuceneAwareDatabaseConnector.class);
+    private static final Logger log = LogManager.getLogger(LuceneAwareDatabaseConnector.class);
 
     private static final Joiner AND = Joiner.on(" AND ");
     private static final Joiner OR = Joiner.on(" OR ");
@@ -50,7 +57,7 @@ public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
     private final DatabaseConnector connector;
 
     private static final List<String> LUCENE_SPECIAL_CHARACTERS = Arrays.asList("[\\\\\\+\\-\\!\\~\\*\\?\\\"\\^\\:\\(\\)\\{\\}\\[\\]]", "\\&\\&", "\\|\\|");
-
+    private String dbNameForLuceneSearch;
     /**
      * Maximum number of results to return
      */
@@ -61,6 +68,7 @@ public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
      */
     public LuceneAwareDatabaseConnector(Supplier<HttpClient> httpClient, String dbName) throws IOException {
         this(new DatabaseConnector(httpClient, dbName));
+        this.dbNameForLuceneSearch = dbName;
     }
 
     /**
@@ -118,8 +126,47 @@ public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
             return queryLucene(query);
         } catch (DbAccessException e) {
             log.error("Error querying database.", e);
+            log.info("Trying to call lucene directly");
+            try {
+                LuceneResult callLuceneDirectly = callLuceneDirectly(function, queryString, includeDocs);
+                return callLuceneDirectly;
+            } catch (Exception exp) {
+                log.error("Error querying Lucene directly.", exp);
+            }
             return null;
         }
+    }
+
+    private LuceneResult callLuceneDirectly(LuceneSearchView function, String queryString, boolean includeDocs)
+            throws IOException {
+        URI queryURI = URI.of("/");
+        queryURI.append(DEFAULT_LUCENE_INDEX);
+        queryURI.append(dbNameForLuceneSearch);
+        queryURI.append(function.searchView.startsWith(DesignDocument.ID_PREFIX) ? function.searchView
+                : DesignDocument.ID_PREFIX + function.searchView);
+        queryURI.append(function.searchFunction);
+        queryURI.param("include_docs", new Boolean(includeDocs).toString());
+        if (resultLimit > 0) {
+            queryURI.param("limit", resultLimit);
+        }
+        queryURI.param("q", queryString.toString());
+        URL luceneResourceUrl = new URL(DatabaseSettings.COUCH_DB_LUCENE_URL + queryURI.toString());
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) luceneResourceUrl.openConnection();
+            connection.setRequestMethod("GET");
+            connection.connect();
+            int responseCode = connection.getResponseCode();
+            if (responseCode == 200) {
+                ObjectMapper objectMapper = new EktorpLuceneObjectMapperFactory().createObjectMapper();
+                return objectMapper.readValue(connection.getInputStream(), LuceneResult.class);
+            }
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        return null;
     }
 
     /////////////////////////
