@@ -18,8 +18,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class LicsArchive {
-    public static final String RISK_CATEGORY_FILE = "dbo.Riskcategory.csv";
-    public static final String RISK_FILE = "dbo.Risk.csv";
     public static final String TODO_FILE = "dbo.Obligations.csv";
     public static final String LICENSETYPE_FILE = "dbo.Licensetype.csv";
     public static final String LICENSE_TODO_FILE = "dbo.licenseoblig.csv";
@@ -28,7 +26,6 @@ public class LicsArchive {
     public static final String CUSTOM_PROPERTIES_FILE = "dbo.customProperties.csv";
     public static final String TODO_CUSTOM_PROPERTIES_FILE = "dbo.obligCustomProperties.csv";
     public static final Set<String> requiredLicenseFileNames = ImmutableSet.<String>builder()
-            .add(RISK_CATEGORY_FILE).add(RISK_FILE)
             .add(TODO_FILE).add(LICENSETYPE_FILE)
             .add(LICENSE_TODO_FILE).add(LICENSE_RISK_FILE)
             .add(LICENSE_FILE).build();
