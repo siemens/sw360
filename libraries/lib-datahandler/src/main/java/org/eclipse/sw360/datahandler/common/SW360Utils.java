@@ -249,7 +249,7 @@ public class SW360Utils {
     }
 
     public static Map<String, String> getReleaseIdtoAcceptedCLIMappings(Map<String, ObligationStatusInfo> obligationStatusMap) {
-        return obligationStatusMap.values().stream().flatMap(e -> e.getReleaseIdToAcceptedCLI().entrySet().stream())
+        return obligationStatusMap.values().stream().flatMap(e -> (e.getReleaseIdToAcceptedCLI() != null ? e.getReleaseIdToAcceptedCLI() : new HashMap<String,String>()).entrySet().stream())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (oldValue, newValue) -> oldValue));
     }
 
@@ -285,7 +285,7 @@ public class SW360Utils {
             return licenseClient.getObligations().stream()
                     .filter(o -> o.isValidForProject())
                     .filter(o -> Objects.nonNull(o.getObligationLevel()))
-                    .filter(o->o.getObligationLevel().equals(ObligationLevel.PRODUCT_OBLIGATION))
+                    .filter(o->o.getObligationLevel().equals(ObligationLevel.PROJECT_OBLIGATION))
                     .collect(Collectors.toMap(
                             todo -> todo,
                             todo -> new TodoInfo(projectTodos.stream()

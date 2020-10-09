@@ -17,7 +17,7 @@ import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.*;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectObligation;
+import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 
@@ -45,65 +45,18 @@ public class ThriftValidate {
         // Utility class with only static functions
     }
 
-    public static void prepareObligation(LicenseObligation obligation) throws SW360Exception {
-        // Check required fields
-        assertNotNull(obligation);
-        assertNotEmpty(obligation.getName());
-        assertNotNull(obligation.getObligationId());
-
-        // Check type
-        obligation.setType(TYPE_OBLIGATION);
-    }
-
     public static void prepareTodo(Obligation oblig) throws SW360Exception {
         // Check required fields
         assertNotNull(oblig);
         assertNotEmpty(oblig.getText());
         assertNotNull(oblig.getTitle());
 
-        if (oblig.isSetListOfobligation() && !oblig.isSetObligationDatabaseIds()) {
-            for (LicenseObligation obligation : oblig.getListOfobligation()) {
-                oblig.addToObligationDatabaseIds(obligation.getId());
-            }
-        }
-
-        if (oblig.listOfobligation == null) {
-            oblig.setListOfobligation(Collections.emptyList());
-        }
-
         if (oblig.whitelist == null) {
             oblig.setWhitelist(Collections.emptySet());
         }
 
-        oblig.unsetListOfobligation();
         // Check type
         oblig.setType(TYPE_OBLIGATION);
-    }
-
-    public static void prepareRiskCategory(RiskCategory riskCategory) throws SW360Exception {
-        // Check required fields
-        assertNotNull(riskCategory);
-        assertNotEmpty(riskCategory.getText());
-        assertNotNull(riskCategory.getRiskCategoryId());
-
-        // Check type
-        riskCategory.setType(TYPE_RISKCATEGORY);
-    }
-
-    public static void prepareRisk(Risk risk) throws SW360Exception {
-        // Check required fields
-        assertNotNull(risk);
-        assertNotEmpty(risk.getText());
-        assertNotNull(risk.getRiskId());
-
-        if (risk.isSetCategory() && !risk.isSetRiskCategoryDatabaseId()) {
-            risk.setRiskCategoryDatabaseId(risk.getCategory().getId());
-        }
-
-        risk.unsetCategory();
-
-        // Check type
-        risk.setType(TYPE_RISK);
     }
 
     public static void prepareLicense(License license) throws SW360Exception {
@@ -123,13 +76,6 @@ public class ThriftValidate {
             }
         }
         license.unsetObligations();
-
-        if (license.isSetRisks() && !license.isSetRiskDatabaseIds()) {
-            for (Risk risk : license.getRisks()) {
-                license.addToRiskDatabaseIds(risk.getId());
-            }
-        }
-        license.unsetRisks();
 
         // Check type
         license.setType(TYPE_LICENSE);
@@ -279,10 +225,10 @@ public class ThriftValidate {
         project.unsetReleaseClearingStateSummary();
     }
 
-    public static void prepareProjectObligation(ProjectObligation obligation) throws SW360Exception {
+    public static void prepareProjectObligation(ObligationList obligation) throws SW360Exception {
         assertId(obligation.getProjectId());
-        assertNotNull(obligation.getLinkedObligations());
-        assertNotEmpty(obligation.getLinkedObligations().keySet(), "linked obligtions cannot be empty");
+        assertNotNull(obligation.getLinkedObligationStatus());
+        assertNotEmpty(obligation.getLinkedObligationStatus().keySet(), "linked obligtions cannot be empty");
         obligation.setType(TYPE_PROJECT_OBLIGATION);
     }
 }

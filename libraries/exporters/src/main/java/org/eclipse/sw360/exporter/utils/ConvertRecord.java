@@ -42,79 +42,6 @@ public class ConvertRecord {
         // Utility class with only static functions
     }
 
-    public static List<RiskCategory> convertRiskCategories(List<CSVRecord> records) {
-        ArrayList<RiskCategory> list = new ArrayList<>(records.size());
-
-        for (CSVRecord record : records) {
-            if (record.size() < 2) break;
-            int id = Integer.parseInt(record.get(0));
-            String text = record.get(1);
-
-            RiskCategory category = new RiskCategory().setRiskCategoryId(id).setText(text);
-            list.add(category);
-        }
-
-        return list;
-    }
-
-    public static Serializer<RiskCategory> riskCategorySerializer() {
-        return new Serializer<RiskCategory>() {
-            @Override
-            public Function<RiskCategory, List<String>> transformer() {
-                return riskCategory -> {
-                        final ArrayList<String> out = new ArrayList<>(2);
-                        out.add(((Integer)riskCategory.getRiskCategoryId()).toString());
-                        out.add(riskCategory.getText());
-                        return out;
-                };
-            }
-
-            @Override
-            public List<String> headers() {
-                return ImmutableList.of("ID", "Category");
-            }
-        };
-    }
-
-    public static List<Risk> convertRisks(List<CSVRecord> records, Map<Integer, RiskCategory> categories) {
-        List<Risk> list = new ArrayList<>(records.size());
-
-        for (CSVRecord record : records) {
-            if (record.size() < 3) break;
-            int id = Integer.parseInt(record.get(0));
-            int catId = Integer.parseInt(record.get(1));
-            String text = record.get(2);
-
-            Risk risk = new Risk().setRiskId(id).setText(text);
-            risk.setCategory(categories.get(catId));
-
-            list.add(risk);
-        }
-
-        return list;
-    }
-
-    public static Serializer<Risk> riskSerializer() {
-        return new Serializer<Risk>() {
-            @Override
-            public Function<Risk, List<String>> transformer() {
-                return risk -> {
-                        final ArrayList<String> out = new ArrayList<>(3);
-
-                        out.add(((Integer) risk.getRiskId()).toString());
-                        out.add(((Integer) risk.getCategory().getRiskCategoryId()).toString());
-                        out.add(risk.getText());
-                        return out;
-                };
-            }
-
-            @Override
-            public List<String> headers() {
-                return ImmutableList.of("ID", "Category_ID", "Text");
-            }
-        };
-    }
-
     public static Map<String, Set<String>> convertCustomProperties(List<CSVRecord> records){
         Map<String, Set<String>> resultProperties = new HashMap<>();
         for (CSVRecord record : records){
@@ -228,11 +155,26 @@ public class ConvertRecord {
                 oblig.setDistribution(distribution);
             }
 
-            if(record.size() >= 5) {
-                Optional.ofNullable(record.get(4))
-                        .filter(json -> ! "NULL".equals(json))
-                        .map(json -> (Map<String, String>) gson.fromJson(json, new TypeToken<Map<String, String>>() { }.getType()))
-                        .ifPresent(oblig::setExternalIds);
+            if (record.size() >= 5) {
+                Optional.ofNullable(record.get(4)).filter(json -> !"NULL".equals(json))
+                        .map(json -> (Map<String, String>) gson.fromJson(json, new TypeToken<Map<String, String>>() {
+                        }.getType())).ifPresent(oblig::setExternalIds);
+            }
+
+            if (record.size() >= 6) {
+                String obligationTypeStr = record.get(5);
+                if (!"NULL".equals(obligationTypeStr)) {
+                    ObligationType oblType = ThriftEnumUtils.enumByString(obligationTypeStr, ObligationType.class);
+                    oblig.setObligationType(oblType);
+                }
+            }
+
+            if (record.size() >= 7) {
+                String obligationLevel = record.get(6);
+                if (!"NULL".equals(obligationLevel)) {
+                    ObligationLevel oblLevel = ThriftEnumUtils.enumByString(obligationLevel, ObligationLevel.class);
+                    oblig.setObligationLevel(oblLevel);
+                }
             }
 
             list.add(oblig);
@@ -256,75 +198,19 @@ public class ConvertRecord {
                             .map(gson::toJson)
                             .map(Object::toString)
                             .orElse("{}"));
+                    out.add(Optional.ofNullable(oblig.getObligationType()).map(ThriftEnumUtils::enumToString)
+                            .orElse(""));
+                    out.add(Optional.ofNullable(oblig.getObligationLevel()).map(ThriftEnumUtils::enumToString)
+                            .orElse(""));
                     return out;
                 };
             }
 
             @Override
             public List<String> headers() {
-                return ImmutableList.of("Title", "Text", "Development", "Distribution", "External IDs");
+                return ImmutableList.of("Title", "Text", "Development", "Distribution", "External IDs", "Obligation Type", "Obligation Level");
             }
         };
-    }
-
-   public static List<LicenseObligation> convertObligation(List<CSVRecord> records) {
-        List<LicenseObligation> list = new ArrayList<>(records.size());
-
-        for (CSVRecord record : records) {
-            if (record.size() < 2) break;
-            String id = record.get(0);
-            String name = record.get(1);
-
-            LicenseObligation obligation = new LicenseObligation().setObligationId(Integer.parseInt(id)).setName(name);
-            list.add(obligation);
-        }
-
-        return list;
-    }
-
-    public static Serializer<LicenseObligation> obligationSerializer() {
-        return new Serializer<LicenseObligation>() {
-            @Override
-            public Function<LicenseObligation, List<String>> transformer() {
-                return obligation -> {
-                        final ArrayList<String> out = new ArrayList<>(2);
-
-                        out.add(((Integer) obligation.getObligationId()).toString());
-                        out.add(obligation.getName());
-                        return out;
-                };
-            }
-
-            @Override
-            public List<String> headers() {
-                return ImmutableList.of("ID", "Name");
-            }
-        };
-    }
-
-
-    public static void putToTodos(Map<Integer, LicenseObligation> obligations, Map<Integer, Obligation> obligs, Map<Integer, Set<Integer>> obligationTodo) {
-        Map<Integer, Set<Integer>> obligObligation = invertRelation(obligationTodo);
-
-
-        for (Map.Entry<Integer, Set<Integer>> entry : obligObligation.entrySet()) {
-            Obligation oblig = obligs.get(entry.getKey());
-
-            if (oblig != null) {
-                fillTodo(obligations, entry.getValue(), oblig);
-            }
-
-        }
-    }
-
-    private static void fillTodo(Map<Integer, LicenseObligation> obligations, Set<Integer> values, Obligation oblig) {
-        for (int obligationId : values) {
-            LicenseObligation obligation = obligations.get(obligationId);
-
-            if (obligation != null) {
-                oblig.addToListOfobligation(obligation);
-            }
-        }
     }
 
     public static List<LicenseType> convertLicenseTypes(List<CSVRecord> records) {
@@ -362,7 +248,7 @@ public class ConvertRecord {
     }
 
 
-    public static List<License> fillLicenses(List<CSVRecord> records, Map<Integer, LicenseType> licenseTypeMap, Map<Integer, Obligation> obligMap, Map<Integer, Risk> riskMap, Map<String, Set<Integer>> licenseTodo, Map<String, Set<Integer>> licenseRisk) {
+    public static List<License> fillLicenses(List<CSVRecord> records, Map<Integer, LicenseType> licenseTypeMap, Map<Integer, Obligation> obligMap, Map<String, Set<Integer>> licenseTodo) {
         List<License> licenses = new ArrayList<>(records.size());
 
         for (CSVRecord record : records) {
@@ -408,17 +294,6 @@ public class ConvertRecord {
                         .map(json -> gson.fromJson(json, new TypeToken<Map<String, String>>() { }.getType()))
                         .map(o -> (Map<String, String>) o)
                         .ifPresent(license::setExternalIds);
-            }
-
-            // Add all risks
-            Set<Integer> riskIds = licenseRisk.get(identifier);
-            if (riskIds != null) {
-                for (int riskId : riskIds) {
-                    Risk risk = riskMap.get(riskId);
-                    if (risk != null) {
-                        license.addToRiskDatabaseIds(risk.getId());
-                    }
-                }
             }
 
             // Add all obligations
@@ -540,20 +415,6 @@ public class ConvertRecord {
     }
 
     @NotNull
-    public static SetMultimap<Integer, String> getTodoToObligationMap(List<Obligation> obligations) {
-        SetMultimap<Integer, String> obligationTodo = HashMultimap.create();
-
-        for (Obligation oblig : obligations) {
-            if (oblig.isSetListOfobligation()) {
-                for (LicenseObligation obligation : oblig.getListOfobligation()) {
-                    obligationTodo.put(obligation.getObligationId(), oblig.getId());
-                }
-            }
-        }
-        return obligationTodo;
-    }
-
-    @NotNull
     public static SetMultimap<String, String> getLicenseToTodoMap(List<License> licenses) {
         SetMultimap<String, String> licenseToTodo = HashMultimap.create();
 
@@ -565,20 +426,6 @@ public class ConvertRecord {
             }
         }
         return licenseToTodo;
-    }
-
-    @NotNull
-    public static SetMultimap<String, Integer> getLicenseToRiskMap(List<License> licenses) {
-        SetMultimap<String, Integer> licenseToRisk = HashMultimap.create();
-
-        for (License license : licenses) {
-            if (license.isSetRisks()) {
-                for (Risk risk : license.getRisks()) {
-                    licenseToRisk.put(license.getId(), risk.getRiskId());
-                }
-            }
-        }
-        return licenseToRisk;
     }
 
     public interface Serializer<T> {
