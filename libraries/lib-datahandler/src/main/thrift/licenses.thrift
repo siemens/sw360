@@ -22,18 +22,11 @@ typedef sw360.CustomProperties CustomProperties
 typedef sw360.RequestSummary RequestSummary
 typedef sw360.Ternary Ternary
 
-struct LicenseObligation {
-	1: optional string id,
-    2: optional string revision
-    3: optional string type = "licenseObligation",
-    5: required string name,
-    6: required i32 obligationId,
-}
-
 enum ObligationLevel {
     ORGANISATION_OBLIGATION = 0,
-    PRODUCT_OBLIGATION = 1,
+    PROJECT_OBLIGATION = 1,
     COMPONENT_OBLIGATION = 2,
+    LICENSE_OBLIGATION = 3,
 }
 
 enum ObligationType {
@@ -52,8 +45,6 @@ struct Obligation {
     5: optional set<string> whitelist,
     6: optional bool development,
     7: optional bool distribution,
-    8: optional list<LicenseObligation> listOfobligation,
-    9: optional set<string> obligationDatabaseIds,
     10: optional string title,
     11: optional map<string, string> customPropertyToValue,
 
@@ -70,24 +61,6 @@ struct Obligation {
     23: optional ObligationType obligationType,
     300: optional map<string, string> additionalData,
 
-}
-
-struct RiskCategory {
-    1: optional string id,
-    2: optional string revision,
-    3: optional string type = "riskCategory",
-    5: required i32 riskCategoryId,
-    6: required string text
-}
-
-struct Risk {
-    1: optional string id,
-    2: optional string revision,
-    3: optional string type = "risk",
-    5: required i32 riskId,
-    6: required string text,
-    7: optional RiskCategory category,
-    8: optional string riskCategoryDatabaseId,
 }
 
 struct LicenseType {
@@ -122,8 +95,6 @@ struct License {
 
     20: optional list<Obligation> obligations,
     21: optional set<string> obligationDatabaseIds,
-	22: optional list<Risk> risks,
-	23: optional set<string> riskDatabaseIds,
     25: optional string text,
 
     30: optional bool checked = true;
@@ -210,21 +181,6 @@ service LicenseService {
     list<License> getDetailedLicenseSummary(1: string organisation, 2: list<string> identifiers);
 
     /**
-     * bulk add for import of license archive, returns input risk categories if successful, null otherwise
-     **/
-    list<RiskCategory> addRiskCategories(1: list <RiskCategory> riskCategories, 2: User user);
-
-    /**
-     * bulk add for import of license archive, returns input risks if successful, null otherwise
-     **/
-    list<Risk> addRisks(1: list <Risk> risks, 2: User user);
-
-    /**
-     * bulk add for import of license archive, returns input obligations if successful, null otherwise
-     **/
-    list<LicenseObligation> addListOfobligation(1: list <LicenseObligation> obligations, 2: User user);
-
-    /**
      * bulk add for import of license archive, returns input license types if successful, null otherwise
      **/
     list<LicenseType> addLicenseTypes(1: list <LicenseType> licenseTypes, 2: User user);
@@ -245,16 +201,6 @@ service LicenseService {
     list<Obligation> addListOfObligations(1: list <Obligation> obligations, 2: User user);
 
     /**
-     * get complete list of risk categories
-     **/
-    list<RiskCategory> getRiskCategories();
-
-    /**
-     * get complete list of filled risks
-     **/
-    list<Risk> getRisks();
-
-    /**
      * get complete list of license types
      **/
     list<LicenseType> getLicenseTypes();
@@ -270,26 +216,6 @@ service LicenseService {
     list<Obligation> getObligations();
 
     /**
-     * get complete list of obligations
-     **/
-    list<LicenseObligation> getListOfobligation();
-
-    /**
-    * get filled risks with id in ids
-    **/
-    list<Risk> getRisksByIds( 1: list<string> ids);
-
-    /**
-     * get risk categories with id in ids
-     **/
-    list<RiskCategory> getRiskCategoriesByIds( 1: list<string> ids);
-
-    /**
-     * get obligations with id in ids
-     **/
-    list<LicenseObligation> getListOfobligationByIds( 1: list<string> ids);
-
-    /**
      * get license types with id in ids
      **/
     list<LicenseType> getLicenseTypesByIds( 1: list<string> ids);
@@ -299,13 +225,6 @@ service LicenseService {
      **/
     list<Obligation> getObligationsByIds( 1: list<string> ids);
 
-    /**
-     * return filled risk
-     **/
-    Risk getRiskById( 1: string id);
-
-    RiskCategory getRiskCategoryById( 1: string id);
-    LicenseObligation getObligationById( 1: string id);
     LicenseType getLicenseTypeById( 1: string id);
 
     /**

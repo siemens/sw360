@@ -45,13 +45,6 @@ public class LicenseHandler implements LicenseService.Iface {
     // SUMMARY GETTERS //
     /////////////////////
 
-    /**
-     * Get a list of all obligations
-     */
-    @Override
-    public List<LicenseObligation> getListOfobligation() throws TException {
-        return handler.getListOfobligation();
-    }
 
     /**
      * Get an list of id/identifier/fullname for all licenses. The other fields will be set to null.
@@ -80,22 +73,6 @@ public class LicenseHandler implements LicenseService.Iface {
     }
 
     @Override
-    public List<RiskCategory> addRiskCategories(List<RiskCategory> riskCategories, User user) throws TException {
-        return handler.addRiskCategories(riskCategories, user);
-    }
-
-    @Override
-    public List<Risk> addRisks(List<Risk> risks, User user) throws TException {
-        return handler.addRisks(risks, user);
-    }
-
-    @Override
-    public List<LicenseObligation> addListOfobligation(List<LicenseObligation> obligations, User user) throws TException {
-        return handler.addListOfobligation(obligations, user);
-
-    }
-
-    @Override
     public List<LicenseType> addLicenseTypes(List<LicenseType> licenseTypes, User user) throws TException {
         return handler.addLicenseTypes(licenseTypes, user);
     }
@@ -117,16 +94,6 @@ public class LicenseHandler implements LicenseService.Iface {
     }
 
     @Override
-    public List<RiskCategory> getRiskCategories() throws TException {
-        return handler.getRiskCategories() ;
-    }
-
-    @Override
-    public List<Risk> getRisks() throws TException {
-        return handler.getRisks();
-    }
-
-    @Override
     public List<LicenseType> getLicenseTypes() throws TException {
         return handler.getLicenseTypes();
     }
@@ -139,24 +106,6 @@ public class LicenseHandler implements LicenseService.Iface {
     @Override
     public List<Obligation> getObligations() throws TException {
         return handler.getObligations();
-    }
-
-    @Override
-    public List<Risk> getRisksByIds(List<String> ids) throws TException {
-        assertNotEmpty(ids);
-        return handler.getRisksByIds(ids);
-    }
-
-    @Override
-    public List<RiskCategory> getRiskCategoriesByIds(List<String> ids) throws TException {
-        assertNotEmpty(ids);
-        return handler.getRiskCategoriesByIds(ids);
-    }
-
-    @Override
-    public List<LicenseObligation> getListOfobligationByIds(List<String> ids) throws TException {
-        assertNotEmpty(ids);
-        return handler.getListOfobligationByIds(ids);
     }
 
     @Override
@@ -203,24 +152,6 @@ public class LicenseHandler implements LicenseService.Iface {
         assertNotEmpty(organisation);
 
         return handler.getLicenses(ids, organisation);
-    }
-
-    @Override
-    public Risk getRiskById(String id) throws TException {
-        assertNotEmpty(id);
-        return handler.getRiskById(id);
-    }
-
-    @Override
-    public RiskCategory getRiskCategoryById(String id) throws TException {
-        assertNotEmpty(id);
-        return handler.getRiskCategoryById(id);
-    }
-
-    @Override
-    public LicenseObligation getObligationById(String id) throws TException {
-        assertNotEmpty(id);
-        return handler.getObligationById(id);
     }
 
     @Override
