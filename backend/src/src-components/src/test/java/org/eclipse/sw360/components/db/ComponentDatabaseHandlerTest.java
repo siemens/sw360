@@ -20,6 +20,7 @@ import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.SvmConnector;
 import org.eclipse.sw360.datahandler.entitlement.ComponentModerator;
+import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.entitlement.ReleaseModerator;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
@@ -81,6 +82,8 @@ public class ComponentDatabaseHandlerTest {
     ComponentModerator moderator;
     @Mock
     ReleaseModerator releaseModerator;
+    @Mock
+    ProjectModerator projectModerator;
 
     @Mock
     SvmConnector svmConnector;
@@ -149,7 +152,7 @@ public class ComponentDatabaseHandlerTest {
         componentMap= ThriftUtils.getIdMap(components);
 
         // Prepare the handler
-        handler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbName, attachmentsDbName, moderator, releaseModerator);
+        handler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbName, attachmentsDbName, moderator, releaseModerator, projectModerator);
         handler.setSvmConnector(svmConnector);
     }
 
