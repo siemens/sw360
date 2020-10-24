@@ -1451,7 +1451,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         putIfNotEmpty(jsonArray, c.getHomepage());
         putIfNotEmpty(jsonArray, c.getBlog());
         putIfNotEmpty(jsonArray, c.getWiki());
-        putIfNotEmpty(jsonArray, r.getDownloadurl());
+        putIfNotEmpty(jsonArray, r.getSourceCodeDownloadurl());
         return jsonArray;
     }
 
