@@ -292,7 +292,7 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                 Project projWithCsSummary = projects.get(0);
                 if (null != projWithCsSummary && null != projWithCsSummary.getReleaseClearingStateSummary()) {
                     ReleaseClearingStateSummary summary = projWithCsSummary.getReleaseClearingStateSummary();
-                    approvedReleaseCount = summary.getApproved();
+                    approvedReleaseCount = summary.getApproved() + summary.getReportAvailable();
                 }
                 request.setAttribute(APPROVED_RELEASE_COUNT, approvedReleaseCount);
             }

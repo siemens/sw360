@@ -602,7 +602,7 @@ AUI().use('liferay-portlet-url', function () {
                             projName = response[i].name,
                             clearing = response[i].clearing,
                             totalCount = d(clearing.newRelease) + d(clearing.underClearing) + d(clearing.sentToClearingTool) + d(clearing.reportAvailable) + d(clearing.approved),
-                            approvedCount = d(clearing.approved);
+                            approvedCount = d(clearing.reportAvailable) + d(clearing.approved);
 
                         buCell.data(response[i].bu);
                         projCell.data(renderLinkToProject(response[i].id, projName));
