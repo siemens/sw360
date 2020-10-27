@@ -472,15 +472,20 @@ AUI().use('liferay-portlet-url', function () {
             if (!isClosed) {
                 span.setAttribute("class","align-top badge");
                 if (validation.isValidDate(rcd, 21)) { // green --> greater than 21 days
-                    $(span).html('P-3').addClass('badge-info');
+                    $(span).html('P3').addClass('badge-info');
+                    row[0].concat(' P3');
                 } else if (validation.isValidDate(rcd, 14)) { // yellow --> greater than 14 days but less than 21 days
-                    $(span).html('P-2').addClass('badge-primary');
+                    $(span).html('P2').addClass('badge-primary');
+                    row[0].concat(' P2');
                 } else if (validation.isValidDate(rcd, 7)) { // orange --> greater than 7 days but less than 14 days
-                    $(span).html('P-1').addClass('badge-warning');
+                    $(span).html('P1').addClass('badge-warning');
+                    row[0].concat(' P1');
                 } else if (validation.isValidDate(rcd, 1)) { // red --> greater than today but less than 7 days
-                    $(span).html('P-0').addClass('badge-danger');
+                    $(span).html('P0').addClass('badge-danger');
+                    row[0].concat(' P0');
                 } else { // red --> today
-                    $(span).html('P-0').addClass('badge-danger');
+                    $(span).html('P0').addClass('badge-danger');
+                    row[0].concat(' P0');
                 }
                 return url + " &nbsp; " + $(span)[0].outerHTML;
             }
@@ -602,7 +607,7 @@ AUI().use('liferay-portlet-url', function () {
                             projName = response[i].name,
                             clearing = response[i].clearing,
                             totalCount = d(clearing.newRelease) + d(clearing.underClearing) + d(clearing.sentToClearingTool) + d(clearing.reportAvailable) + d(clearing.approved),
-                            approvedCount = d(clearing.approved);
+                            approvedCount = d(clearing.reportAvailable) + d(clearing.approved);
 
                         buCell.data(response[i].bu);
                         projCell.data(renderLinkToProject(response[i].id, projName));
