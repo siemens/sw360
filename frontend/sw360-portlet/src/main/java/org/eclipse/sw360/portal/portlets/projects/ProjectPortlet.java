@@ -146,6 +146,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             Project._Fields.PROJECT_RESPONSIBLE,
             Project._Fields.NAME,
             Project._Fields.STATE,
+            Project._Fields.CLEARING_STATE,
             Project._Fields.TAG,
             Project._Fields.ADDITIONAL_DATA);
 
@@ -1230,7 +1231,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Map<String, Set<String>> filterMap = new HashMap<>();
         for (Project._Fields filteredField : projectFilteredFields) {
             String parameter = request.getParameter(filteredField.toString());
-            if (!isNullOrEmpty(parameter) && !((filteredField.equals(Project._Fields.PROJECT_TYPE) || filteredField.equals(Project._Fields.STATE))
+            if (!isNullOrEmpty(parameter) && !((filteredField.equals(Project._Fields.PROJECT_TYPE)
+                    || filteredField.equals(Project._Fields.STATE)
+                    || filteredField.equals(Project._Fields.CLEARING_STATE))
                     && parameter.equals(PortalConstants.NO_FILTER))) {
                 Set<String> values = CommonUtils.splitToSet(parameter);
                 if (filteredField.equals(Project._Fields.NAME) || filteredField.equals(Project._Fields.VERSION)) {
@@ -2283,9 +2286,19 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private Comparator<Project> compareByState(boolean isAscending) {
-        Comparator<Project> comparator = Comparator.comparing(
-                p -> nullToEmptyString(p.getState()));
+        Comparator<Project> comparator = Comparator.comparing(p -> getProjectStatePriority(p.getState()) + "-"
+                + (p.getClearingState() == null ? 4 : p.getClearingState().getValue()));
         return isAscending ? comparator : comparator.reversed();
+    }
+
+    private int getProjectStatePriority(ProjectState ps) {
+        if (ps == null)
+            return 3;
+
+        int priority = ps.getValue();
+        if (ps == ProjectState.PHASE_OUT)
+            priority = 4;
+        return priority;
     }
 
     private void linkProjectsToProject(ResourceRequest request, ResourceResponse response, String[] projectIds)
