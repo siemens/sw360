@@ -40,9 +40,11 @@ import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.VulnerabilityUpdateStatus;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
+import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
@@ -246,7 +248,14 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         else if ((PortalConstants.LOAD_OBLIGATIONS_EDIT.equals(action)
                 || PortalConstants.LOAD_OBLIGATIONS_VIEW.equals(action))
                 && PortalConstants.IS_PROJECT_OBLIGATIONS_ENABLED) {
-            request.setAttribute(OBLIGATION_DATA, loadLinkedObligations(request));
+            ObligationList loadLinkedObligations = loadLinkedObligations(request);
+            if (loadLinkedObligations != null && loadLinkedObligations.getLinkedObligationStatus() != null) {
+                Map<String, ObligationStatusInfo> licenseObligationFromDb = (Map<String, ObligationStatusInfo>) request
+                        .getAttribute(LICENSE_OBLIGATIONS);
+                loadLinkedObligations.getLinkedObligationStatus().putAll(licenseObligationFromDb);
+            }
+            request.removeAttribute(LICENSE_OBLIGATIONS);
+            request.setAttribute(OBLIGATION_DATA, loadLinkedObligations);
             if (PortalConstants.LOAD_OBLIGATIONS_VIEW.equals(action)) {
                 request.setAttribute("inProjectDetailsContext", true);
             } else {
@@ -255,6 +264,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
             request.setAttribute("isObligationPresent", true);
             include("/html/projects/includes/projects/linkedObligations.jsp", request, response,
+                    PortletRequest.RESOURCE_PHASE);
+        } else if (PortalConstants.LOAD_LICENSE_OBLIGATIONS.equals(action)) {
+            request.setAttribute(LICENSE_OBLIGATION_DATA, loadLicenseObligation(request));
+            include("/html/projects/includes/projects/licenseObligations.jsp", request, response,
                     PortletRequest.RESOURCE_PHASE);
         }
     }
@@ -1283,6 +1296,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 PortletUtils.setCustomFieldsDisplay(request, user, project);
                 addProjectBreadcrumb(request, response, project);
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
+                request.setAttribute(IS_PROJECT_MEMBER, SW360Utils.isModeratorOrCreator(project, user));
             } catch (SW360Exception sw360Exp) {
                 setSessionErrorBasedOnErrorCode(request, sw360Exp.getErrorCode());
             } catch (TException e) {
@@ -1290,6 +1304,177 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 setSW360SessionError(request, ErrorMessages.ERROR_GETTING_PROJECT);
             }
         }
+    }
+
+    private Map<String, ObligationStatusInfo> loadLicenseObligation(ResourceRequest request) {
+        User user = UserCacheHolder.getUserFromRequest(request);
+        String projectId = request.getParameter(DOCUMENT_ID);
+
+        ProjectService.Iface client = thriftClients.makeProjectClient();
+        Project project = null;
+        try {
+            project = client.getProjectById(projectId, user);
+        } catch (TException e) {
+            log.error("Error fetching project from backend!", e);
+            return null;
+        }
+        if (CommonUtils.isNullOrEmptyMap(project.getReleaseIdToUsage())) {
+            return null;
+        }
+        Map<String, AttachmentUsage> licenseInfoAttachmentUsage = getLicenseInfoAttachmentUsage(request, projectId);
+        Map<String, Set<Release>> licensesFromAttachmentUsage = getLicensesFromAttachmentUsage(
+                licenseInfoAttachmentUsage, project.getReleaseIdToUsage(), user, request);
+        Map<String, ObligationStatusInfo> licenseObligation = new HashMap<>();
+        LicenseService.Iface licenseClient = thriftClients.makeLicenseClient();
+        licensesFromAttachmentUsage.entrySet().stream().forEach(entry -> wrapTException(() -> {
+            License lic = null;
+            try {
+                lic = licenseClient.getByID(entry.getKey(), user.getDepartment());
+            } catch (TException exp) {
+                log.warn("Error fetching license from backend! License Id-" + entry.getKey(), exp.getMessage());
+                return;
+            }
+            if (lic == null || CommonUtils.isNullOrEmptyCollection(lic.getObligations()))
+                return;
+
+            lic.getObligations().stream().filter(Objects::nonNull).forEach(obl -> {
+                String keyofObl = CommonUtils.isNotNullEmptyOrWhitespace(obl.getTitle()) ? obl.getTitle()
+                        : obl.getText();
+                ObligationStatusInfo osi = null;
+                if (licenseObligation.containsKey(keyofObl)) {
+                    osi = licenseObligation.get(keyofObl);
+                } else {
+                    osi = new ObligationStatusInfo();
+                    licenseObligation.put(keyofObl, osi);
+                }
+                osi.setText(obl.getText());
+                osi.setObligationType(ThriftEnumUtils.enumByString(obl.getType(), ObligationType.class));
+                Set<String> licenseIds = osi.getLicenseIds();
+                if (licenseIds == null) {
+                    licenseIds = new HashSet<>();
+                    osi.setLicenseIds(licenseIds);
+                }
+                licenseIds.add(entry.getKey());
+                Set<Release> releases = osi.getReleases();
+                if (releases == null) {
+                    releases = new HashSet<>();
+                    osi.setReleases(releases);
+                }
+                releases.addAll(entry.getValue());
+            });
+
+        }));
+
+        return licenseObligation;
+    }
+
+    private Map<String, Set<Release>> getLicensesFromAttachmentUsage(
+            Map<String, AttachmentUsage> licenseInfoAttachmentUsage,
+            Map<String, ProjectReleaseRelationship> releaseIdToUsage, User user, ResourceRequest request) {
+        LicenseInfoService.Iface licenseInfoClient = thriftClients.makeLicenseInfoClient();
+        ComponentService.Iface componentClient = thriftClients.makeComponentClient();
+        Map<String, Release> attachmentIdToReleaseMap = new HashMap<String, Release>();
+        Map<String, Set<Release>> licenseIdToReleasesMap = new HashMap<>();
+        licenseInfoAttachmentUsage.entrySet().stream()
+                .filter(entry -> entry.getKey() != null && entry.getValue() != null).forEach(entry -> {
+                    String releaseId = entry.getValue().getOwner().getReleaseId();
+                    Release releaseById = null;
+                    try {
+                        releaseById = componentClient.getReleaseById(releaseId, user);
+                    } catch (TException exp) {
+                        log.warn("Error fetching Release from backend! Release Id-" + releaseId, exp.getMessage());
+                        return;
+                    }
+                    if (CommonUtils.isNullOrEmptyCollection(releaseById.getAttachments()))
+                        return;
+
+                    Set<Attachment> attachmentFiltered = releaseById.getAttachments().stream().filter(Objects::nonNull)
+                            .filter(att -> entry.getKey().equals(att.getAttachmentContentId()))
+                            .filter(att -> att.getCheckStatus() != null && att.getCheckStatus() == CheckStatus.ACCEPTED)
+                            .collect(Collectors.toSet());
+
+                    if (CommonUtils.isNullOrEmptyCollection(attachmentFiltered))
+                        return;
+                    releaseById.setAttachments(attachmentFiltered);
+
+                    attachmentIdToReleaseMap.put(entry.getKey(), releaseById);
+                });
+
+        setReleasesForWhichAttachmentUsageNotSet(componentClient, user, attachmentIdToReleaseMap, releaseIdToUsage,
+                request);
+        attachmentIdToReleaseMap.entrySet().stream().filter(entry -> entry.getKey() != null && entry.getValue() != null)
+                .forEach(entry -> wrapTException(() -> {
+                    List<LicenseInfoParsingResult> licenseInfoForAttachment = licenseInfoClient
+                            .getLicenseInfoForAttachment(entry.getValue(), entry.getKey(), user);
+                    Set<String> licenseIds = licenseInfoForAttachment.stream().filter(Objects::nonNull)
+                            .filter(lia -> lia.getLicenseInfo() != null)
+                            .filter(lia -> lia.getLicenseInfo().getLicenseNamesWithTexts() != null)
+                            .flatMap(lia -> lia.getLicenseInfo().getLicenseNamesWithTexts().stream())
+                            .filter(Objects::nonNull)
+                            .map(licenseNamesWithTexts -> CommonUtils.isNotNullEmptyOrWhitespace(
+                                    licenseNamesWithTexts.getLicenseSpdxId()) ? licenseNamesWithTexts.getLicenseSpdxId()
+                                            : licenseNamesWithTexts.getLicenseName())
+                            .filter(CommonUtils::isNotNullEmptyOrWhitespace).collect(Collectors.toSet());
+
+                    licenseIds.stream().forEach(licenseId -> {
+                        if (licenseIdToReleasesMap.containsKey(licenseId)) {
+                            licenseIdToReleasesMap.get(licenseId).add(entry.getValue());
+                        } else {
+                            Set<Release> listOfRelease = new HashSet<>();
+                            listOfRelease.add(entry.getValue());
+                            licenseIdToReleasesMap.put(licenseId, listOfRelease);
+                        }
+                    });
+                }));
+
+        return licenseIdToReleasesMap;
+    }
+
+    private void setReleasesForWhichAttachmentUsageNotSet(ComponentService.Iface componentClient, User user,
+            Map<String, Release> attachmentIdToReleaseMap, Map<String, ProjectReleaseRelationship> releaseIdToUsage,
+            ResourceRequest request) {
+        Set<String> releaseIdUsed = attachmentIdToReleaseMap.values().stream().map(release -> release.getId())
+                .collect(Collectors.toSet());
+        Set<String> linkedReleaseIds = releaseIdToUsage.keySet();
+
+        linkedReleaseIds.removeAll(releaseIdUsed);
+
+        Set<Release> setOfUnusedRelease = new HashSet<Release>();
+        linkedReleaseIds.stream().forEach(releaseIdUnused -> {
+            try {
+                Release releaseById = componentClient.getReleaseById(releaseIdUnused, user);
+                setOfUnusedRelease.add(releaseById);
+            } catch (TException exp) {
+                log.warn("Error fetching Release from backend! Release Id-" + releaseIdUnused, exp.getMessage());
+                return;
+            }
+        });
+
+        request.setAttribute(UNUSED_RELEASES, setOfUnusedRelease);
+    }
+
+    private Map<String, AttachmentUsage> getLicenseInfoAttachmentUsage(PortletRequest request, String projectId) {
+        Map<String, AttachmentUsage> licenseInfoUsages = new HashMap<>();
+        try {
+            AttachmentService.Iface attachmentClient = thriftClients.makeAttachmentClient();
+
+            List<AttachmentUsage> attachmentUsages = wrapTException(
+                    () -> attachmentClient.getUsedAttachments(Source.projectId(projectId), null));
+            Collector<AttachmentUsage, ?, Map<String, AttachmentUsage>> attachmentUsageMapCollector = Collectors.toMap(
+                    AttachmentUsage::getAttachmentContentId, Function.identity(),
+                    ProjectPortletUtils::mergeAttachmentUsages);
+            BiFunction<List<AttachmentUsage>, UsageData._Fields, Map<String, AttachmentUsage>> filterAttachmentUsages = (
+                    attUsages, type) -> attUsages.stream()
+                            .filter(attUsage -> attUsage.getUsageData().getSetField().equals(type))
+                            .collect(attachmentUsageMapCollector);
+
+            licenseInfoUsages = filterAttachmentUsages.apply(attachmentUsages, UsageData._Fields.LICENSE_INFO);
+
+        } catch (WrappedTException e) {
+            log.error("Error fetching AttachmentUsage from backend!", e);
+        }
+
+        return licenseInfoUsages;
     }
 
     private void prepareLicenseInfo(RenderRequest request, RenderResponse response) throws IOException, PortletException {
@@ -1622,15 +1807,69 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     }
 
     private void setObligationsFromAdminSection(Map<String, ObligationStatusInfo> obligationStatusMap,
-            PortletRequest request) throws TException {
+            PortletRequest request, Project project) throws TException {
+        User user = UserCacheHolder.getUserFromRequest(request);
         List<Obligation> obligations = SW360Utils.getObligations();
+        ComponentService.Iface componentClient = thriftClients.makeComponentClient();
+        request.setAttribute(PROJECT_OBLIGATIONS, SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(
+                obligationStatusMap, obligations, ObligationLevel.PROJECT_OBLIGATION, false, true));
+        request.setAttribute(COMPONENT_OBLIGATIONS,
+                SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(obligationStatusMap, obligations,
+                        ObligationLevel.COMPONENT_OBLIGATION, false, true));
+        request.setAttribute(ORGANISATION_OBLIGATIONS,
+                SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(obligationStatusMap, obligations,
+                        ObligationLevel.ORGANISATION_OBLIGATION, false, true));
+        Map<String, ObligationStatusInfo> licenseObligations = SW360Utils
+                .getProjectComponentOrganisationLicenseObligationToDisplay(obligationStatusMap, obligations,
+                        ObligationLevel.LICENSE_OBLIGATION, true, false);
+        Map<String, ProjectReleaseRelationship> releaseIdToUsage = project.getReleaseIdToUsage();
 
-        request.setAttribute(PROJECT_OBLIGATIONS, SW360Utils.getProjectComponentOrganisationObligationToDisplay(
-                obligationStatusMap, obligations, ObligationLevel.PROJECT_OBLIGATION));
-        request.setAttribute(COMPONENT_OBLIGATIONS, SW360Utils.getProjectComponentOrganisationObligationToDisplay(
-                obligationStatusMap, obligations, ObligationLevel.COMPONENT_OBLIGATION));
-        request.setAttribute(ORGANISATION_OBLIGATIONS, SW360Utils.getProjectComponentOrganisationObligationToDisplay(
-                obligationStatusMap, obligations, ObligationLevel.ORGANISATION_OBLIGATION));
+        Map<String, Release> mapOfReleases = new HashMap<String, Release>();
+        if (!CommonUtils.isNullOrEmptyMap(releaseIdToUsage)) {
+            releaseIdToUsage.keySet().stream().forEach(rId -> {
+                try {
+                    Release releaseById = componentClient.getReleaseById(rId, user);
+                    mapOfReleases.put(rId, releaseById);
+                } catch (TException e) {
+                    log.error("Error fetching release from backend. ", e);
+                    return;
+                }
+            });
+            licenseObligations.values().stream().filter(Objects::nonNull).forEach(obl -> {
+                Map<String, String> releaseIdToAcceptedCLI = obl.getReleaseIdToAcceptedCLI();
+                if (!CommonUtils.isNullOrEmptyMap(releaseIdToAcceptedCLI)) {
+                    releaseIdToAcceptedCLI.entrySet().stream()
+                            .filter(entry -> CommonUtils.isNotNullEmptyOrWhitespace(entry.getKey())
+                                    && CommonUtils.isNotNullEmptyOrWhitespace(entry.getValue()))
+                            .forEach(entry -> {
+                                if (mapOfReleases.containsKey(entry.getKey())) {
+                                    Release release = mapOfReleases.get(entry.getKey());
+                                    if (CommonUtils.isNullOrEmptyCollection(release.getAttachments())) {
+                                        return;
+                                    }
+
+                                    Set<Attachment> attachmentFiltered = release.getAttachments().stream()
+                                            .filter(Objects::nonNull)
+                                            .filter(att -> entry.getValue().equals(att.getAttachmentContentId()))
+                                            .filter(att -> att.getCheckStatus() != null
+                                                    && att.getCheckStatus() == CheckStatus.ACCEPTED)
+                                            .collect(Collectors.toSet());
+                                    if (CommonUtils.isNullOrEmptyCollection(attachmentFiltered)) {
+                                        return;
+                                    }
+                                    release.setAttachments(attachmentFiltered);
+                                    Set<Release> releases = obl.getReleases();
+                                    if (releases == null) {
+                                        releases = new HashSet<>();
+                                        obl.setReleases(releases);
+                                    }
+                                    releases.add(release);
+                                }
+                            });
+                }
+            });
+        }
+        request.setAttribute(LICENSE_OBLIGATIONS, licenseObligations);
     }
 
     private void prepareProjectEdit(RenderRequest request) {
@@ -1643,6 +1882,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         Set<Project> usingProjects;
         int allUsingProjectCount = 0;
         request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
+        request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
 
         if (id != null) {
 
@@ -1675,6 +1915,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             request.setAttribute(ALL_USING_PROJECTS_COUNT, allUsingProjectCount);
             Map<RequestedAction, Boolean> permissions = project.getPermissions();
             DocumentState documentState = project.getDocumentState();
+            request.setAttribute(IS_PROJECT_MEMBER, SW360Utils.isModeratorOrCreator(project, user));
 
             addEditDocumentMessage(request, permissions, documentState);
         } else {
@@ -1864,7 +2105,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 ObligationStatusInfo newOsi = OBJECT_MAPPER.convertValue(osiNode, ObligationStatusInfo.class);
 
                 if (newOsi.getReleaseIdToAcceptedCLISize() < 1 && isDeleteAllOrphanObligations
-                        && newOsi.getObligationLevel() == null) {
+                        && (newOsi.getObligationLevel() == null
+                                || newOsi.getObligationLevel() == ObligationLevel.LICENSE_OBLIGATION)) {
                     obligationStatusInfo.remove(topic);
                     return;
                 }
@@ -1875,7 +2117,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                     newOsi.setModifiedOn(createdOn);
                     obligationStatusInfo.put(topic, newOsi);
                 } else if (null != currentOsi) {
-                    currentOsi.setReleaseIdToAcceptedCLI(newOsi.getReleaseIdToAcceptedCLI());
+                    if (newOsi.getReleaseIdToAcceptedCLISize() > 0)
+                        currentOsi.setReleaseIdToAcceptedCLI(newOsi.getReleaseIdToAcceptedCLI());
                     obligationStatusInfo.put(topic, currentOsi);
                 }
 
@@ -2037,14 +2280,14 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 if (CommonUtils.isNotNullEmptyOrWhitespace(project.getLinkedObligationId())) {
                     obligation = projectClient.getLinkedObligations(project.getLinkedObligationId(), user);
                     obligationStatusMap = obligation.getLinkedObligationStatus();
-                    setObligationsFromAdminSection(obligationStatusMap, request);
+                    setObligationsFromAdminSection(obligationStatusMap, request, project);
                     if (!CommonUtils.isNotEmpty(releases)) {
                         return null;
                     }
                     releaseIdToAcceptedCLI.putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(obligationStatusMap));
                 }
                 else {
-                    setObligationsFromAdminSection(new HashMap(), request);
+                    setObligationsFromAdminSection(new HashMap(), request, project);
                 }
                 obligation.setLinkedObligationStatus(setLicenseInfoWithObligations(request, obligationStatusMap, releaseIdToAcceptedCLI, releases, user));
         } catch (TException e) {
@@ -2206,7 +2449,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         PortletUtils.handlePaginationSortOrder(request, paginationParameters, projectFilteredFields, PROJECT_NO_SORT);
         List<Project> projectList = getFilteredProjectList(request);
 
-        JSONArray jsonProjects = getProjectData(projectList, paginationParameters);
+        JSONArray jsonProjects = getProjectData(projectList, paginationParameters, request);
         JSONObject jsonResult = createJSONObject();
         jsonResult.put(DATATABLE_RECORDS_TOTAL, projectList.size());
         jsonResult.put(DATATABLE_RECORDS_FILTERED, projectList.size());
@@ -2219,7 +2462,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
     }
 
-    public JSONArray getProjectData(List<Project> projectList, PaginationParameters projectParameters) {
+    public JSONArray getProjectData(List<Project> projectList, PaginationParameters projectParameters, ResourceRequest request) {
         List<Project> sortedProjects = sortProjectList(projectList, projectParameters);
         int count = PortletUtils.getProjectDataCount(projectParameters, projectList.size());
 
@@ -2240,6 +2483,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             jsonObject.put("lProjSize", String.valueOf(project.getLinkedProjectsSize()));
             jsonObject.put("lRelsSize", String.valueOf(project.getReleaseIdToUsageSize()));
             jsonObject.put("attsSize", String.valueOf(project.getAttachmentsSize()));
+            jsonObject.put(IS_PROJECT_MEMBER,
+                    SW360Utils.isModeratorOrCreator(project, UserCacheHolder.getUserFromRequest(request)));
             projectData.put(jsonObject);
         }
 
