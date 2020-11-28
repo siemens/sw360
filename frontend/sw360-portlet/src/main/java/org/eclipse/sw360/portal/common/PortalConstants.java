@@ -92,6 +92,7 @@ public class PortalConstants {
     public static final String IS_USER_AT_LEAST_ECC_ADMIN = "isUserAtLeastECCAdmin";
     public static final String IS_USER_ADMIN = "isUserAdmin";
     public static final String IS_CLEARING_EXPERT = "isClearingExpert";
+    public static final String IS_PROJECT_MEMBER = "isProjectMember";
 
     //! Specialized keys for licenses
     public static final String LICENSES_PORTLET_NAME = PORTLET_NAME_PREFIX + "licenses";
@@ -195,6 +196,11 @@ public class PortalConstants {
     public static final String OBLIGATION_COMMENT = "obligationComment";
     public static final String OBLIGATION_DATA = "obligationData";
     public static final String DELETE_ALL_ORPHAN_OBLIGATIONS = "deleteAllOrphanObligations";
+    public static final String LICENSE_OBLIGATION_DATA = "licenseObligationData";
+    public static final String LOAD_OBLIGATIONS_VIEW = "load_obligations_view";
+    public static final String LOAD_OBLIGATIONS_EDIT = "load_obligations_edit";
+    public static final String LOAD_LICENSE_OBLIGATIONS = "load_license_obligations";
+    public static final String UNUSED_RELEASES = "unusedReleases";
 
     //! Specialized keys for attachments
     public static final String ATTACHMENTS = "attachments";
@@ -218,8 +224,6 @@ public class PortalConstants {
     // ! Specialized keys for changelog
     public static final String LOAD_CHANGE_LOGS = "load_change_logs";
     public static final String VIEW_CHANGE_LOGS = "view_change_logs";
-    public static final String LOAD_OBLIGATIONS_VIEW = "load_obligations_view";
-    public static final String LOAD_OBLIGATIONS_EDIT = "load_obligations_edit";
     
     //! Specialized keys for projects
     public static final String PROJECTS = "projects";
@@ -257,6 +261,7 @@ public class PortalConstants {
     public static final String PROJECT_OBLIGATIONS = "projectLevelObligations";
     public static final String ORGANISATION_OBLIGATIONS = "organisationLevelObligations";
     public static final String COMPONENT_OBLIGATIONS = "componentLevelObligations";
+    public static final String LICENSE_OBLIGATIONS = "licenseLevelObligations";
     public static final Set<String> PROJECT_EXTERNAL_ID_KEYS;
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES = "selectedAttachmentUsages";
     public static final String PROJECT_SELECTED_ATTACHMENT_USAGES_SHADOWS = "selectedAttachmentUsagesShadows";
