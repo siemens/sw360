@@ -121,6 +121,7 @@ struct Project {
     44: optional string deliveryStart,
     45: optional string phaseOutSince,
     46: optional bool enableSvm, // flag for enabling Security Vulnerability Monitoring
+    49: optional bool considerReleasesFromExternalList, // Consider list of releases from existing external list
     47: optional string licenseInfoHeaderText;
     48: optional bool enableVulnerabilitiesDisplay, // flag for enabling displaying vulnerabilities in project view
     134: optional string obligationsText,

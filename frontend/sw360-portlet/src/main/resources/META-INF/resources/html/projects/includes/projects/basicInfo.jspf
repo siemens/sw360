@@ -169,6 +169,18 @@
         </td>
         <td>
             <div class="form-group">
+                <input id="considerReleasesFromExternalList" type="checkbox" class="form-check-input"
+                    name="<portlet:namespace/><%=Project._Fields.CONSIDER_RELEASES_FROM_EXTERNAL_LIST%>"
+                    value="<sw360:out value="${project.considerReleasesFromExternalList}"/>"
+                        <core_rt:if test="${project.considerReleasesFromExternalList}"> checked="checked" </core_rt:if>
+                />
+                <label class="form-check-label" for="considerReleasesFromExternalList">
+                    <liferay-ui:message key="consider.list.of.releases.from.existing.external.list" />
+                </label>
+            </div>
+        </td>
+        <td>
+            <div class="form-group">
                 <input id="enable_vulnerabilities_display" type="checkbox" class="form-check-input"
                         name="<portlet:namespace/><%=Project._Fields.ENABLE_VULNERABILITIES_DISPLAY%>"
                         value="<sw360:out value="${project.enableVulnerabilitiesDisplay}"/>"
@@ -179,7 +191,6 @@
                 </label>
             </div>
         </td>
-        <td></td>
     </tr>
 </table>
 

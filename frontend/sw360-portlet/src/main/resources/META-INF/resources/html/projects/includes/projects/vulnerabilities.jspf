@@ -46,19 +46,6 @@
     </div>
     <div class="row stateinfo">
         <div class="col-3">
-            <liferay-ui:message key="security.vulnerability.monitoring" />:
-        </div>
-        <div class="col">
-            <core_rt:if test="${project.enableSvm}">
-                <span class="badge badge-success"><liferay-ui:message key="enabled" /></span>
-            </core_rt:if>
-            <core_rt:if test="${not project.enableSvm}">
-                <span class="badge badge-light"><liferay-ui:message key="disabled" /></span>
-            </core_rt:if>
-        </div>
-    </div>
-    <div class="row stateinfo">
-        <div class="col-3">
             <liferay-ui:message key="security.vulnerabilities.display" />:
         </div>
         <div class="col">
