@@ -281,6 +281,12 @@
             <type>org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant</type>
             <rtexprvalue>true</rtexprvalue>
         </attribute>
+        <attribute>
+            <name>formatsToShow</name>
+            <required>false</required>
+            <type>java.util.Collection</type>
+            <rtexprvalue>true</rtexprvalue>
+        </attribute>
     </tag>
     <tag>
         <name>DisplayUser</name>
@@ -398,7 +404,7 @@
         </attribute>
     </tag>
     <tag>
-        <name>DisplayMainLicensesEdit</name>
+        <name>DisplayLicensesEdit</name>
         <tag-class>org.eclipse.sw360.portal.tags.DisplayLicensesEdit</tag-class>
         <body-content>empty</body-content>
         <attribute>
@@ -411,6 +417,12 @@
             <name>licenseIds</name>
             <required>false</required>
             <type>java.util.Set</type>
+            <rtexprvalue>true</rtexprvalue>
+        </attribute>
+        <attribute>
+            <name>main</name>
+            <required>false</required>
+            <type>java.lang.Boolean</type>
             <rtexprvalue>true</rtexprvalue>
         </attribute>
     </tag>

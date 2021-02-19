@@ -220,6 +220,10 @@ public class DatabaseRepository<T> extends CouchDbRepositorySupport<T> {
         return connector.get(type, ids);
     }
 
+    public List<T> get(Collection<String> ids, boolean ignoreNotFound) {
+        return connector.get(type, ids, ignoreNotFound);
+    }
+
 
     /**
      * Creates, updates all objects in the supplied collection.
