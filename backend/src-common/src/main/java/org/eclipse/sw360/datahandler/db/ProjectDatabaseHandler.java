@@ -10,6 +10,7 @@
  */
 package org.eclipse.sw360.datahandler.db;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.*;
@@ -107,7 +108,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final ReleaseRepository releaseRepository;
     private final VendorRepository vendorRepository;
     private final MailUtil mailUtil = new MailUtil();
-
+    private static final ObjectMapper mapper = new ObjectMapper();
     // this caching structure is only used for filling clearing state summaries and
     // should be avoided anywhere else so that no other outdated information will be
     // provided
@@ -1361,6 +1362,22 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList()), componentMap));
 
+            if (p.isConsiderReleasesFromExternalList()) {
+                Set<String> externalIdValueSet = new TreeSet<>();
+                String externalIdValues = p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
+                if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdValues)) {
+                    try {
+                        externalIdValueSet = mapper.readValue(externalIdValues, Set.class);
+                    } catch (IOException e) {
+                        externalIdValueSet.add(externalIdValues);
+                    }
+                    Set<String> filteredExternalIds = externalIdValueSet.stream()
+                            .filter(externalId -> externalId.length() == 8).collect(Collectors.toSet());
+                    if (CommonUtils.isNotEmpty(filteredExternalIds)) {
+                        json.put("svm_children_ml_ids", stringCollectionToJsonArray(filteredExternalIds));
+                    }
+                }
+            }
             serializedProjects.put(json);
         }
         return serializedProjects;
@@ -1440,6 +1457,12 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         String jsonString = jsonResult.toString();
         log.info("SVMML: projects serialized to JSON string. String length: " + jsonString.length());
         log.info("SVMML: JSON starts with: " + StringUtils.abbreviate(jsonString, SVMML_JSON_LOG_CUTOFF_LENGTH));
+
+        try {
+            DatabaseHandlerUtil.writeToFile(jsonResult.toString(4));
+        } catch (Exception e) {
+            log.warn("Unable to write to Json Output to File . ", e);
+        }
 
         // send json to svm
         try {

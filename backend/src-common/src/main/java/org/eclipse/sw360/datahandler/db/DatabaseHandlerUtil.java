@@ -9,7 +9,15 @@
  */
 package org.eclipse.sw360.datahandler.db;
 
+import java.io.BufferedWriter;
 import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collection;
@@ -21,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -79,6 +88,15 @@ public class DatabaseHandlerUtil {
     public static final String SEPARATOR = " -> ";
     private static ChangeLogsRepository changeLogRepository = getChangeLogsRepository();
     private static ObjectMapper mapper = initAndGetObjectMapper();
+    public static final String PROPERTIES_FILE_PATH = "/sw360.properties";
+    private static final String SVM_JSON_LOG_OUTPUT_LOCATION;
+    private static final String SVM_JSON_FILE_PREFIX = "svm_json_output_";
+    private static final String SVM_JSON_FILE_SUFFIX = ".json";
+    private static final String SVM_JSON_LOG_OUTPUT_FILE_PERMISSION = "rw-------";
+    static {
+        Properties props = CommonUtils.loadProperties(DatabaseSettings.class, PROPERTIES_FILE_PATH);
+        SVM_JSON_LOG_OUTPUT_LOCATION = props.getProperty("svm.json.log.output.location", "/tmp");
+    }
 
     private static <T, R> Object[] getCyclicLinkPresenceAndLastElementInCycle(T obj, R handler, User user,
             Map<String, String> linkedPath) throws TException {
@@ -400,6 +418,15 @@ public class DatabaseHandlerUtil {
     }
 
     /**
+     * Write content to a file
+     */
+    public static void writeToFile(String content) {
+        Runnable fileHandlerRunnable = prepareFileHandlerRunnable(content);
+        Thread fileWriterThread = new Thread(fileHandlerRunnable);
+        fileWriterThread.start();
+    }
+
+    /**
      * Prepare ChangeLog Runnable along with all the Change data.
      */
     private static <T extends TBase> Runnable prepareChangeLogRunnable(T newDocVersion, T oldDocVersion,
@@ -695,5 +722,30 @@ public class DatabaseHandlerUtil {
             mapper.addMixInAnnotations(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
         }
         return mapper;
+    }
+
+    /**
+     * Prepare Runnable to create file , set permissions and write to file
+     */
+    private static Runnable prepareFileHandlerRunnable(String content) {
+        return () -> {
+            try {
+                log.info("Preparing to write content to file");
+                StringBuilder fileNameSb = new StringBuilder(SVM_JSON_FILE_PREFIX)
+                        .append(getTimeStamp().replaceAll(" ", "_").replaceAll(":", "-")).append(SVM_JSON_FILE_SUFFIX);
+                Path outputFile = Paths.get(SVM_JSON_LOG_OUTPUT_LOCATION, fileNameSb.toString());
+                if (!Files.exists(outputFile)) {
+                    Set<PosixFilePermission> perms = PosixFilePermissions.fromString(SVM_JSON_LOG_OUTPUT_FILE_PERMISSION);
+                    FileAttribute<Set<PosixFilePermission>> fileAttribute = PosixFilePermissions.asFileAttribute(perms);
+                    Files.createFile(outputFile, fileAttribute);
+                    try (BufferedWriter bw = Files.newBufferedWriter(outputFile, StandardOpenOption.WRITE)) {
+                        bw.write(content);
+                        bw.flush();
+                    }
+                }
+            } catch (Exception exp) {
+                log.warn("Error occured while writing to a file", exp);
+            }
+        };
     }
 }
