@@ -16,6 +16,7 @@
 
 start_tomcat() {
     echo "Starting tomcat ...";
+    cd /home/siemagrant
     sudo -u siemagrant sh ${SSH_DEPLOY_SERVER_TOMCAT}/bin/startup.sh
 }
 
@@ -27,8 +28,8 @@ copy_packages() {
 }
 
 main() {
-    SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-portal-7.2.0-ga1/tomcat-9.0.17"
-    SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-portal-7.2.0-ga1/deploy"
+    SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-ce-portal-7.3.3-ga4/tomcat-9.0.33"
+    SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-ce-portal-7.3.3-ga4/deploy"
     copy_packages
     start_tomcat
 }
