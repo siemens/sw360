@@ -40,12 +40,15 @@ clean_tomcat() {
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vendors.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/vendors/
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/projects.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/projects/
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/changelogs.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/changelogs/
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/health.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/health/
     sudo -u siemagrant rm -rf ${SSH_LIFERAY_DEPLOY_PATH}/*
+    sudo -u siemagrant rm -rf ${SSH_LIFERAY_OSGI_MODULES_PATH}/org.eclipse.sw360.*
 }
 
 main() {
-    SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-portal-7.2.0-ga1/tomcat-9.0.17"
-    SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-portal-7.2.0-ga1/deploy"
+    SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-ce-portal-7.3.3-ga4/tomcat-9.0.33"
+    SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-ce-portal-7.3.3-ga4/deploy"
+    SSH_LIFERAY_OSGI_MODULES_PATH="/opt/liferay-ce-portal-7.3.3-ga4/osgi/modules"
     stop_tomcat
     clean_tomcat
 }

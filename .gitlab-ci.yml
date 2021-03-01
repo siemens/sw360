@@ -1,60 +1,66 @@
-image: maven:3-jdk-8
+image: maven:3.6.3-openjdk-11
 
 stages:
 - build
 - deploy_to_dev
-- deploy_to_blr_test
+- deploy_to_stage
 
 services:
-- couchdb:1.7.1
+- couchdb:3.1.1
 
 variables:
   PACKAGE_STORE_PATH: "/home/${SSH_PACKAGE_USER}/cipackages/${CI_COMMIT_REF_SLUG}"
   DEPLOY_STORE_PATH:  "/home/${SSH_TEST_DEPLOY_USER}/deppackage"
   PACKAGE_NAME_PREFIX: "sw360"
+  COUCHDB_USER: $COUCHDB_TEST_USER
+  COUCHDB_PASSWORD: $COUCHDB_TEST_PWD
+  https_proxy: $CODE_PROXY
+  http_proxy: $CODE_PROXY
+  no_proxy: couchdb,linux.siemens.com,.siemens.com,.siemens.de,.siemens.co.in
+  _JAVA_OPTIONS: -Djdk.net.URLClassPath.disableClassPathURLCheck=true -DSPDXParser.OnlyUseLocalLicenses=true -Dhttp.proxySet=true -Dhttp.proxyHost=$CODE_PROXY_HOST -Dhttp.proxyPort=$CODE_PROXY_PORT -Dhttp.nonProxyHosts=localhost|couchdb
 
 build_sw360:
   stage: build
-  cache:
-    key: sw360-build-cache
-    paths:
-    - .m2/repository/
   script:
-  - mkdir -p /vagrant_shared/packages/
-  - wget --no-check-certificate https://ccp.siemens.com/sources/thrift-0.11.0.tar.gz -O /vagrant_shared/packages/thrift-0.11.0.tar.gz
-  - wget --no-check-certificate 'https://linux.siemens.com/pub/tools/FOSSologyNG/liferay-ce-portal-tomcat-7.2.0-ga1-20190531153709761.tar.gz' -O /opt/liferay.gz
-  - tar -xvf /opt/liferay.gz
-  - rm /opt/liferay.gz
-  - export LIFERAY_INSTALL=/opt/liferay-portal-7.2.0-ga1
+  - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts /etc/sw360/
+
+  # setting remote repos url to download mvn packages
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
+
+  # Create couchdb.properties in /etc/sw360 to run testcases
+  - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb.properties
+  - echo "couchdb.user = ${COUCHDB_TEST_USER}" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.database = sw360_test_db" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.usersdb = sw360_test_users" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.attachments = sw360_test_attachments" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.fossologyKeys = sw360_test_fossologykeys" >> /etc/sw360/couchdb.properties
+  - echo "couchdb.vulnerability_management = sw360_test_vm" >> /etc/sw360/couchdb.properties
+
+  # Create databasetest.properties in /etc/sw360 to run testcases
+  - echo 'couch_db_url = http://couchdb:5984' > /etc/sw360/databasetest.properties
+  - echo 'couch_db_database = datahandlertestdb' >> /etc/sw360/databasetest.properties
+  - echo "couchdb.username = ${COUCHDB_TEST_USER}" >> /etc/sw360/databasetest.properties
+  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/databasetest.properties
+
   - apt-get -qq update && apt-get -qq -y install build-essential rsync && apt-get install zip -y --no-install-recommends && apt-get install awscli -y --no-install-recommends
   - ./scripts/install-thrift.sh
-  - mkdir -p /etc/sw360/
-  - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb.properties
+
+  # Check if CouchDB is running
   - curl -s couchdb:5984/_utils
-  - echo 'couch_db_url = http://couchdb:5984' > /databasetest.properties
-  - echo 'couch_db_database = datahandlertestdb' >> /databasetest.properties
-  - cp -f /databasetest.properties libraries/lib-datahandler/src/test/resources/databasetest.properties
-  - workdir=$(pwd)
-  - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts
+
+  # Checkout branch for proper footer
   - git checkout ${CI_COMMIT_REF_NAME}
-  - GIT_COMMIT_COUNT="$(git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)"
-  - mvn --batch-mode clean package -P ci,deploy -Dcount=$GIT_COMMIT_COUNT -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Dmaven.repo.local=.m2/repository
+
+  # Build code and create artifacts
+  - mvn --batch-mode clean package -P deploy -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Dmaven.repo.local=.m2/repository
   - cp ./scripts/aws_codedeploy/application* ${GITLAB_PACKAGE_PATH}/artifacts/scripts
   - cp ./scripts/aws_codedeploy/appspec.yml ${GITLAB_PACKAGE_PATH}/artifacts/
   - cd ${GITLAB_PACKAGE_PATH}/artifacts
   - zip -r ${GITLAB_PACKAGE_PATH}/artifacts.zip *
-  - cd /builds/sw360/sw360portal
-  - tar -czvf packages.tar.gz ${GITLAB_PACKAGE_PATH}/artifacts/packages
-  - mkdir -p ~/.ssh
-  - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
-  - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
-  - chmod 600 ~/packagekey
-  - eval $(ssh-agent -s)
-  - ssh-add ~/packagekey && ssh-add -L
-  - ssh ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER} "mkdir -p ${PACKAGE_STORE_PATH}/"
-  - rsync -htzv -e "ssh" packages.tar.gz ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/
+
   # Upload packages to s3 if CI_COMMIT_REF_SLUG matches DEPLOY_BRANCH
+  - cd /builds/sw360/sw360portal
   - ./scripts/aws_codedeploy/upload_packages_to_s3.sh
 
 deploy_sw360_DEV_server:
@@ -69,43 +75,21 @@ deploy_sw360_DEV_server:
   script:
   - echo "Trigger aws CodeDeploy for Dev server"
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
-  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_DEV} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_DEV} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
 
-deploy_sw360_BLR_test_server:
+deploy_sw360_STAGE_server:
   allow_failure: true
-  stage: deploy_to_blr_test
+  stage: deploy_to_stage
   environment:
-    name: BLR-test
-    url: "http://${SSH_TEST_DEPLOY_SERVER}"
+    name: Stage
   when: manual
-  #  dependencies:
-  #    - build_sw360
+  only:
+    - masterct
   before_script:
-  - echo "Running deploy_sw360_BLR_test_server"
+  - echo "Running deploy_sw360_STAGE_server"
   script:
-  # adding host key to list of known hosts
-  - mkdir -p ~/.ssh
-  - ssh-keyscan -H ${SSH_TEST_DEPLOY_SERVER} >> ~/.ssh/known_hosts
-  - ssh-keyscan -H ${SSH_PACKAGE_SERVER} >> ~/.ssh/known_hosts
-  - echo "${SSH_DEPLOY_KEY}" > ~/deploykey
-  - echo "${SSH_PACKAGE_KEY}" > ~/packagekey
-  - chmod 600 ~/deploykey && chmod 600 ~/packagekey
-  - eval $(ssh-agent -s)
-  - ssh-add ~/deploykey
-  - ssh-add ~/packagekey
-  - ssh-add -L
-  - echo "Acquire::http::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
-  - echo "Acquire::https::proxy \"http://194.138.0.3:9400\";" >> /etc/apt/apt.conf
-  - apt-get -qq update && apt-get -qq install -y rsync
-  # copying the packages
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "mkdir -p ${DEPLOY_STORE_PATH}/"
-  - rsync -htzv -e "ssh" ${SSH_PACKAGE_USER}@${SSH_PACKAGE_SERVER}:${PACKAGE_STORE_PATH}/packages.tar.gz .
-  - rsync -htzv -e "ssh" ./packages.tar.gz ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER}:${DEPLOY_STORE_PATH}/packages.tar.gz
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "tar -xzvf ${DEPLOY_STORE_PATH}/packages.tar.gz -C ${DEPLOY_STORE_PATH}"
-  # logging in, install the wars and restart tomcat
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/deploy/* ${SSH_LIFERAY_DEPLOY_PATH}"
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo cp -f ${DEPLOY_STORE_PATH}/packages/webapps/* ${SSH_LIFERAY_WEBAPP_PATH}"
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "rm -rf ${DEPLOY_STORE_PATH}/packages/"
-  - ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh"
-  - (sleep 1m && ssh ${SSH_TEST_DEPLOY_USER}@${SSH_TEST_DEPLOY_SERVER} "sudo ${DEPLOY_SERVER_TOMCAT}/bin/startup.sh")
+  - echo "Trigger aws CodeDeploy for Stage server"
+  - apt-get -qq update && apt-get install awscli -y --no-install-recommends
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_STAGE} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_STAGE} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
