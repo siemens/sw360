@@ -748,4 +748,11 @@ public class DatabaseHandlerUtil {
             }
         };
     }
+
+    public static String trimProjectTag(String projectTag) {
+        if (projectTag != null) {
+            projectTag = projectTag.replaceAll(",$", "");
+        }
+        return projectTag;
+    }
 }

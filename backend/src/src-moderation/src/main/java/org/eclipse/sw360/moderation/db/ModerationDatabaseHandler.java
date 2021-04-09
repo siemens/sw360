@@ -106,7 +106,8 @@ public class ModerationDatabaseHandler {
         return repository.getRequestsByRequestingUser(user);
     }
 
-    public ClearingRequest getClearingRequestByProjectId(String projectId) {
+    public ClearingRequest getClearingRequestByProjectId(String projectId, User user) throws SW360Exception {
+        projectDatabaseHandler.getProjectById(projectId, user); // check if user have READ access to project.
         return clearingRequestRepository.getClearingRequestByProjectId(projectId);
     }
 
@@ -327,6 +328,7 @@ public class ModerationDatabaseHandler {
         // Define moderators
         Set<String> moderators = new HashSet<>();
         CommonUtils.add(moderators, dbcomponent.getCreatedBy());
+        CommonUtils.addAll(moderators, dbcomponent.getModerators());
         CommonUtils.addAll(moderators, getUsersAtLeast(UserGroup.CLEARING_ADMIN));
 
         ModerationRequest request = createStubRequest(user, isDeleteRequest, component.getId(), moderators);
