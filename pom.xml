@@ -50,8 +50,8 @@
         <!-- This is first of two places for changing the version of SW360 -->
         <!-- note that 6.1.0-SNAPSHOT relates to 6.0.${patchlevel} -->
         <!-- pls see also the profile cli -->
-        <revision>13.${patchlevel}</revision>
-        <patchlevel>1.0-SNAPSHOT</patchlevel>
+        <revision>13.2.${patchlevel}</revision>
+        <patchlevel>0-SNAPSHOT</patchlevel>
         <java.version>11</java.version>
         <ektorp.version>1.5.0</ektorp.version>
         <thrift.version>0.13.0</thrift.version>
@@ -106,7 +106,7 @@
         <rest.deploy.dir>${base.deploy.dir}/tomcat</rest.deploy.dir>
 
         <!-- some mem optimization here -->
-        <argLine>-Dcatalina.home=${project.build.directory}/home -Xms64m -Xmx128m -XX:MaxPermSize=512m</argLine>
+        <argLine>-Dcatalina.home=${project.build.directory}/home -Xms128m -Xmx256m -XX:MaxPermSize=512m</argLine>
     </properties>
 
     <dependencyManagement>
@@ -695,45 +695,6 @@
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>
-            <id>ci</id>
-            <properties>
-                <!-- second of two places for version setting: minor version -->
-                <patchlevel>1.${count}</patchlevel>
-            </properties>
-        </profile>
-        <profile>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <id>copyDependencies</id>
-            <build>
-                <pluginManagement>
-                    <plugins>
-                        <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-dependency-plugin</artifactId>
-                            <executions>
-                                <execution>
-                                    <id>copy-dependencies</id>
-                                    <phase>package</phase>
-                                    <goals>
-                                        <goal>copy-dependencies</goal>
-                                    </goals>
-                                    <configuration>
-                                        <outputDirectory>${packagePath}</outputDirectory>
-                                        <includeScope>runtime</includeScope>
-                                    </configuration>
-                                </execution>
-                            </executions>
-                        </plugin>
-                    </plugins>
-                </pluginManagement>
-            </build>
-        </profile>
-        <profile>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
             <id>eclipse-ci</id>
 
             <pluginRepositories>
@@ -745,7 +706,7 @@
                     </releases>
                     <snapshots>
                       <enabled>true</enabled>
-                    </snapshots>        
+                    </snapshots>
                 </pluginRepository>
             </pluginRepositories>
 
@@ -789,7 +750,7 @@
                                 </goals>
                             </execution>
                         </executions>
-                     </plugin>        
+                     </plugin>
                 </plugins>
             </build>
         </profile>

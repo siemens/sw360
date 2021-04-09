@@ -322,10 +322,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
      * Add new release to the database
      */
     public AddDocumentRequestSummary addComponent(Component component, String user) throws SW360Exception {
-        if(isDuplicate(component)) {
+        if(isDuplicate(component, true)) {
             final AddDocumentRequestSummary addDocumentRequestSummary = new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.DUPLICATE);
-            Set<String> duplicates = componentRepository.getComponentIdsByName(component.getName());
+            Set<String> duplicates = componentRepository.getComponentIdsByName(component.getName(), true);
             if (duplicates.size() == 1) {
                 duplicates.forEach(addDocumentRequestSummary::setId);
             }
@@ -444,8 +444,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 .setId(id);
     }
 
-    private boolean isDuplicate(Component component){
-        Set<String> duplicates = componentRepository.getComponentIdsByName(component.getName());
+    private boolean isDuplicate(Component component, boolean caseInsenstive){
+        Set<String> duplicates = componentRepository.getComponentIdsByName(component.getName(), caseInsenstive);
         return duplicates.size()>0;
     }
 
@@ -614,7 +614,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return false;
         }
 
-        return isDuplicate(after);
+        return isDuplicate(after, false);
     }
 
     private void updateComponentInternal(Component updated, Component current, User user) {
@@ -1875,7 +1875,6 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     public List<Component> searchComponentByNameForExport(String name) {
         return componentRepository.searchByNameForExport(name);
     }
-
 
     public Set<Component> getUsingComponents(String releaseId) {
         return componentRepository.getUsingComponents(releaseId);
