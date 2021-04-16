@@ -27,15 +27,15 @@ build_sw360:
   # setting remote repos url to download mvn packages
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
-  # Create couchdb.properties in /etc/sw360 to run testcases
-  - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb.properties
-  - echo "couchdb.user = ${COUCHDB_TEST_USER}" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.database = sw360_test_db" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.usersdb = sw360_test_users" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.attachments = sw360_test_attachments" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.fossologyKeys = sw360_test_fossologykeys" >> /etc/sw360/couchdb.properties
-  - echo "couchdb.vulnerability_management = sw360_test_vm" >> /etc/sw360/couchdb.properties
+  # Create couchdb-test.properties in /etc/sw360 to run testcases
+  - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb-test.properties
+  - echo "couchdb.user = ${COUCHDB_TEST_USER}" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.database = sw360_test_db" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.usersdb = sw360_test_users" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.attachments = sw360_test_attachments" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.fossologyKeys = sw360_test_fossologykeys" >> /etc/sw360/couchdb-test.properties
+  - echo "couchdb.vulnerability_management = sw360_test_vm" >> /etc/sw360/couchdb-test.properties
 
   # Create databasetest.properties in /etc/sw360 to run testcases
   - echo 'couch_db_url = http://couchdb:5984' > /etc/sw360/databasetest.properties
