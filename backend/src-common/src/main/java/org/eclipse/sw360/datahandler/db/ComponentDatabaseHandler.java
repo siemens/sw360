@@ -519,7 +519,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Get actual document for members that should not change
         Component actual = componentRepository.get(component.getId());
         assertNotNull(actual, "Could not find component to update!");
-
+        DatabaseHandlerUtil.saveAttachmentInFileSystem(attachmentConnector, actual.getAttachments(),
+                component.getAttachments(), user.getEmail(), component.getId());
         if (changeWouldResultInDuplicate(actual, component)) {
             return RequestStatus.DUPLICATE;
         } else if (!isDependenciesExistInComponent(component)){
@@ -875,7 +876,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Get actual document for members that should no change
         Release actual = releaseRepository.get(release.getId());
         assertNotNull(actual, "Could not find release to update");
-
+        DatabaseHandlerUtil.saveAttachmentInFileSystem(attachmentConnector, actual.getAttachments(),
+                release.getAttachments(), user.getEmail(), release.getId());
         if (actual.equals(release)) {
             return RequestStatus.SUCCESS;
         } else if (changeWouldResultInDuplicate(actual, release)) {
