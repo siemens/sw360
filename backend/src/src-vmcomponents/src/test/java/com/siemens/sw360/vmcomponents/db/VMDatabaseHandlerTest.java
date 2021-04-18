@@ -20,6 +20,7 @@ package com.siemens.sw360.vmcomponents.db;
 
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
@@ -44,7 +45,7 @@ import static org.junit.Assert.*;
 @RunWith(MockitoJUnitRunner.class)
 public class VMDatabaseHandlerTest {
 
-    private static final String dbName = DatabaseSettings.COUCH_DB_VM;
+    private static final String dbName = DatabaseSettingsTest.COUCH_DB_VM;
 
     private static VMPriority p1;
     private static VMPriority p2;
@@ -68,10 +69,10 @@ public class VMDatabaseHandlerTest {
         assertTestString(dbName);
 
         // Create the database
-        TestUtils.createDatabase(DatabaseSettings.getConfiguredHttpClient(), dbName);
+        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
 
         // Prepare the database
-        DatabaseConnector databaseConnector = new DatabaseConnector(DatabaseSettings.getConfiguredHttpClient(), dbName);
+        DatabaseConnector databaseConnector = new DatabaseConnector(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
 
         // set up prios
         p1 = new VMPriority().setVmid("1").setShortText("one").setLongText("onelong");
@@ -104,12 +105,12 @@ public class VMDatabaseHandlerTest {
         pr1 = new VMProcessReporting(VMAction.class.getSimpleName(), SW360Utils.getCreatedOnTime());
 
         // Prepare the handler
-        handler = new VMDatabaseHandler();
+        handler = new VMDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), DatabaseSettingsTest.COUCH_DB_VM);
     }
 
     @After
     public void tearDown() throws Exception {
-        TestUtils.deleteDatabase(DatabaseSettings.getConfiguredHttpClient(), dbName);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
     }
 
     @Test

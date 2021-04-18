@@ -53,9 +53,12 @@ public class VMDatabaseHandler extends VulnerabilityDatabaseHandler {
     private VMMatchRepository matchRepo;
 
     public VMDatabaseHandler() throws MalformedURLException {
+        this(DatabaseSettings.getConfiguredHttpClient(), DatabaseSettings.COUCH_DB_VM);
+    }
+
+    public VMDatabaseHandler(Supplier<HttpClient> httpClient, String dbName) throws MalformedURLException {
         // Create the connector
-        DatabaseConnector db = new DatabaseConnector(DatabaseSettings.getConfiguredHttpClient(),
-                 DatabaseSettings.COUCH_DB_VM);
+        DatabaseConnector db = new DatabaseConnector(httpClient, dbName);
         compRepo = new VMComponentRepository(db);
         actionRepo = new VMActionRepository(db);
         prioRepo = new VMPriorityRepository(db);

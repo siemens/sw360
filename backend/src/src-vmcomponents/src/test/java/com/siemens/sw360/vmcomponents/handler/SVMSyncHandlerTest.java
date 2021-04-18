@@ -26,6 +26,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
@@ -74,9 +75,9 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
     private VendorRepository vendorRepository;
     private User user;
 
-    private static final String dbNameVM = DatabaseSettings.COUCH_DB_VM;
-    private static final String dbNameComp = DatabaseSettings.COUCH_DB_DATABASE;
-    private static final String dbNameAtt = DatabaseSettings.COUCH_DB_ATTACHMENTS;
+    private static final String dbNameVM = DatabaseSettingsTest.COUCH_DB_VM;
+    private static final String dbNameComp = DatabaseSettingsTest.COUCH_DB_DATABASE;
+    private static final String dbNameAtt = DatabaseSettingsTest.COUCH_DB_ATTACHMENTS;
 
     @Before
     public void setUp() throws TException, IOException {
@@ -86,7 +87,7 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         assumeCanConnectTo(URL_ACTIONS);
 
         // Create the database
-        TestUtils.createDatabase(DatabaseSettings.getConfiguredHttpClient(), dbNameVM);
+        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameVM);
 
 
         svmActionHandler = new SVMSyncHandler<VMAction>(VMAction.class);
@@ -96,9 +97,9 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
         releaseHandler = new SVMSyncHandler<Release>(Release.class);
         user = new User().setEmail("me");
         // Prepare the handler
-        handler = new VMDatabaseHandler();
-        compDBHandler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbNameComp, dbNameAtt);
-        vendorRepository = new VendorRepository(new DatabaseConnector(DatabaseSettings.getConfiguredHttpClient(), dbNameComp));
+        handler = new VMDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), DatabaseSettingsTest.COUCH_DB_VM);
+        compDBHandler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameComp, dbNameAtt);
+        vendorRepository = new VendorRepository(new DatabaseConnector(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameComp));
 
         // mock preparation
         staticJSONResponse("/portal/api/v1/public/actions", "[1,2,3,4,5,6,7,8,9]");
@@ -107,15 +108,15 @@ public class SVMSyncHandlerTest extends AbstractJSONMockTest {
 
     @After
     public void tearDown() throws Exception {
-        TestUtils.deleteDatabase(DatabaseSettings.getConfiguredHttpClient(), dbNameVM);
-        TestUtils.deleteDatabase(DatabaseSettings.getConfiguredHttpClient(), dbNameComp);
-        TestUtils.deleteDatabase(DatabaseSettings.getConfiguredHttpClient(), dbNameAtt);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameVM);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameComp);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameAtt);
     }
 
 //    @Test
     public void create5000Matches() throws SW360Exception, MalformedURLException {
-        VMDatabaseHandler handler = new VMDatabaseHandler();
-        ComponentDatabaseHandler compDBHandler = new ComponentDatabaseHandler(DatabaseSettings.getConfiguredHttpClient(), dbNameComp, dbNameAtt);
+        VMDatabaseHandler handler = new VMDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), DatabaseSettingsTest.COUCH_DB_VM);
+        ComponentDatabaseHandler compDBHandler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), dbNameComp, dbNameAtt);
         VMComponent component = new VMComponent(SW360Utils.getCreatedOnTime(), "droelf");
         component.setName("droelf");
         component.setVendor("droelf");
