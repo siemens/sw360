@@ -69,7 +69,7 @@ public class VMDatabaseHandlerTest {
         assertTestString(dbName);
 
         // Create the database
-        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
 
         // Prepare the database
         DatabaseConnector databaseConnector = new DatabaseConnector(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
@@ -110,7 +110,7 @@ public class VMDatabaseHandlerTest {
 
     @After
     public void tearDown() throws Exception {
-        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
     }
 
     @Test

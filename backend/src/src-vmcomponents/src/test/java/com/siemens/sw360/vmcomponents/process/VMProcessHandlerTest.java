@@ -28,7 +28,6 @@ import org.apache.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.TestUtils;
-import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
@@ -88,7 +87,7 @@ public class VMProcessHandlerTest extends AbstractJSONMockTest {
         assumeCanConnectTo(URL_ACTIONS);
 
         // Create the database
-        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
 
         // Prepare the handler
         handler = new VMDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), DatabaseSettingsTest.COUCH_DB_VM);
@@ -102,7 +101,7 @@ public class VMProcessHandlerTest extends AbstractJSONMockTest {
 
     @After
     public void tearDown() throws Exception {
-        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
     }
 
     @Test

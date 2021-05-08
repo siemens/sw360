@@ -4,6 +4,80 @@ This is the changelog file of the sw360 project. It starts with the first releas
 
 https://github.com/sw360/sw360portal/releases
 
+## sw360-13.3.0-M1
+
+This tag is applied to have the migration from cloudant to ektorp in one single step. Ektorp is a Java library which provides an object oriented interface to the (REST-based) access to couchdb. It has been used in sw360 from day 1. Now we concluded to replace ektorp: it does not support paging; having our server growing larger and lager and serving more and more users, receiving results sets from a couchdb view without paging is a pain. And it did not look like it will be supported, because the ektorp project looks calm now (last commit to master in 2017). Among the available options for replacing ektorp, we choose the java-client from the open source project cloudant (version 2.19.1, see https://github.com/cloudant/java-cloudant). It supports paging and offers potentially other interesting features (caching, compatibility with MongoDB, etc.).
+
+### Migrations
+
+For this version, no database migration is necessary.
+
+### Credits
+
+The following github users have contributed to the source code since the last release (in alphabetical order):
+
+```
+smruti.sahoo@siemens.com
+```
+
+Please note that also many other persons usually contribute to the project with reviews, testing, documentations, conversations or presentations.
+
+### Infrastructure
+
+* `0e22d55e` feat(components-pagination): paginated view response for components
+* `fd95a2cf` feat(cloudant): Migrating from ektorp to cloudant java client
+
+## sw360-13.2.0-M1
+
+The reason for this tag is to have the last release before the ektorp framework to the new cloudant framework for access to the couchdb. This upcoming change will touch a large number of places in the code and thus a last release before this larger change will be merged.
+
+As per notable feature there is the new UI in the admin area to issue the OAuth client credentials for the OAuth legacy workflow for the REST API. Another feature is the storing of all attachments (at upload) also to a configurable location in the file system. This helps anti virus software to scan these instead of requesting them from the couchdb. Note that files are stored at the configured path with `user_mail/document_id` folder structure to quickly track down origin of viruses and malware.
+
+This milestone tag also chovers changes to the build infrastructure on the eclipse servers to prepare future releases.
+
+### Migrations
+
+For this version, no database migration is necessary.
+
+### Credits
+
+The following github users have contributed to the source code since the last release (in alphabetical order):
+
+```
+abdul.kapti@siemens-healthineers.com
+jaideep.palit@siemens.com
+kumar.ravindra@siemens.com
+kouki1.hama@toshiba.co.jp
+lars.geyer-blaumeiser@bosch.io
+michael.c.jaeger@siemens.com
+smruti.sahoo@siemens.com
+```
+
+### Features Summary
+
+* `d8021733` feat(AttachmentVirusScan): Store attachment to File System asynchronously, handle saving of large multi-part attachments. Fix test cases
+* `5c77743f` feat(AttachmentVirusScan):Store the attachment to local file system for virus scan.
+* `d97146a3` feat(REST): Added new Rest API endpoint for reading clearing request
+* `50f576a2` feat(OAuthClient): Create, update, delete OAuthClient from UI
+* `d4017345` feat(PredefinedTags):Predefined tags per group in the Projects Tag field.
+* `0c7fc59a` feat(UI): added button for copying document id to clipboard
+
+### Corrections
+
+* `d19d08d0` fix(rest): Added support for pagination and retrival using multi value `projectRelevance` param
+* `3419b4a6` fix(search): Removing support for `_fti` hook based lucene search for couchdb 1.x
+* `f783240a` fix(rest): Fix status code when moderation request is created as a part of an API call
+* `4f2c2121` fix(moderaion):add CommonUtils.addAll(moderators, dbcomponent.getModerators());
+* `8b867c19` fix(build): Fix issue with overwriting of patchlevel variable in pom.xml
+* `b9a38744` fix(test): Use test databases in maven test phase
+* `c68b4d4a` fix(OrtIntegration): Fix client to perform case insensitive search of component.
+* `784fbafc` fix(script): Utility script to recompute clearing state of release
+* `ce69b3bd` bug(eclipse): Quickfix for maven flatten pom problem
+
+### Infrastructure, Docs and Refactorings
+
+* `958a8a77` chore(tag) changing back pom.xml shapshot version tag
+
 ## sw360-13.1.0-M1
 
 This time: client libraries. This release among other things brings the client libraries taken over from the sw360antenna project and moved them into the sw360 code base. The client libraries enable Java applications to communicate with a sw360 server via REST calls. Other notable contributions include:

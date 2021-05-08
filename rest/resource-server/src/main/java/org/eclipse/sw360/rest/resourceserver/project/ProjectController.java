@@ -479,6 +479,25 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         return new ResponseEntity<>(resources, status);
     }
 
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = PROJECTS_URL + "/{id}/release/{releaseId}", method = RequestMethod.PATCH)
+    public ResponseEntity<Resource<ProjectReleaseRelationship>> patchProjectReleaseUsage(
+            @PathVariable("id") String id, @PathVariable("releaseId") String releaseId,
+            @RequestBody ProjectReleaseRelationship requestBodyProjectReleaseRelationship) throws TException {
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+        Map<String, ProjectReleaseRelationship> releaseIdToUsage = sw360Project.getReleaseIdToUsage();
+        ProjectReleaseRelationship updatedProjectReleaseRelationship = projectService
+                .updateProjectReleaseRelationship(releaseIdToUsage, requestBodyProjectReleaseRelationship, releaseId);
+        RequestStatus updateProjectStatus = projectService.updateProject(sw360Project, sw360User);
+        if (updateProjectStatus == RequestStatus.SENT_TO_MODERATOR) {
+            return new ResponseEntity(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        Resource<ProjectReleaseRelationship> updatedProjectReleaseRelationshipResource = new Resource<>(
+                updatedProjectReleaseRelationship);
+        return new ResponseEntity<>(updatedProjectReleaseRelationshipResource, HttpStatus.OK);
+    }
+
     public ProjectVulnerabilityRating updateProjectVulnerabilityRatingFromRequest(Optional<ProjectVulnerabilityRating> projectVulnerabilityRatings, List<VulnerabilityDTO> vulDtoList, String projectId, User sw360User) {
         Function<VulnerabilityDTO, VulnerabilityCheckStatus> fillVulnerabilityCheckStatus = vulDto -> {
             return new VulnerabilityCheckStatus().setCheckedBy(sw360User.getEmail())
@@ -638,6 +657,23 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final Resources<Resource<Attachment>> resources = attachmentService.getResourcesFromList(sw360Project.getAttachments());
         return new ResponseEntity<>(resources, HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = PROJECTS_URL + "/{id}/attachment/{attachmentId}", method = RequestMethod.PATCH)
+    public ResponseEntity<Resource<Attachment>> patchProjectAttachmentInfo(@PathVariable("id") String id,
+            @PathVariable("attachmentId") String attachmentId, @RequestBody Attachment attachmentData)
+            throws TException {
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+        Set<Attachment> attachments = sw360Project.getAttachments();
+        Attachment updatedAttachment = attachmentService.updateAttachment(attachments, attachmentData, attachmentId, sw360User);
+        RequestStatus updateProjectStatus = projectService.updateProject(sw360Project, sw360User);
+        if (updateProjectStatus == RequestStatus.SENT_TO_MODERATOR) {
+            return new ResponseEntity(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        Resource<Attachment> attachmentResource = new Resource<>(updatedAttachment);
+        return new ResponseEntity<>(attachmentResource, HttpStatus.OK);
     }
 
     @RequestMapping(value = PROJECTS_URL + "/{projectId}/attachments/{attachmentId}", method = RequestMethod.GET, produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
