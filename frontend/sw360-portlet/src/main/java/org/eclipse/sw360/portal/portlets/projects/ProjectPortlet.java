@@ -235,8 +235,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             showClearingRequest(request, response);
         } else if (PortalConstants.LIST_CLEARING_STATUS.equals(action)) {
             serveClearingStatusList(request, response);
-        }  else if (PortalConstants.CLEARING_STATUS_ON_LOAD.equals(action)) {
+        } else if (PortalConstants.CLEARING_STATUS_ON_LOAD.equals(action)) {
             serveClearingStatusonLoad(request, response);
+        } else if (PortalConstants.LICENSE_TO_SOURCE_FILE.equals(action)) {
+            serveLicenseToSourceFileMapping(request, response);
         } else if (isGenericAction(action)) {
             dealWithGenericAction(request, response, action);
         } else if (PortalConstants.LOAD_CHANGE_LOGS.equals(action) || PortalConstants.VIEW_CHANGE_LOGS.equals(action)) {
@@ -1213,8 +1215,14 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     private void prepareStandardView(RenderRequest request) throws IOException {
         User user = UserCacheHolder.getUserFromRequest(request);
-        List<Organization> organizations = UserUtils.getOrganizations(request);
-        request.setAttribute(PortalConstants.ORGANIZATIONS, organizations);
+        ProjectService.Iface projectClient = thriftClients.makeProjectClient();
+        try {
+            List<Project> projectList = projectClient.getAccessibleProjectsSummary(user);
+            Set<String> organizations = getProjectGroups(projectList);
+            request.setAttribute(PortalConstants.ORGANIZATIONS, organizations);
+        } catch(TException e) {
+            log.error("Error in getting the projectList from backend ", e);
+        }
         request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
         for (Project._Fields filteredField : projectFilteredFields) {
             String parameter = request.getParameter(filteredField.toString());
@@ -1981,6 +1989,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 request.setAttribute(PROJECT, newProject);
                 putDirectlyLinkedProjectsInRequest(request, newProject, user);
                 putDirectlyLinkedReleasesInRequest(request, newProject);
+                newProject.unsetId();
                 request.setAttribute(USING_PROJECTS, Collections.emptySet());
                 request.setAttribute(ALL_USING_PROJECTS_COUNT, 0);
                 request.setAttribute(SOURCE_PROJECT_ID, id);
@@ -2190,6 +2199,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                     () -> attachmentClient.getUsedAttachments(Source.projectId(sourceProjectId), null));
             attachmentUsages.forEach(attachmentUsage -> {
                 attachmentUsage.unsetId();
+                attachmentUsage.unsetRevision();
                 attachmentUsage.setUsedBy(Source.projectId(newProjectId));
                 if (attachmentUsage.isSetUsageData()
                         && attachmentUsage.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO)
@@ -2440,6 +2450,74 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         include("/html/utils/ajax/linkedProjectsRows.jsp", request, response, PortletRequest.RESOURCE_PHASE);
     }
 
+    private void serveLicenseToSourceFileMapping(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        final String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        final ComponentService.Iface componentClient = thriftClients.makeComponentClient();
+        final LicenseInfoService.Iface licenseClient = thriftClients.makeLicenseInfoClient();
+        final JSONObject jsonResult = createJSONObject();
+        final ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+
+        Set<LicenseNameWithText> licenseNameWithTexts = new HashSet<LicenseNameWithText>();
+        Release release = null;
+        try {
+            release = componentClient.getReleaseById(releaseId, user);
+            final List<Attachment> filteredAttachments = SW360Utils.getApprovedClxAttachmentForRelease(release);
+            if (filteredAttachments.size() == 1) {
+                final Attachment filteredAttachment = filteredAttachments.get(0);
+                final String attachmentContentId = filteredAttachment.getAttachmentContentId();
+
+                try {
+                    List<LicenseInfoParsingResult> licenseResults = licenseClient.getLicenseInfoForAttachment(release, attachmentContentId, false, user);
+                    if (CommonUtils.isNotEmpty(licenseResults) && LicenseInfoRequestStatus.SUCCESS.equals(licenseResults.get(0).getStatus())) {
+                        licenseNameWithTexts = licenseResults.get(0).getLicenseInfo().getLicenseNamesWithTexts();
+                        if (CommonUtils.isNotEmpty(licenseNameWithTexts)) {
+                            JSONArray licenseToSourceData = createJSONArray();
+                            for (LicenseNameWithText license : licenseNameWithTexts) {
+                                JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+                                jsonObject.put("licName", nullToEmptyString(license.getLicenseName()));
+                                jsonObject.put("licSpdxId", nullToEmptyString(license.getLicenseSpdxId()));
+                                jsonObject.put("srcFiles",  nullToEmptyString(String.join(",", license.getSourceFiles())));
+                                jsonObject.put("licType", SW360Constants.LICENSE_TYPE_GLOBAL.equalsIgnoreCase(license.getType()) ? SW360Constants.LICENSE_TYPE_GLOBAL : SW360Constants.LICENSE_TYPE_OTHERS);
+                                licenseToSourceData.put(jsonObject);
+                            }
+                            jsonResult.put(SW360Constants.STATUS, SW360Constants.SUCCESS);
+                            jsonResult.put("data", licenseToSourceData);
+                            jsonResult.put("relId", releaseId);
+                            jsonResult.put("relName", nullToEmptyString(printName(release)));
+                            jsonResult.put("attName", nullToEmptyString(filteredAttachment.getFilename()));
+                        } else {
+                            jsonResult.put(SW360Constants.STATUS, SW360Constants.FAILURE);
+                            jsonResult.put(SW360Constants.MESSAGE, LanguageUtil.get(resourceBundle, "source.file.information.not.found.in.cli"));
+                        }
+                    } else {
+                        jsonResult.put(SW360Constants.STATUS, SW360Constants.FAILURE);
+                        jsonResult.put(SW360Constants.MESSAGE, licenseResults.get(0).getMessage());
+                    }
+                } catch (TException exception) {
+                    log.error(String.format("Error fetchinig license Information for attachment: %s in release: %s",
+                            filteredAttachment.getFilename(), releaseId), exception);
+                }
+            } else {
+                jsonResult.put(SW360Constants.STATUS, SW360Constants.FAILURE);
+                if (filteredAttachments.size() > 1) {
+                    jsonResult.put(SW360Constants.MESSAGE, LanguageUtil.get(resourceBundle, "multiple.approved.cli.are.found.in.the.release"));
+                } else {
+                    jsonResult.put(SW360Constants.MESSAGE, LanguageUtil.get(resourceBundle, "approved.cli.not.found.in.the.release"));
+                }
+            }
+        } catch (TException e) {
+            log.error(String.format("error fetching release from db: %s ", releaseId), e);
+        }
+        jsonResult.put("releaseId", releaseId);
+        jsonResult.put("releaseName", nullToEmptyString(printName(release)));
+        try {
+            writeJSON(request, response, jsonResult);
+        } catch (IOException e) {
+            log.error("Error rendering license to source file mapping", e);
+        }
+    }
+
     private void serveClearingStatusList(ResourceRequest request, ResourceResponse response) {
         ProjectService.Iface client = thriftClients.makeProjectClient();
         User user = UserCacheHolder.getUserFromRequest(request);
@@ -2688,5 +2766,15 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             log.error("Cannot create moderation request", exception);
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE, "500");
         }
+    }
+
+    private Set<String> getProjectGroups(List<Project> projects) {
+        Set<String> businessUnit = new TreeSet<String>();
+        if (CommonUtils.isNotEmpty(projects)) {
+            for (Project project : projects) {
+                businessUnit.add(project.getBusinessUnit());
+            }
+        }
+        return businessUnit;
     }
 }

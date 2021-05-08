@@ -57,6 +57,7 @@ public class ComponentDatabaseHandlerTest {
 
     private static final String dbName = DatabaseSettingsTest.COUCH_DB_DATABASE;
     private static final String attachmentsDbName = DatabaseSettingsTest.COUCH_DB_ATTACHMENTS;
+    private static final String changeLogsDbName = DatabaseSettingsTest.COUCH_CHANGELOGS;
 
     private static final String email1 = "cedric.bodet@tngtech.com";
     private static final String email2 = "johannes.najjar@tngtech.com";
@@ -134,7 +135,7 @@ public class ComponentDatabaseHandlerTest {
         releases.add(release2c);
 
         // Create the database
-        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.createDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
 
         // Prepare the database
         DatabaseConnector databaseConnector = new DatabaseConnector(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
@@ -152,13 +153,13 @@ public class ComponentDatabaseHandlerTest {
         componentMap= ThriftUtils.getIdMap(components);
 
         // Prepare the handler
-        handler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredHttpClient(), dbName, attachmentsDbName, moderator, releaseModerator, projectModerator);
+        handler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, changeLogsDbName, attachmentsDbName, moderator, releaseModerator, projectModerator);
         handler.setSvmConnector(svmConnector);
     }
 
     @After
     public void tearDown() throws Exception {
-        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredHttpClient(), dbName);
+        TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
     }
 
     @Test
