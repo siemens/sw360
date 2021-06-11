@@ -120,6 +120,7 @@ public class PortalConstants {
     public static final String MODERATION_REQUEST = "moderationRequest";
     public static final String MODERATION_REQUESTS = "moderationRequests";
     public static final String CLOSED_MODERATION_REQUESTS = "closedModerationRequests";
+    public static final String OPEN_MODERATION_REQUESTS = "openModerationRequests";
     public static final String DELETE_MODERATION_REQUEST = "deleteModerationRequest";
     public static final String MODERATION_ACTIONS_ALLOWED = "moderationAllowed";
     public static final String MODERATION_REQUESTING_USER_DEPARTMENTS = "requestingUserDepartments";
@@ -299,6 +300,9 @@ public class PortalConstants {
 
     public static final String FOSSOLOGY_PORTLET_NAME = PORTLET_NAME_PREFIX + "fossology";
     public static final String USER_LIST = "userList";
+    public static final String SECONDARY_GROUPS_LIST = "secGrpsKeys";
+    public static final String EDIT_SECONDARY_GROUP_FOR_USER = "editSecondaryGroupForUser";
+    public static final String SECONDARY_ROLES_OPTIONS = "secondaryRolesOptions";
     public static final String MISSING_USER_LIST = "missingUserList";
     public static final String GET_CLEARING_STATE_SUMMARY = "getClearingStateSummary";
     public static final String PROJECT_LINK_TABLE_MODE = "projectLinkTableMode";
@@ -378,6 +382,10 @@ public class PortalConstants {
     public static final String SVM_TRACKING_FEEDBACK_OFFSET = "trackingFeedbackOffset";
     public static final String SVM_TRACKING_FEEDBACK_INTERVAL = "trackingFeedbackInterval";
     public static final String SVM_TRACKING_FEEDBACK_NEXT_SYNC = "trackingFeedbackNextSync";
+    public static final String DELETE_ATTACHMENT_IS_SCHEDULED = "deleteAttachmentIsScheduled";
+    public static final String DELETE_ATTACHMENT_OFFSET = "deleteAttachmentOffset";
+    public static final String DELETE_ATTACHMENT_INTERVAL = "deleteAttachmentInterval";
+    public static final String DELETE_ATTACHMENT_NEXT_SYNC = "deleteAttachmentNextSync";
 
     //! Specialized keys for licenseInfo
     public static final String LICENSE_INFO_OUTPUT_FORMATS = "licenseInfoOutputFormats";

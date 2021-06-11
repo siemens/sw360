@@ -80,6 +80,8 @@ public class ScheduleHandler implements ScheduleService.Iface {
                 break;
             case ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE:
                 successSync = wrapSupplierException(() -> thriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback(), serviceName);
+            case ThriftClients.DELETE_ATTACHMENT_SERVICE:
+                successSync = wrapSupplierException(() -> thriftClients.makeAttachmentClient().deleteOldAttachmentFromFileSystem(), serviceName);
                 break;
             default:
                 log.error("Could not schedule service: " + serviceName + ". Reason: service is not registered in ThriftClients.");
