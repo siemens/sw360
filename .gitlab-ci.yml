@@ -22,6 +22,7 @@ variables:
 build_sw360:
   stage: build
   script:
+  - echo "Running build_sw360 by user - ${GITLAB_USER_EMAIL}"
   - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts /etc/sw360/
 
   # setting remote repos url to download mvn packages
@@ -31,15 +32,9 @@ build_sw360:
   - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb-test.properties
   - echo "couchdb.user = ${COUCHDB_TEST_USER}" >> /etc/sw360/couchdb-test.properties
   - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.database = sw360_test_db" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.usersdb = sw360_test_users" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.attachments = sw360_test_attachments" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.fossologyKeys = sw360_test_fossologykeys" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.vulnerability_management = sw360_test_vm" >> /etc/sw360/couchdb-test.properties
 
   # Create databasetest.properties in /etc/sw360 to run testcases
   - echo 'couch_db_url = http://couchdb:5984' > /etc/sw360/databasetest.properties
-  - echo 'couch_db_database = datahandlertestdb' >> /etc/sw360/databasetest.properties
   - echo "couchdb.username = ${COUCHDB_TEST_USER}" >> /etc/sw360/databasetest.properties
   - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/databasetest.properties
 
@@ -68,12 +63,16 @@ deploy_sw360_DEV_server:
   stage: deploy_to_dev
   environment:
     name: Dev
-  only:
-    - masterct
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $AUTO_DEPLOY_BRANCH_FOR_DEV'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH != $AUTO_DEPLOY_BRANCH_FOR_DEV'
+      when: manual
   before_script:
-  - echo "Running deploy_sw360_DEV_server"
+  - echo "Running deploy_sw360_DEV_server by user - ${GITLAB_USER_EMAIL}"
   script:
   - echo "Trigger aws CodeDeploy for Dev server"
+  - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
   - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_DEV} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_DEV} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
@@ -84,12 +83,11 @@ deploy_sw360_STAGE_server:
   environment:
     name: Stage
   when: manual
-  only:
-    - masterct
   before_script:
-  - echo "Running deploy_sw360_STAGE_server"
+  - echo "Running deploy_sw360_STAGE_server by user - ${GITLAB_USER_EMAIL}"
   script:
   - echo "Trigger aws CodeDeploy for Stage server"
+  - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
   - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_STAGE} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_STAGE} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}

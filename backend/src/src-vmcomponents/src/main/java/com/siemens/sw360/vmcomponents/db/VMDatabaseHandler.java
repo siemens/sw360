@@ -57,7 +57,7 @@ public class VMDatabaseHandler extends VulnerabilityDatabaseHandler {
     }
 
     public VMDatabaseHandler(Supplier<HttpClient> httpClient, String dbName) throws MalformedURLException {
-        // Create the connector
+        super(httpClient, dbName);
         DatabaseConnector db = new DatabaseConnector(httpClient, dbName);
         compRepo = new VMComponentRepository(db);
         actionRepo = new VMActionRepository(db);
