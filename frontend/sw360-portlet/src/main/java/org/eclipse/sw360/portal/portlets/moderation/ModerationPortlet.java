@@ -11,6 +11,7 @@ package org.eclipse.sw360.portal.portlets.moderation;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -32,6 +33,7 @@ import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.DateRange;
+import org.eclipse.sw360.datahandler.permissions.DocumentPermissions;
 import org.eclipse.sw360.datahandler.thrift.ModerationState;
 import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RemoveModeratorRequestStatus;
@@ -93,6 +95,7 @@ import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhit
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
 import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 import static org.eclipse.sw360.portal.common.PortalConstants.*;
+import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
 
 @org.osgi.service.component.annotations.Component(
     immediate = true,
@@ -182,15 +185,19 @@ public class ModerationPortlet extends FossologyAwarePortlet {
         }
         JSONArray jsonOpenModerations = getModerationData(moderations, paginationParameters, request, open);
         JSONObject jsonResult = createJSONObject();
-        jsonResult.put(DATATABLE_RECORDS_TOTAL, pgDt.getTotalRowCount());
-        jsonResult.put(DATATABLE_RECORDS_FILTERED, pgDt.getTotalRowCount());
-        jsonResult.put(DATATABLE_DISPLAY_DATA, jsonOpenModerations);
-        final Map<String, Long> countByModerationState = getCountByModerationState();
-        long totalNoOfRequests = countByModerationState.values().stream().mapToLong(Long::longValue).sum();
+        final Map<String, Long> countByModerationState = getCountByModerationState(request);
+        long openModRequestCount = countByModerationState.get("OPEN") == null ? 0
+                : countByModerationState.get("OPEN");
         long closedModRequestCount = countByModerationState.get("CLOSED") == null ? 0
                 : countByModerationState.get("CLOSED");
-        jsonResult.put(MODERATION_REQUESTS, totalNoOfRequests);
+        Map<String, Set<String>> filterMap = getModerationFilterMap(request);
+        long noOfRecords = filterMap.isEmpty() ? (open ? openModRequestCount : closedModRequestCount)
+                : pgDt.getTotalRowCount();
+        jsonResult.put(DATATABLE_RECORDS_TOTAL, noOfRecords);
+        jsonResult.put(DATATABLE_RECORDS_FILTERED, noOfRecords);
+        jsonResult.put(DATATABLE_DISPLAY_DATA, jsonOpenModerations);
         jsonResult.put(CLOSED_MODERATION_REQUESTS, closedModRequestCount);
+        jsonResult.put(OPEN_MODERATION_REQUESTS, openModRequestCount);
         jsonResult.put(MODERATION_REQUESTING_USER_DEPARTMENTS, getRequestingUserDepts());
         try {
             writeJSON(request, response, jsonResult);
@@ -199,11 +206,12 @@ public class ModerationPortlet extends FossologyAwarePortlet {
         }
     }
 
-    private Map<String, Long> getCountByModerationState() {
+    private Map<String, Long> getCountByModerationState(ResourceRequest request) {
         Map<String, Long> countByModerationState = Maps.newHashMap();
         ModerationService.Iface client = thriftClients.makeModerationClient();
+        User user = UserCacheHolder.getUserFromRequest(request);
         try {
-            countByModerationState = client.getCountByModerationState();
+            countByModerationState = client.getCountByModerationState(user);
         } catch (TException e) {
             log.error("Error geeting moderation requests count", e);
         }
@@ -288,6 +296,7 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                 moderationRequestsWithPageData = client.getRequestsByModeratorWithPagination(user, pageData, open);
             } else {
                 List<ModerationRequest> moderations = client.refineSearch(null, filterMap);
+                moderations = moderations.stream().filter(mr -> mr.getModerators().contains(user.getEmail())).collect(Collectors.toList());
                 Map<Boolean, List<ModerationRequest>> partitionedModerationRequests = moderations.stream()
                         .collect(Collectors.groupingBy(ModerationPortletUtils::isOpenModerationRequest));
                 List<ModerationRequest> requests = CommonUtils.nullToEmptyList(partitionedModerationRequests.get(open));
@@ -455,15 +464,27 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                 clearingRequest = client.getClearingRequestById(clearingId, user);
             }
             clearingRequest.setComments(Lists.reverse(CommonUtils.nullToEmptyList(clearingRequest.getComments())));
+            boolean isPrimaryRoleOfUserAtLeastClearingExpert = PermissionUtils.isUserAtLeast(UserGroup.CLEARING_EXPERT,
+                    user);
             request.setAttribute(CLEARING_REQUEST, clearingRequest);
             request.setAttribute(WRITE_ACCESS_USER, false);
-            request.setAttribute(IS_CLEARING_EXPERT, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_EXPERT, user));
+            request.setAttribute(IS_CLEARING_EXPERT, isPrimaryRoleOfUserAtLeastClearingExpert);
 
             if (CommonUtils.isNotNullEmptyOrWhitespace(clearingRequest.getProjectId()) ) {
                 ProjectService.Iface projectClient = thriftClients.makeProjectClient();
                 Project project = projectClient.getProjectById(clearingRequest.getProjectId(), UserCacheHolder.getUserFromRequest(request));
                 request.setAttribute(PROJECT, project);
-                request.setAttribute(WRITE_ACCESS_USER, makePermission(project, user).isActionAllowed(RequestedAction.WRITE));
+
+                DocumentPermissions<Project> projectPermission = makePermission(project, user);
+                ImmutableSet<UserGroup> clearingExpertRoles = ImmutableSet.of(UserGroup.CLEARING_EXPERT);
+                ImmutableSet<UserGroup> adminRoles = ImmutableSet.of(UserGroup.ADMIN, UserGroup.SW360_ADMIN);
+
+                request.setAttribute(IS_CLEARING_EXPERT,
+                        isPrimaryRoleOfUserAtLeastClearingExpert
+                                || projectPermission.isUserOfOwnGroupHasRole(clearingExpertRoles, UserGroup.CLEARING_EXPERT)
+                                || projectPermission.isUserOfOwnGroupHasRole(adminRoles, UserGroup.ADMIN));
+                request.setAttribute(WRITE_ACCESS_USER, projectPermission.isActionAllowed(RequestedAction.WRITE));
+
                 List<Project> projects = getWithFilledClearingStateSummary(projectClient, Lists.newArrayList(project), user);
                 Integer approvedReleaseCount = 0;
                 Project projWithCsSummary = projects.get(0);
@@ -632,6 +653,12 @@ public class ModerationPortlet extends FossologyAwarePortlet {
         try {
             Set<ClearingRequest> clearingRequestsSet = client.getMyClearingRequests(user);
             clearingRequestsSet.addAll(client.getClearingRequestsByBU(user.getDepartment()));
+
+            if (!CommonUtils.isNullOrEmptyMap(user.getSecondaryDepartmentsAndRoles())) {
+                user.getSecondaryDepartmentsAndRoles().keySet().stream().forEach(department -> wrapTException(() -> {
+                    clearingRequestsSet.addAll(client.getClearingRequestsByBU(department));
+                }));
+            }
 
             Map<Boolean, List<ClearingRequest>> partitionedClearingRequests = clearingRequestsSet
                     .stream().collect(Collectors.groupingBy(ModerationPortletUtils::isClosedClearingRequest));

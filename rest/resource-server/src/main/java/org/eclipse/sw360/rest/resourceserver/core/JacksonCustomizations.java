@@ -259,7 +259,12 @@ class JacksonCustomizations {
                 "restApiTokensIterator",
                 "myProjectsPreferenceSelection",
                 "myProjectsPreferenceSelectionSize",
-                "setMyProjectsPreferenceSelection"
+                "setMyProjectsPreferenceSelection",
+                "setSecondaryDepartmentsAndRoles",
+                "secondaryDepartmentsAndRolesSize",
+                "primaryRolesSize",
+                "primaryRoles",
+                "setPrimaryRoles"
         })
         static abstract class UserMixin extends User {
             @Override
