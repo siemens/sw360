@@ -212,6 +212,91 @@
     </tr>
 </table>
 
+
+
+<table class="table table-bordered">
+    <colgroup>
+        <col style="width: 30%;"/>
+        <col style="width: 70%;"/>
+    </colgroup>
+    <thead>
+        <tr>
+            <th colspan="2">Clearing Assessment Summary: <sw360:ReleaseName release="${release}" /></th>
+        </tr>
+    </thead>
+
+    <tbody>
+            <tr >
+                <td>
+                    General assessment
+                </td>
+                <td >
+                    <textarea class="form-control" rows="3" placeholder="Enter Assessment">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</textarea>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Additional notes
+                </td>
+                <td >
+                    <textarea class="form-control" rows="3" placeholder="Enter notes">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</textarea>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Source / binary integration notes
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="critical" value="nonCritical" checked >no critical files found, source code and binaries can be used as is</label></div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="critical" value="critical" unchecked >critical files found, source code needs to be adapted and binaries possibly re-built</label></div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Dependency notes
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label ><input type="radio" name="dependencySourceBinary" value="noDependency" checked >no dependencies found, neither in source code nor in binaries</label>
+                </div>
+                <div class="radio form-check">
+                    <label class="text-muted"><input type="radio" name="dependencySourceBinary" value="dependencySource" unchecked >dependencies found in source code</label>
+                </div>
+                <div class="radio form-check">
+                    <label class="text-muted"><input type="radio" name="dependencySourceBinary" value="dependencyBinary" unchecked >dependencies found in binaries</label>
+                </div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Export restrictions by copyright owner
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="exportRestriction" value="noExportRestriction" checked >no export restrictions found</label>
+                </div>
+                <div class="radio form-check">
+                    <label class="text-muted"><input type="radio" name="exportRestriction" value="exportRestriction" unchecked >export restrictions found</label>
+                </div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Restrictions for use by copyright owner <br> (e.g. not for Nuclear Power)
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="restrictionForUse" value="noRestriction" checked >no restrictions for use found</label></div>
+                <div class="radio form-check">
+                    <label class="text-muted"><input type="radio" name="restrictionForUse" value="restrictionForUse" unchecked >restrictions for use found</label></div>
+                </td>
+            </tr>
+    </tbody>
+</table>
+
+
 <table class="table edit-table three-columns" id="RequestInformation">
     <thead>
         <tr>

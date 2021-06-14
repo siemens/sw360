@@ -58,6 +58,128 @@
     </tbody>
 </table>
 
+<table class="table table-bordered">
+    <colgroup>
+        <col style="width: 30%;"/>
+        <col style="width: 70%;"/>
+    </colgroup>
+    <thead>
+        <tr>
+            <th colspan="2">Clearing Assessment Summary: <sw360:ReleaseName release="${release}" /></th>
+        </tr>
+    </thead>
+
+    <tbody>
+            <tr >
+                <td colspan="2">
+                    More then 1 CLI files are available in release.
+                </td>
+            </tr>
+    </tbody>
+</table>
+
+<table class="table table-bordered">
+    <colgroup>
+        <col style="width: 30%;"/>
+        <col style="width: 70%;"/>
+    </colgroup>
+    <thead>
+        <tr>
+            <th colspan="2">Clearing Assessment Summary: <sw360:ReleaseName release="${release}" /></th>
+        </tr>
+    </thead>
+
+    <tbody>
+            <tr >
+                <td colspan="2">
+                    No CLI files are available in release.
+                </td>
+            </tr>
+    </tbody>
+</table>
+
+<table class="table table-bordered">
+    <colgroup>
+        <col style="width: 30%;"/>
+        <col style="width: 70%;"/>
+    </colgroup>
+    <thead>
+        <tr>
+            <th colspan="2">Clearing Assessment Summary: <sw360:ReleaseName release="${release}" /></th>
+        </tr>
+    </thead>
+
+    <tbody>
+            <tr >
+                <td>
+                    General assessment
+                </td>
+                <td >
+                    <textarea rows="3" class="form-control">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</textarea>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Additional notes
+                </td>
+                <td >
+                    <textarea rows="3" class="form-control">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</textarea>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Source / binary integration notes
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="critical" value="nonCritical" checked >no critical files found, source code and binaries can be used as is</label></div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="critical" value="critical" unchecked disabled>critical files found, source code needs to be adapted and binaries possibly re-built</label></div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Dependency notes
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="dependencySourceBinary" value="noDependency" checked >no dependencies found, neither in source code nor in binaries</label>
+                </div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="dependencySourceBinary" value="dependencySource" unchecked disabled>dependencies found in source code</label>
+                </div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="dependencySourceBinary" value="dependencyBinary" unchecked disabled>dependencies found in binaries</label>
+                </div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Export restrictions by copyright owner
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="exportRestriction" value="noExportRestriction" checked >no export restrictions found</label>
+                </div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="exportRestriction" value="exportRestriction" unchecked disabled>export restrictions found</label>
+                </div>
+                </td>
+            </tr>
+            <tr >
+                <td>
+                    Restrictions for use by copyright owner <br> (e.g. not for Nuclear Power)
+                </td>
+                <td >
+                <div class="radio form-check">
+                    <label><input type="radio" name="restrictionForUse" value="noRestriction" checked >no restrictions for use found</label></div>
+                <div class="radio form-check">
+                    <label><input type="radio" name="restrictionForUse" value="restrictionForUse" unchecked disabled>restrictions for use found</label></div>
+                </td>
+            </tr>
+    </tbody>
+</table>
+
 <table class="table label-value-table" id="ReleaseClearingOverview">
     <thead>
     <tr>
