@@ -358,7 +358,8 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
             if(selectedReleaseRelations.includes(projectReleaseReln)) {
                 selectedAttachmentWithPathArray.push(selectedAttachmentIdsWithPath);
                 let fileName = $(this).closest('td').next('td').next('td').text();
-                let fnameToAttchmntId = fileName.trim()+":"+attchmntId;
+                let tableId = $(this).closest('table').attr('id');
+                let fnameToAttchmntId = fileName.trim()+":"+attchmntId+'~'+tableId;              
                 attchmntIdToFilename.push(fnameToAttchmntId);
             }
         });

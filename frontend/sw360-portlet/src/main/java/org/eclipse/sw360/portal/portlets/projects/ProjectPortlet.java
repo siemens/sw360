@@ -107,7 +107,7 @@ import static org.eclipse.sw360.portal.portlets.projects.ProjectPortletUtils.isU
         "javax.portlet.display-name=Projects",
         "javax.portlet.info.short-title=Projects",
         "javax.portlet.info.title=Projects",
-	    "javax.portlet.resource-bundle=content.Language",
+        "javax.portlet.resource-bundle=content.Language",
         "javax.portlet.init-param.view-template=/html/projects/view.jsp",
     },
     service = Portlet.class,
@@ -157,6 +157,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     public static final String LICENSE_STORE_KEY_PREFIX = "license-store-";
 
+    String tableId = null;
+    
     public ProjectPortlet() {
     }
 
@@ -590,7 +592,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             LicenseInfoFile licenseInfoFile = licenseInfoClient.getLicenseInfoFile(project, user, outputGenerator,
                     releaseIdsToSelectedAttachmentIds, excludedLicensesPerAttachmentId, externalIds, fileName);
             saveLicenseInfoAttachmentUsages(project, user, filteredSelectedAttachmentIdsWithPath,
-                    excludedLicensesPerAttachmentIdWithPath, includeConcludedLicenseList);
+                    excludedLicensesPerAttachmentIdWithPath, includeConcludedLicenseList, tableId);
             saveSelectedReleaseAndProjectRelations(projectId, listOfSelectedRelationships, listOfSelectedProjectRelationships, isLinkedProjectPresent);
             sendLicenseInfoResponse(request, response, project, licenseInfoFile);
         } catch (TException e) {
@@ -618,7 +620,16 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         AttachmentService.Iface attachmentClient = thriftClients.makeAttachmentClient();
         JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
         Set<String> attachmntNames = new HashSet<String>();
-
+        String tableIdValue = null;
+        for (String attachmentData : fileNameToAttchmntId) {
+            String separator = "~";
+            String[] tableId = attachmentData.split(separator);
+            tableIdValue = tableId[1];
+        }
+        if (tableIdValue != null) {
+            tableId = tableIdValue;
+        }
+        
         User user = UserCacheHolder.getUserFromRequest(request);
         ProjectService.Iface projClient = thriftClients.makeProjectClient();
         Project project = null;
@@ -744,20 +755,20 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         OutputFormatInfo outputFormatInfo = licenseInfoFile.getOutputFormatInfo();
         String documentVariant = licenseInfoFile.getOutputFormatInfo().getVariant() == OutputFormatVariant.DISCLOSURE ? "LicenseInfo" : "ProjectClearingReport";
         String filename = String.format("%s-%s%s-%s.%s", documentVariant, project.getName(),
-			StringUtils.isBlank(project.getVersion()) ? "" : "-" + project.getVersion(),
-			SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
-			outputFormatInfo.getFileExtension());
-    	String mimetype = outputFormatInfo.getMimeType();
-    	if (isNullOrEmpty(mimetype)) {
-    		mimetype = URLConnection.guessContentTypeFromName(filename);
-    	}
+            StringUtils.isBlank(project.getVersion()) ? "" : "-" + project.getVersion(),
+            SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
+            outputFormatInfo.getFileExtension());
+        String mimetype = outputFormatInfo.getMimeType();
+        if (isNullOrEmpty(mimetype)) {
+            mimetype = URLConnection.guessContentTypeFromName(filename);
+        }
         PortletResponseUtil.sendFile(request, response, filename, licenseInfoFile.getGeneratedOutput(), mimetype);
     }
 
     private void saveLicenseInfoAttachmentUsages(Project project, User user, Set<String> selectedAttachmentIdsWithPath,
             Map<String, Set<LicenseNameWithText>> excludedLicensesPerAttachmentIdWithPath,
-            List<String> includeConcludedLicenseList) {
-        try {
+            List<String> includeConcludedLicenseList, String tableId) {
+        try {           
             Function<String, UsageData> usageDataGenerator = attachmentContentId -> {
                 Set<String> licenseIds = CommonUtils
                         .nullToEmptySet(excludedLicensesPerAttachmentIdWithPath.get(attachmentContentId)).stream()
@@ -769,6 +780,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 String splittedAttachmentContentId[] = attachmentContentId.split(":");
                 String projectPath = String.join(":", Arrays.copyOf(splittedAttachmentContentId, splittedAttachmentContentId.length-3));
                 licenseInfoUsage.setProjectPath(projectPath);
+                licenseInfoUsage.setTableId(tableId);
                 licenseInfoUsage.setIncludeConcludedLicense(includeConcludedLicenseList.contains(attachmentContentId));
                 return UsageData.licenseInfo(licenseInfoUsage);
             };

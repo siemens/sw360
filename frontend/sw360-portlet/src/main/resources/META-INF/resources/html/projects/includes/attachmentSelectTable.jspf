@@ -24,6 +24,7 @@
 <%--These variables are used as a trick to allow referencing constant values in EL expressions below--%>
 <c:set var="tableModeLicenseInfo" value="<%=PortalConstants.PROJECT_LINK_TABLE_MODE_LICENSE_INFO%>"/>
 <c:set var="tableModeSourceBundle" value="<%=PortalConstants.PROJECT_LINK_TABLE_MODE_SOURCE_BUNDLE%>"/>
+<c:set var="tableModeLicenseInfoForOnlyApprovedAttachment" value="<%=PortalConstants.PROJECT_LINK_TABLE_MODE_LICENSE_INFO%>"/>
 
 <div id="infobar" class="alert alert-info">
     <div class="spinner"><liferay-ui:message key="loading.previously.stored.selection" /></div>
@@ -232,7 +233,7 @@
 <table class="table" id="LinkedProjectsInfoForOnlyApprovedAttachment" style="width: 100%; max-width: 100%;"
     data-project-id="${project.id}"
     data-table-mode="${projectLinkTableMode}"
-    data-table-mode-license-info="${tableModeLicenseInfo}"
+    data-table-mode-license-info-for-Only-Approved-Attachment="${tableModeLicenseInfoForOnlyApprovedAttachment}"
     data-table-mode-source-bundle="${tableModeSourceBundle}"
     data-portlet-namespace="<portlet:namespace/>"
     data-license-info-base-url="<%=downloadLicenseInfoURL%>"
@@ -254,7 +255,7 @@
     </colgroup>
     <thead>
         <tr>
-            <th><input type="checkbox" class="form-check-input" checked="checked" id="selectAllCheckbox"/></th>
+            <th><input type="checkbox" class="form-check-input" checked="checked" id="selectAllCheckboxOnlyApprovedView"/></th>
             <th><liferay-ui:message key="lvl" /></th>
             <th><liferay-ui:message key="name" /></th>
             <th></th>
@@ -282,7 +283,7 @@
                       value="${projectLink.name}" maxChar="50"/>
                         <sw360:out value="${projectLink.version}"/>
                     </a>
-                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo}">
+                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment}">
                         <div class="form-group">
                             <button type="button" id="${projectPath}_use-sel" class="mt-1 mb-1 btn btn-sm btn-secondary use-subproject-selection" data-tt-parent-id="${projectLink.nodeId}">
                                 <liferay-ui:message key="use.selection.of.this.subproject" />
@@ -336,30 +337,30 @@
                 </td>
             </tr>
             <!-- TODO what is the logic that is controlled by this variable?! -->
-            <core_rt:set var="attachmentSelected" value="false" scope="request"/>
+            <core_rt:set var="attachmentSelectedForOnlyApproved" value="false" scope="request"/>
             <core_rt:forEach items="${releaseLink.attachments}" var="attachment" varStatus="attachmentloop">
             <core_rt:if test="${attachment.checkStatus == 'ACCEPTED'}">
                 <tr id="attachmentRow${loop.count}_${releaseloop.count}_${attachmentloop.count}"
                     data-tt-id="${releaseLink.nodeId}_${attachment.attachmentContentId}"
                     data-tt-parent-id="${releaseLink.nodeId}"
                     data-project-path="${projectPath}"
-                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo}">data-tt-branch="true"</core_rt:if>
+                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment}">data-tt-branch="true"</core_rt:if>
                     data-row-type="attachment"
                     data-tree-level="${projectLink.treeLevel + 1}"
                     data-release-id="${releaseLink.id}"
                     data-attachment-id="${attachment.attachmentContentId}"
-                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo}">data-release-relationship="${releaseLink.releaseRelationship}"</core_rt:if>
+                    <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment}">data-release-relationship="${releaseLink.releaseRelationship}"</core_rt:if>
                     <core_rt:if test="${empty releaseLink.attachments}">class="selectable"</core_rt:if>
                     <core_rt:if test="${fn:length(releaseLink.attachments) == 1}">class="selectable highlightSuccess"</core_rt:if>
                     <core_rt:if test="${fn:length(releaseLink.attachments) gt 1}">class="selectable highlightWarning"</core_rt:if>
                 >
                     <td>
-                        <input type="checkbox" class="form-check-input attachmentChkbox"
+                        <input type="checkbox" class="form-check-input attachmentChkboxForOnlyApprovedView"
                                 name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_RELEASE_TO_ATTACHMENT%>"
-                                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo}">value='${projectPath.concat(":").concat(releaseLink.id).concat(":").concat(releaseLink.releaseRelationship).concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
-                                <core_rt:if test="${projectLinkTableMode != tableModeLicenseInfo}">value='${releaseLink.id.concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
+                                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment}">value='${projectPath.concat(":").concat(releaseLink.id).concat(":").concat(releaseLink.releaseRelationship).concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
+                                <core_rt:if test="${projectLinkTableMode != tableModeLicenseInfoForOnlyApprovedAttachment}">value='${releaseLink.id.concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
                                 <core_rt:if test="${!attachmentSelected && (releaseLink.attachments.size() == 1 || attachment.createdTeam == sw360User.department)}">checked="checked" class="defaultChecked"
-                                    <core_rt:set var="attachmentSelected" value="true" scope="request"/>
+                                    <core_rt:set var="attachmentSelectedForOnlyApproved" value="true" scope="request"/>
                                 </core_rt:if>
                         />
                     </td>
@@ -374,8 +375,8 @@
                         <core_rt:if test='${attachment.filename.toLowerCase().endsWith(".rdf")}'>
                             <input type="checkbox" class="form-check-input concludedLicense" disabled="true"
                                 name="<portlet:namespace/><%=PortalConstants.INCLUDE_CONCLUDED_LICENSE%>"
-                                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo}">value='${projectPath.concat(":").concat(releaseLink.id).concat(":").concat(releaseLink.releaseRelationship).concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
-                                <core_rt:if test="${projectLinkTableMode != tableModeLicenseInfo}">value='${releaseLink.id.concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
+                                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment}">value='${projectPath.concat(":").concat(releaseLink.id).concat(":").concat(releaseLink.releaseRelationship).concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
+                                <core_rt:if test="${projectLinkTableMode != tableModeLicenseInfoForOnlyApprovedAttachment}">value='${releaseLink.id.concat(":").concat(attachment.attachmentContentId)}'</core_rt:if>
                             />
                         </core_rt:if>
                       </td>
@@ -402,7 +403,7 @@
                     </td>
                 </tr>
                 </core_rt:if>
-                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfo && attachment.checkStatus == 'ACCEPTED'}">
+                <core_rt:if test="${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment && attachment.checkStatus == 'ACCEPTED'}">
                     <tr data-tt-id="${releaseLink.nodeId}_${attachment.attachmentContentId}_loader" data-tt-parent-id="${releaseLink.nodeId}_${attachment.attachmentContentId}">
                         <td colspan="7">
                             <div class="spinner"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> <liferay-ui:message key="loading.license.information.please.wait" /></div>
@@ -434,7 +435,7 @@
             var $linkedProjectsInfoTableForApprovedAttachment = $("#LinkedProjectsInfoForOnlyApprovedAttachment"),
                 dataForApproved = $linkedProjectsInfoTableForApprovedAttachment.data(),
                 releaseRelationDataAttr,
-                licenseinfoTableModeForApprovedAttachment = ${projectLinkTableMode == tableModeLicenseInfo};
+                licenseinfoTableModeForApprovedAttachment = ${projectLinkTableMode == tableModeLicenseInfoForOnlyApprovedAttachment};
 
             if(data.tableMode === data.tableModeLicenseInfo) {
                 initializeTableForLicenseInfo($linkedProjectsInfoTable);
@@ -450,9 +451,8 @@
                 $linkedProjectsInfoTable.remove();
             }
 
-            if (dataForApproved.tableMode === dataForApproved.tableModeLicenseInfo) {
+            if (dataForApproved.tableMode === dataForApproved.tableModeLicenseInfoForOnlyApprovedAttachment) {
                 initializeTableForLicenseInfo($linkedProjectsInfoTableForApprovedAttachment);
-                loadSavedSelectionState($linkedProjectsInfoTableForApprovedAttachment, dataForApproved.projectId);
              }
 
             $("#selectAllCheckbox").on("change", function() {
@@ -463,6 +463,16 @@
                     $linkedProjectsInfoTable.find(":checkbox.defaultChecked").prop('checked', true).trigger('change');
                 }
             });
+            
+            $("#selectAllCheckboxOnlyApprovedView").on("change", function() {
+                // first uncheck all in any case because on check only the default ones should be checked...
+                $linkedProjectsInfoTable.find(":checkbox:not(#selectAllCheckboxOnlyApprovedView)").prop('checked', false).trigger('change');
+                // ...and check them if selected
+                if (this.checked){
+                    $linkedProjectsInfoTable.find(":checkbox.defaultChecked").prop('checked', true).trigger('change');
+                }
+            });
+            
 
             $(".use-subproject-selection").on("click", function(event) {
                 var node = event.target,
@@ -698,10 +708,18 @@
                 var config = $linkedProjectsInfoTable.data(),
                     prefix = prefix || '',
                     url;
-                if(config.tableMode === config.tableModeLicenseInfo) {
+                if ($linkedProjectsInfoTable[0].id === 'LinkedProjectsInfo') {
+                if (config.tableMode === config.tableModeLicenseInfo) {
                     url = config.licenseInfoStateUrl;
                 } else {
                     url = config.sourcePackageStateUrl;
+                }
+                } else {
+                if(config.tableMode === config.tableModeLicenseInfoForOnlyApprovedAttachment) {
+                   url = config.licenseInfoStateUrl;
+                } else {
+                    url = config.sourcePackageStateUrl;
+                }
                 }
                 url = Liferay.PortletURL.createURL(url);
                 url.setParameter(config.projectIdParameterName, projectId);
@@ -725,6 +743,17 @@
                                 $(includeConcludedLicense).prop("checked", true);
                             }
                         });
+                        
+                        $(".attachmentChkboxForOnlyApprovedView").each(function(event){
+                            let selectedRow = $(this).parents('tr:first'),
+                                checked = $(this).is(':checked');
+                            let includeConcludedLicense = $(selectedRow).find(':checkbox:eq(1)')
+                            if(checked) {
+                                $(includeConcludedLicense).prop("disabled", false);
+                                $(includeConcludedLicense).prop("checked", true);
+                            }
+                        });
+                        
 
                         $('#infobar').removeClass('alert-info').addClass('alert-secondary').html($('<span>', {
                             text: "<liferay-ui:message key="no.previous.selection.found.if.you.have.writing.permissions.to.this.project.your.selection.will.be.stored.automatically.when.downloading" />"
@@ -797,27 +826,44 @@
                 if (!prefix) {
                     // on first load (=prefix is empty) reset all default selected checkboxes if we have a stored selection
                     $("#selectAllCheckbox").prop('checked', false).trigger('change');
+                    $("#selectAllCheckboxOnlyApprovedView").prop('checked', false).trigger('change');
                 } else {
                     // on subproject loads (=prefix is set) reset only subtree checkboxes
                     $ttNode = $linkedProjectsInfoTable.treetable('node', ttId);
                     uncheckAttachmentInSubtree($ttNode);
                 }
+                
+                var tableId;
+                              	
                 attachmentUsages.forEach(function(usage) {
+                	tableId = usage.usageData.licenseInfo.tableId;
+                	if ($linkedProjectsInfoTable[0].id === 'LinkedProjectsInfo') {
                     var inputPrefix = config.tableMode === config.tableModeLicenseInfo ? prefix + usage.usageData.licenseInfo.projectPath + ':' : '',
                         node;
+                	} else {
+                    var inputPrefix = config.tableMode === config.tableModeLicenseInfoForOnlyApprovedAttachment ? prefix + usage.usageData.licenseInfo.projectPath + ':' : '',
+                            node;                
+                    }
                     // check all checkboxes by checking the parent one because we are storing exclusions and only
                     // excluded ones will be unchecked
+                    if (tableId === $linkedProjectsInfoTable[0].id) {
                     var releaseRelationFromMap = '';
-                    if (licenseinfoTableMode) {
+                    if (licenseinfoTableMode || licenseinfoTableModeForApprovedAttachment) {
                         var inputPrefixSplitted = inputPrefix.split(":");
                         var projOrSubProjId = inputPrefixSplitted[inputPrefixSplitted.length-2];
                         var projToRel = projOrSubProjId + ":" + usage.owner.releaseId;
                         var projRelToReln = JSON.parse(JSON.stringify(${projectReleaseToRelation}));
                         releaseRelationFromMap = projRelToReln.projectReleaseToRel[projToRel];
                     }
+                    
+                    if (licenseinfoTableMode) {
                     releaseRelationDataAttr = licenseinfoTableMode?'[data-release-relationship=' + releaseRelationFromMap + ']':'';
+                    } 
+                    
                     var relationPlusColon = releaseRelationFromMap + ':';
+                    if (licenseinfoTableMode) {
                     var releaseRelation = licenseinfoTableMode ? relationPlusColon : '';
+                    } 
 
                     $linkedProjectsInfoTable.find('tr input[value="' + inputPrefix + usage.owner.releaseId + ':' + releaseRelation + usage.attachmentContentId + '"]:first').prop('checked', true).trigger('change');
                     $linkedProjectsInfoTable.find('tr input[value="' + inputPrefix + usage.owner.releaseId + ':' + releaseRelation + usage.attachmentContentId + '"]:eq(1)').prop('disabled', false).trigger('change');
@@ -877,6 +923,7 @@
                     } else {
                         loadCountdown.decrement();
                     }
+                }
                 });
             }
 
@@ -923,9 +970,9 @@
                     }
                 };
             }
-        });
 
         $("#pills-onlyapproved-tab").on("click", function(event) {
+            loadSavedSelectionState($linkedProjectsInfoTableForApprovedAttachment, dataForApproved.projectId);
             if ($('#pills-onlyapproved-tab').hasClass('show active')) {
               } else {
                  $('#pills-showall-tab').removeClass('show active');
@@ -939,6 +986,10 @@
                       }
                 });
              }
+        });
+       $("#pills-showall-tab").on("click", function(event) {
+            loadSavedSelectionState($linkedProjectsInfoTable, data.projectId);
+        }); 
         });
     });
 </script>
