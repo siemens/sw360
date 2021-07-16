@@ -12,6 +12,11 @@
 namespace java org.eclipse.sw360.datahandler.thrift
 namespace php sw360.thrift
 
+enum Quadratic {
+    NA = 0,
+    YES = 1
+}
+
 enum Ternary {
     UNDEFINED = 0,
     NO = 1,
@@ -67,6 +72,13 @@ enum ClearingRequestState {
     IN_PROGRESS = 4,
     CLOSED = 5,
     ON_HOLD = 6
+}
+
+enum ClearingRequestPriority {
+    LOW = 0,
+    MEDIUM = 1,
+    HIGH = 2,
+    CRITICAL = 3,
 }
 
 enum Visibility {

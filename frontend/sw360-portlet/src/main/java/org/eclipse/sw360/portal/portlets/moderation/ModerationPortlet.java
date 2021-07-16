@@ -32,6 +32,8 @@ import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
+import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
+import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.DateRange;
 import org.eclipse.sw360.datahandler.permissions.DocumentPermissions;
 import org.eclipse.sw360.datahandler.thrift.ModerationState;
@@ -324,7 +326,9 @@ public class ModerationPortlet extends FossologyAwarePortlet {
         User user = UserCacheHolder.getUserFromRequest(request);
         List<Project> projects;
         String ids[] = request.getParameterValues("projectIds[]");
+        Boolean isOpenCr = Boolean.parseBoolean(request.getParameter("isOpenCr"));
         if (ids == null || ids.length == 0) {
+            log.warn("Invalid project Ids!");
             JSONArray jsonResponse = createJSONArray();
             writeJSON(request, response, jsonResponse);
         } else {
@@ -336,7 +340,9 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                 projects = Collections.emptyList();
             }
 
-            projects = getWithFilledClearingStateSummary(client, projects, user);
+            if (isOpenCr) {
+                projects = getWithFilledClearingStateSummary(client, projects, user);
+            }
 
             JSONArray jsonResponse = createJSONArray();
             ThriftJsonSerializer thriftJsonSerializer = new ThriftJsonSerializer();
@@ -346,8 +352,10 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                     row.put("id", project.getId());
                     row.put("crId", project.getClearingRequestId());
                     row.put("name", SW360Utils.printName(project));
-                    row.put("clearing", JsonHelpers.toJson(project.getReleaseClearingStateSummary(), thriftJsonSerializer));
-                    String babl = project.getAdditionalData().get("BA BL");
+                    if (isOpenCr && null != project.getReleaseClearingStateSummary()) {
+                        row.put("clearing", JsonHelpers.toJson(project.getReleaseClearingStateSummary(), thriftJsonSerializer));
+                    }
+                    String babl = CommonUtils.nullToEmptyMap(project.getAdditionalData()).get("BA BL");
                     row.put("bu", CommonUtils.isNotNullEmptyOrWhitespace(babl) ? babl : CommonUtils.nullToEmptyString(project.getBusinessUnit()));
                     jsonResponse.put(row);
                 } catch (JSONException e) {
@@ -469,10 +477,14 @@ public class ModerationPortlet extends FossologyAwarePortlet {
             request.setAttribute(CLEARING_REQUEST, clearingRequest);
             request.setAttribute(WRITE_ACCESS_USER, false);
             request.setAttribute(IS_CLEARING_EXPERT, isPrimaryRoleOfUserAtLeastClearingExpert);
-
+            Integer approvedReleaseCount = 0;
             if (CommonUtils.isNotNullEmptyOrWhitespace(clearingRequest.getProjectId()) ) {
                 ProjectService.Iface projectClient = thriftClients.makeProjectClient();
                 Project project = projectClient.getProjectById(clearingRequest.getProjectId(), UserCacheHolder.getUserFromRequest(request));
+                String babl = CommonUtils.nullToEmptyMap(project.getAdditionalData()).get("BA BL");
+                if (CommonUtils.isNotNullEmptyOrWhitespace(babl)) {
+                    project.setBusinessUnit(babl);
+                }
                 request.setAttribute(PROJECT, project);
 
                 DocumentPermissions<Project> projectPermission = makePermission(project, user);
@@ -486,14 +498,19 @@ public class ModerationPortlet extends FossologyAwarePortlet {
                 request.setAttribute(WRITE_ACCESS_USER, projectPermission.isActionAllowed(RequestedAction.WRITE));
 
                 List<Project> projects = getWithFilledClearingStateSummary(projectClient, Lists.newArrayList(project), user);
-                Integer approvedReleaseCount = 0;
                 Project projWithCsSummary = projects.get(0);
                 if (null != projWithCsSummary && null != projWithCsSummary.getReleaseClearingStateSummary()) {
                     ReleaseClearingStateSummary summary = projWithCsSummary.getReleaseClearingStateSummary();
                     approvedReleaseCount = summary.getApproved() + summary.getReportAvailable();
                 }
-                request.setAttribute(APPROVED_RELEASE_COUNT, approvedReleaseCount);
             }
+            if (clearingRequest.getTimestampOfDecision() > 1) {
+                Integer criticalCount = client.getCriticalClearingRequestCount();
+                request.setAttribute(CRITICAL_CR_COUNT, criticalCount);
+            }
+            String dateLimit = CommonUtils.nullToEmptyString(ModerationPortletUtils.loadPreferredClearingDateLimit(request, user));
+            request.setAttribute(CUSTOM_FIELD_PREFERRED_CLEARING_DATE_LIMIT, dateLimit);
+            request.setAttribute(APPROVED_RELEASE_COUNT, approvedReleaseCount);
             addClearingBreadcrumb(request, response, clearingId);
         } catch (TException e) {
             log.error("Error fetching clearing request from backend!", e);
@@ -503,13 +520,21 @@ public class ModerationPortlet extends FossologyAwarePortlet {
 
     @UsedAsLiferayAction
     public void updateClearingRequest(ActionRequest request, ActionResponse response) throws PortletException, IOException {
-        RequestStatus requestStatus = requestStatus = ModerationPortletUtils.updateClearingRequest(request, log);
-        if (RequestStatus.SUCCESS.equals(requestStatus)) {
+        AddDocumentRequestSummary requestSummary = ModerationPortletUtils.updateClearingRequest(request, log);
+        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+
+        if (AddDocumentRequestStatus.SUCCESS.equals(requestSummary.getRequestStatus())) {
+            String successMsg = new StringBuilder(LanguageUtil.get(resourceBundle, "clearing.request")).append(" ")
+                    .append(requestSummary.getId()).append(" ").append(LanguageUtil.get(resourceBundle, "updated.successfully")).toString();
+            SessionMessages.add(request, "request_processed", successMsg);
+            response.setRenderParameter(CLEARING_REQUEST_ID, request.getParameter(CLEARING_REQUEST_ID));
+            response.setRenderParameter(PAGENAME, PAGENAME_DETAIL_CLEARING_REQUEST);
+        } else if (AddDocumentRequestStatus.FAILURE.equals(requestSummary.getRequestStatus())) {
+            String errorMsg = LanguageUtil.get(resourceBundle, requestSummary.getMessage().replace(' ', '.').toLowerCase());
+            setSW360SessionError(request, errorMsg);
             response.setRenderParameter(CLEARING_REQUEST_ID, request.getParameter(CLEARING_REQUEST_ID));
             response.setRenderParameter(PAGENAME, PAGENAME_DETAIL_CLEARING_REQUEST);
         }
-        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
-        setSessionMessage(request, requestStatus, LanguageUtil.get(resourceBundle,"clearing.request"), "update");
     }
 
     private void declineModerationRequest(User user, ModerationRequest moderationRequest, RenderRequest request) throws TException {
@@ -919,6 +944,9 @@ public class ModerationPortlet extends FossologyAwarePortlet {
             putReleasesAndProjectIntoRequest(request, actual_project.getId(), user);
             request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_PROJECT);
             setAttachmentsInRequest(request, actual_project);
+            ModerationService.Iface modClient = thriftClients.makeModerationClient();
+            Integer criticalCount = modClient.getCriticalClearingRequestCount();
+            request.setAttribute(CRITICAL_CR_COUNT, criticalCount);
         } catch (TException e) {
             log.error("Error fetching project from backend!", e);
         }

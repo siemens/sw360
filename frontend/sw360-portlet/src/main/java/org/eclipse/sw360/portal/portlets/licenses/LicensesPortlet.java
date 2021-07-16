@@ -23,7 +23,7 @@ import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
-import org.eclipse.sw360.datahandler.thrift.Ternary;
+import org.eclipse.sw360.datahandler.thrift.Quadratic;
 import org.eclipse.sw360.datahandler.thrift.licenses.*;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
@@ -78,24 +78,7 @@ public class LicensesPortlet extends Sw360Portlet {
 
     private static final Logger log = LogManager.getLogger(LicensesPortlet.class);
 
-    /**
-     * Excel exporter
-     */
-    private final LicenseExporter exporter;
     private List<LicenseType> licenseTypes;
-
-    public LicensesPortlet() throws TException {
-        Function<Logger,List<LicenseType>> getLicenseTypes = log -> {
-            LicenseService.Iface client = thriftClients.makeLicenseClient();
-            try {
-                return client.getLicenseTypes();
-            } catch (TException e){
-                log.error("Error getting license type list.", e);
-                return Collections.emptyList();
-            }
-        };
-        exporter = new LicenseExporter(getLicenseTypes);
-    }
 
     //! Serve resource and helpers
     @Override
@@ -127,6 +110,18 @@ public class LicensesPortlet extends Sw360Portlet {
     }
 
     private void exportExcel(ResourceRequest request, ResourceResponse response) {
+        // Get the latest license types list before export
+        Function<Logger,List<LicenseType>> getLicenseTypes = log -> {
+            LicenseService.Iface client = thriftClients.makeLicenseClient();
+            try {
+                return client.getLicenseTypes();
+            } catch (TException e) {
+                log.error("Error getting license type list.", e);
+                return Collections.emptyList();
+            }
+        };
+        LicenseExporter exporter = new LicenseExporter(getLicenseTypes);
+
         try {
             LicenseService.Iface client = thriftClients.makeLicenseClient();
             List<License> licenses = client.getLicenseSummaryForExport();
@@ -349,16 +344,16 @@ public class LicensesPortlet extends Sw360Portlet {
         String text = request.getParameter(License._Fields.TEXT.name());
         String fullname = request.getParameter(License._Fields.FULLNAME.name());
         String shortname = request.getParameter(License._Fields.SHORTNAME.name());
-        Ternary gpl2compatibility = Ternary.findByValue(Integer.parseInt(request.getParameter(License._Fields.GPLV2_COMPAT.toString())));
-        Ternary gpl3compatibility = Ternary.findByValue(Integer.parseInt(request.getParameter(License._Fields.GPLV3_COMPAT.toString())));
+        Quadratic osiApproved = Quadratic.findByValue(Integer.parseInt(request.getParameter(License._Fields.OSIAPPROVED.toString())));
+        Quadratic fsfLibre = Quadratic.findByValue(Integer.parseInt(request.getParameter(License._Fields.FSFLIBRE.toString())));
         boolean checked = "true".equals(request.getParameter(License._Fields.CHECKED.toString()));
         String licenseTypeString =
                 request.getParameter(License._Fields.LICENSE_TYPE.toString() + LicenseType._Fields.LICENSE_TYPE.toString());
         license.setText(CommonUtils.nullToEmptyString(text));
         license.setFullname(CommonUtils.nullToEmptyString(fullname));
         license.setShortname((CommonUtils.nullToEmptyString(shortname)));
-        license.setGPLv2Compat(gpl2compatibility);
-        license.setGPLv3Compat(gpl3compatibility);
+        license.setOSIApproved(osiApproved);
+        license.setFSFLibre(fsfLibre);
         license.setChecked(checked);
         String obligationIds = request.getParameter("obligations");
         List<String> oblIds = CommonUtils.isNotNullEmptyOrWhitespace(obligationIds) ? Arrays.asList(obligationIds.split(",")) : Lists.newArrayList();
