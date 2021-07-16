@@ -178,7 +178,7 @@
                         <core_rt:if test="${project.considerReleasesFromExternalList}"> checked="checked" </core_rt:if>
                 />
                 <label class="form-check-label" for="considerReleasesFromExternalList">
-                    <liferay-ui:message key="consider.list.of.releases.from.existing.external.list" />
+                    <liferay-ui:message key="do.not.create.monitoring.list.but.use.list.from.external.id" />
                 </label>
             </div>
         </td>
