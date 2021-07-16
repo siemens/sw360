@@ -691,6 +691,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             try {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
                 Component component = client.getComponentByIdForEdit(id, user);
+                Map<String, String> sortedAdditionalData = getSortedMap(component.getAdditionalData(), true);
+                component.setAdditionalData(sortedAdditionalData);
 
                 PortletUtils.setCustomFieldsEdit(request, user, component);
 
@@ -740,6 +742,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
             if (!isNullOrEmpty(releaseId)) {
                 release = client.getReleaseByIdForEdit(releaseId, user);
+                Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
+                release.setAdditionalData(sortedAdditionalData);
                 request.setAttribute(RELEASE, release);
                 request.setAttribute(DOCUMENT_ID, releaseId);
                 setAttachmentsInRequest(request, release);
@@ -815,6 +819,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             String emailFromRequest = LifeRayUserSession.getEmailFromRequest(request);
 
             Release release = PortletUtils.cloneRelease(emailFromRequest, client.getReleaseById(releaseId, user));
+            Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
+            release.setAdditionalData(sortedAdditionalData);
 
             PortletUtils.setCustomFieldsEdit(request, user, release);
 
@@ -1291,6 +1297,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             try {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
                 Component component = client.getComponentById(id, user);
+                Map<String, String> sortedAdditionalData = getSortedMap(component.getAdditionalData(), true);
+                component.setAdditionalData(sortedAdditionalData);
 
                 PortletUtils.setCustomFieldsDisplay(request, user, component);
                 request.setAttribute(COMPONENT, component);
@@ -1358,6 +1366,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
             if (!isNullOrEmpty(releaseId)) {
                 release = client.getReleaseById(releaseId, user);
+                Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
+                release.setAdditionalData(sortedAdditionalData);
 
                 ExternalToolProcessStep processStep = SW360Utils.getExternalToolProcessStepOfFirstProcessForTool(
                         release, ExternalTool.FOSSOLOGY, FossologyUtils.FOSSOLOGY_STEP_NAME_UPLOAD);

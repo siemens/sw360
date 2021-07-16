@@ -79,6 +79,11 @@ To migrate it is recommended to do this in the following order:
 
 - `042_remove_validForProject_from_Obligation.py`
 
+### 13.4.0 -> 14.0.0
+
+- `043_migrate_project_homepage_wiki_to_externalUrls.py`
+- `044_replace_gpl_compatibility_by_osi_approved.py`
+
 ## Optional usage
 - `009_overwrite_release_name_with_component_name.py`
 - `010_repair_missing_vendorId_links_in_releases.py`

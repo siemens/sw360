@@ -86,6 +86,9 @@ public class ProjectSummaryTest {
                 case CONSIDER_RELEASES_FROM_EXTERNAL_LIST:
                     project.considerReleasesFromExternalList = false;
                     break;
+                case EXTERNAL_URLS:
+                    project.externalUrls = Collections.emptyMap();
+                    break;
                 default: //most fields are string
                     project.setFieldValue(renderedField, "asd");
                     break;

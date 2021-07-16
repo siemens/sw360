@@ -20,7 +20,9 @@ typedef sw360.RequestStatus RequestStatus
 typedef sw360.DocumentState DocumentState
 typedef sw360.CustomProperties CustomProperties
 typedef sw360.RequestSummary RequestSummary
-typedef sw360.Ternary Ternary
+typedef sw360.Quadratic Quadratic
+typedef i32 int
+
 
 enum ObligationLevel {
     ORGANISATION_OBLIGATION = 0,
@@ -84,12 +86,10 @@ struct License {
     300: optional map<string, string> additionalData,
 
     // Additional informations
-	// 10: optional bool GPLv2Compat,
-	// 11: optional bool GPLv3Compat,
 	12: optional string reviewdate,
 
-	15: optional Ternary GPLv2Compat = sw360.Ternary.UNDEFINED,
-	16: optional Ternary GPLv3Compat = sw360.Ternary.UNDEFINED,
+	17: optional Quadratic OSIApproved = sw360.Quadratic.NA,
+	18: optional Quadratic FSFLibre = sw360.Quadratic.NA,
 
     20: optional list<Obligation> obligations,
     21: optional set<string> obligationDatabaseIds,
@@ -132,6 +132,11 @@ service LicenseService {
     * Add an existing obligation to a license or generate moderation request if user has no permission
     **/
     RequestStatus addObligationsToLicense(1: set<Obligation> obligations, 2: License license, 3: User user);
+
+    /**
+     * Add a new license type object to database
+     **/
+    RequestStatus addLicenseType(1:LicenseType licenseType, 2: User user);
 
     /**
      * Update given license,
@@ -244,4 +249,14 @@ service LicenseService {
      * delete obligation from database if user has permissions
      **/
     RequestStatus deleteObligations(1: string id, 2: User user);
+
+    /**
+     * delete license type from database if user has permissions
+     **/
+    RequestStatus deleteLicenseType(1: string id, 2: User user);
+
+    /**
+     * Check license type is in using by license
+     **/
+    int checkLicenseTypeInUse(1: string id);
 }

@@ -62,13 +62,21 @@
         <div class="row">
             <div class="col" >
             <button id="selectVariantAndDownload" type="button" class="btn btn-primary"><liferay-ui:message key="download" /></button>
+             <div class="nav nav-pills justify-content-center bg-light font-weight-bold d-inline-flex" id="pills-tab" role="tablist">
+		        <a class="nav-item nav-link active" id="pills-showall-tab" data-toggle="pill" href="#pills-showallView" role="tab" aria-controls="pills-showallView" aria-selected="true">
+			    <liferay-ui:message key="show.all" /></a>
+			    <a class="nav-item nav-link" id="pills-onlyapproved-tab" data-toggle="pill" href="#pills-onlyapprovedView" role="tab" aria-controls="pills-onlyapprovedView" aria-selected="false">
+			    <liferay-ui:message key="only.approved" /></a>
+		     </div>
                 <form id="downloadLicenseInfoForm" class="form-inline" name="downloadLicenseInfoForm" action="<%=downloadLicenseInfoURL%>" method="post">
                     <%@include file="/html/projects/includes/attachmentSelectTable.jspf" %>
                 </form>
             </div>
         </div>
     </div>
-    <%@ include file="/html/utils/includes/pageSpinner.jspf" %>
+    <div id="pageSpinner">
+        <%@ include file="/html/utils/includes/pageSpinner.jspf" %>
+    </div>
 </core_rt:if>
 
 <c:set var="clReportTmplateMappings" value="<%=PortalConstants.CLEARING_REPORT_TEMPLATE_TO_FILENAMEMAPPING%>"/>
@@ -254,7 +262,13 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
             $('#downloadLicenseInfoForm').append('<input id="releaseRelationship" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELEASE_RELATIONS%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="selectedProjectRelations" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELATIONS%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="isSubProjPresent" type="hidden" name="<portlet:namespace/><%=PortalConstants.IS_LINKED_PROJECT_PRESENT%>"/>');
+            $('#downloadLicenseInfoForm').append('<input id="isOnlyApprovedSelected" type="hidden" name="<portlet:namespace/><%=PortalConstants.ONLY_APPROVED%>"/>');
 
+            if ($('#pills-onlyapproved-tab').hasClass('active')) {
+                $("#isOnlyApprovedSelected").val("true");
+            } else {
+                $("#isOnlyApprovedSelected").val("false");
+            }
             $("#extIdHidden").val(extIdsHidden);
             $("#licensInfoFileFormat").val(licenseInfoSelectedOutputFormat);
             $("#releaseRelationship").val(releaseRelationsHidden);
@@ -300,6 +314,13 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
             $('#downloadLicenseInfoForm').append('<input id="releaseRelationship" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELEASE_RELATIONS%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="selectedProjectRelations" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELATIONS%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="template" type="hidden" name="<portlet:namespace/>tmplate"/>');
+            $('#downloadLicenseInfoForm').append('<input id="isOnlyApprovedSelected" type="hidden" name="<portlet:namespace/><%=PortalConstants.ONLY_APPROVED%>"/>');
+
+            if ($('#pills-onlyapproved-tab').hasClass('active')) {
+                $("#isOnlyApprovedSelected").val("true");
+            } else {
+                $("#isOnlyApprovedSelected").val("false");
+            }
             selectedtemplate = $("input[name='org']:checked").val();
             $("#template").val(selectedtemplate);
 
@@ -319,6 +340,13 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
         } else {
             $('#downloadLicenseInfoForm').append('<input id="licensInfoFileFormat" type="hidden" name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT%>" />');
             $('#downloadLicenseInfoForm').append('<input id="isEmptyFile" type="hidden" value="Yes" name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_EMPTY_FILE%>" />');
+            $('#downloadLicenseInfoForm').append('<input id="isOnlyApprovedSelected" type="hidden" name="<portlet:namespace/><%=PortalConstants.ONLY_APPROVED%>"/>');
+
+            if ($('#pills-onlyapproved-tab').hasClass('active')) {
+                $("#isOnlyApprovedSelected").val("true");
+            } else {
+                $("#isOnlyApprovedSelected").val("false");
+            }
             $("#licensInfoFileFormat").val(licenseInfoSelectedOutputFormat);
             let actionUrl = $('#downloadLicenseInfoForm').attr('action');
             cleanedActionUrl = removeUnusedParam(actionUrl);

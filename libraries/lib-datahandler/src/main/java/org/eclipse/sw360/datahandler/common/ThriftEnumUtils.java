@@ -70,6 +70,10 @@ public class ThriftEnumUtils {
             .put(ObligationType.OBLIGATION, "Obligation")
             .build();
 
+    private static final ImmutableMap<Quadratic,String> MAP_QUADRATIC_STRING = ImmutableMap.of(
+            Quadratic.NA, "(n/a)",
+            Quadratic.YES, "yes");
+
     private static final ImmutableMap<Ternary,String> MAP_TERNARY_STRING = ImmutableMap.of(
             Ternary.UNDEFINED, "undefined",
             Ternary.NO, "no",
@@ -292,9 +296,17 @@ public class ThriftEnumUtils {
             .put(ClearingRequestState.ON_HOLD, "On Hold")
             .build();
 
+    private static final ImmutableMap<ClearingRequestPriority, String> MAP_CLEARING_REQUEST_PRIORITY_STRING = ImmutableMap.of(
+            ClearingRequestPriority.LOW, "Low",
+            ClearingRequestPriority.MEDIUM, "Medium",
+            ClearingRequestPriority.HIGH, "High",
+            ClearingRequestPriority.CRITICAL, "Critical"
+    );
+
     public static final ImmutableMap<Class<? extends TEnum>, Map<? extends TEnum, String>>
             MAP_ENUMTYPE_MAP = ImmutableMap.<Class<? extends TEnum>, Map<? extends TEnum, String>>builder()
             .put(ComponentType.class, MAP_COMPONENT_TYPE_STRING)
+            .put(Quadratic.class, MAP_QUADRATIC_STRING)
             .put(Ternary.class, MAP_TERNARY_STRING)
             .put(DateRange.class, MAP_DATE_RANGE_STRING)
             .put(ProjectType.class, MAP_PROJECT_TYPE_STRING)
@@ -320,6 +332,7 @@ public class ThriftEnumUtils {
             .put(ClearingRequestState.class, MAP_CLEARING_REQUEST_STATE_STRING)
             .put(ObligationLevel.class, MAP_OBLIGATION_LEVEL_STRING)
             .put(ObligationType.class, MAP_OBLIGATION_TYPE_STRING)
+            .put(ClearingRequestPriority.class, MAP_CLEARING_REQUEST_PRIORITY_STRING)
             .build();
 
     public static String enumToString(TEnum value) {

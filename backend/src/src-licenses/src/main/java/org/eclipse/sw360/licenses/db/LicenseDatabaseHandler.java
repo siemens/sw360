@@ -408,10 +408,10 @@ public class LicenseDatabaseHandler {
         license.unsetShortname();
         license.setLicenseTypeDatabaseId(inputLicense.getLicenseTypeDatabaseId());
         license.unsetLicenseType();
-        license.setGPLv2Compat(Optional.ofNullable(inputLicense.getGPLv2Compat())
-                .orElse(Ternary.UNDEFINED));
-        license.setGPLv3Compat(Optional.ofNullable(inputLicense.getGPLv3Compat())
-                .orElse(Ternary.UNDEFINED));
+        license.setOSIApproved(Optional.ofNullable(inputLicense.getOSIApproved())
+                .orElse(Quadratic.NA));
+        license.setFSFLibre(Optional.ofNullable(inputLicense.getFSFLibre())
+                .orElse(Quadratic.NA));
         license.setExternalLicenseLink(inputLicense.getExternalLicenseLink());
         license.setChecked(inputLicense.isChecked());
         license.setObligationDatabaseIds(inputLicense.getObligationDatabaseIds());
@@ -473,6 +473,37 @@ public class LicenseDatabaseHandler {
             licenseTypes = CommonUtils.nullToEmptyList(getLicenseTypesByIds(licenseTypeIds));
         }
         return licenseTypes;
+    }
+
+    public RequestStatus addLicenseType(@NotNull LicenseType licenseType, User user) throws SW360Exception {
+        if (PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user)) {
+            prepareLicenseType(licenseType);
+
+            if(isDuplicate(licenseType)) {
+                return RequestStatus.DUPLICATE;
+            }
+
+            licenseType.setLicenseTypeId(licenseType.getLicenseType().hashCode());
+            licenseTypeRepository.add(licenseType);
+            return RequestStatus.SUCCESS;
+        } else {
+            log.error(user + " does not have the permission to add license type.");
+            return RequestStatus.ACCESS_DENIED;
+        }
+    }
+
+    private boolean isDuplicate(LicenseType licenseType) {
+        List<String> existLicenseTypes = new ArrayList<>();
+        String type = licenseType.getLicenseType();
+        List<LicenseType> duplicates = licenseTypeRepository.searchByLicenseType(type);
+
+        for (LicenseType duplicate : duplicates) {
+            existLicenseTypes.add(duplicate.getLicenseType());
+        }
+        if (existLicenseTypes.contains(type)) {
+            return true;
+        }
+        return false;
     }
 
     public List<LicenseType> addLicenseTypes(List<LicenseType> licenseTypes, User user) {
@@ -708,5 +739,27 @@ public class LicenseDatabaseHandler {
             log.error(user + " does not have the permission to delete oblig.");
             return RequestStatus.ACCESS_DENIED;
         }
+    }
+
+    public RequestStatus deleteLicenseType(String id, User user) throws SW360Exception {
+        LicenseType licenseType = licenseTypeRepository.get(id);
+        assertNotNull(licenseType);
+
+        // Remove the license type if the user is allowed to do it by himself
+        if (PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user)) {
+            if (checkLicenseTypeInUse(id) > 0) {
+                return RequestStatus.IN_USE;
+            }
+            licenseTypeRepository.remove(licenseType);
+            return RequestStatus.SUCCESS;
+        } else {
+            log.error(user + " does not have the permission to delete license type.");
+            return RequestStatus.ACCESS_DENIED;
+        }
+    }
+
+    public int checkLicenseTypeInUse(String id) {
+        List<License> usingLicenses = licenseRepository.searchByLicenseTypeId(id);
+        return usingLicenses.size();
     }
 }
