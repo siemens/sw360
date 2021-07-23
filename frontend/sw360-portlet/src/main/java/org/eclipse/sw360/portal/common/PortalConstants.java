@@ -310,6 +310,7 @@ public class PortalConstants {
     public static final String PROJECT_LINK_TABLE_MODE = "projectLinkTableMode";
     public static final String PROJECT_LINK_TABLE_MODE_LICENSE_INFO = "licenseInfo";
     public static final String PROJECT_LINK_TABLE_MODE_SOURCE_BUNDLE = "sourceBundle";
+    public static final String COUCH_DB_USER_COUNT = "couchDbUserCount";
 
     //! Specialized keys for database Sanitation
     public static final String DUPLICATE_RELEASES = "duplicateReleases";
@@ -325,10 +326,12 @@ public class PortalConstants {
     public static final String VULNERABILITY = "vulnerability";
     public static final String VULNERABILITY_LIST = "vulnerabilityList";
     public static final String VULNERABILITY_RATINGS = "vulnerabilityRatings";
+    public static final String VULNERABILITY_ACTIONS = "vulnerabilityActions";
     public static final String VULNERABILITY_ID = "vulnerabilityId";
     public static final String VULNERABILITY_IDS = "vulnerabilityIds";
     public static final String VULNERABILITY_RATING_VALUE = "vulnerabilityRatingValue";
     public static final String VULNERABILITY_RATING_COMMENT = "vulnerabilityRatingComment";
+    public static final String VULNERABILITY_RATING_ACTION = "vulnerabilityRatingAction";
     public static final String NUMBER_OF_VULNERABILITIES = "numberOfVulnerabilities";
     public static final String NUMBER_OF_UNCHECKED_VULNERABILITIES = "numberOfUncheckedVulnerabilities";
     public static final String NUMBER_OF_INCORRECT_VULNERABILITIES = "numberOfIncorrectVulnerabilities";
@@ -622,6 +625,19 @@ public class PortalConstants {
     //
     public static String PROJECTIMPORT_HOSTS;
 
+    // User attributes
+    public static final String USER_SECONDARY_GROUP_KEY = "userSecondaryGroupKey";
+    public static final String USER_SECONDARY_GROUP_VALUES = "userSecondaryGroupValues";
+    public static final String PRIMARY_ROLES = "primaryRoles";
+    public static final String USER_EMAIL = "userEmail";
+    public static final String USER_ACTIVATE_DEACTIVATE = "userActivateDeactivate";
+    public static final String USER_MISSING_COUCHDB = "userMissingCouchdb";
+    public static final String USER_MISSING_LIFERAY = "userMissingLiferay";
+    public static final String IS_PASSWORD_OPTIONAL = "isPasswordOptional";
+    public static final String USERS_PRESENT_IN_COUCH_DB = "usersPresentInCouchDb";
+    public static final String USERS_ABSENT_IN_COUCH_DB = "usersAbsentInCouchDb";
+    public static final String USER_OBJ = "userObj";
+
     // Rest API constants
     public static final UserGroup API_WRITE_ACCESS_USERGROUP;
     public static final Boolean API_TOKEN_ENABLE_GENERATOR;
@@ -635,6 +651,7 @@ public class PortalConstants {
     public static final String EXTERNAL_ID_SELECTED_KEYS = "externalIds";
     public static final String ONLY_APPROVED = "onlyApproved";
     public static final String PREDEFINED_TAGS;
+    public static final boolean SSO_LOGIN_ENABLED;
 
     static {
         Properties props = CommonUtils.loadProperties(PortalConstants.class, PROPERTIES_FILE_PATH);
@@ -673,6 +690,7 @@ public class PortalConstants {
         CLEARING_REPORT_TEMPLATE_TO_FILENAMEMAPPING = props.getProperty("org.eclipse.sw360.licensinfo.projectclearing.templatemapping", "");
         CLEARING_REPORT_TEMPLATE_FORMAT = props.getProperty("org.eclipse.sw360.licensinfo.projectclearing.templateformat", "docx");
         PREDEFINED_TAGS = props.getProperty("project.tag", "[]");
+        SSO_LOGIN_ENABLED = Boolean.parseBoolean(props.getProperty("sso.login.enabled", "false"));
     }
 
     private PortalConstants() {

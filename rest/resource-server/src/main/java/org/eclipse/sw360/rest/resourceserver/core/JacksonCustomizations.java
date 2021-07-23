@@ -272,11 +272,12 @@ public class JacksonCustomizations {
                 "myProjectsPreferenceSelection",
                 "myProjectsPreferenceSelectionSize",
                 "setMyProjectsPreferenceSelection",
-                "setSecondaryDepartmentsAndRoles",
                 "secondaryDepartmentsAndRolesSize",
-                "primaryRolesSize",
+                "setSecondaryDepartmentsAndRoles",
                 "primaryRoles",
-                "setPrimaryRoles"
+                "primaryRolesSize",
+                "setPrimaryRoles",
+                "setDeactivated"
         })
         static abstract class UserMixin extends User {
             @Override
@@ -658,6 +659,10 @@ public class JacksonCustomizations {
             @Override
             @JsonProperty("intReleaseId")
             abstract public String getIntReleaseId();
+
+            @Override
+            @JsonProperty("projectAction")
+            abstract public String getAction();
 
             @Override
             @JsonProperty("intReleaseName")
