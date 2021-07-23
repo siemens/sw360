@@ -61,6 +61,7 @@ import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.Attachmen
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.COTSDetailsMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ClearingInformationMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.EccInformationMixin;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectProjectRelationshipMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ObligationStatusInfoMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectReleaseRelationshipMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.RepositoryMixin;
@@ -84,6 +85,7 @@ import org.eclipse.sw360.datahandler.thrift.components.Repository;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
@@ -739,6 +741,7 @@ public class DatabaseHandlerUtil {
             mapper.addMixInAnnotations(EccInformation.class, EccInformationMixin.class);
             mapper.addMixInAnnotations(Vendor.class, VendorMixin.class);
             mapper.addMixInAnnotations(Repository.class, RepositoryMixin.class);
+            mapper.addMixInAnnotations(ProjectProjectRelationship.class, ProjectProjectRelationshipMixin.class);
             mapper.addMixInAnnotations(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
         }
         return mapper;
