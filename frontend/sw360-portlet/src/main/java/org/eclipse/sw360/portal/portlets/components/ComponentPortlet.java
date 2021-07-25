@@ -1466,7 +1466,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 e -> e.getVerificationState().name(),
                 e -> e.getCheckedOn(),
                 e -> e.getCheckedBy(),
-                e -> e.getComment());
+                e -> e.getComment(),
+                e -> "");
     }
 
     private void putVulnerabilitiesInRequestRelease(RenderRequest request, String releaseId, User user, boolean isVulEditable) throws TException {
