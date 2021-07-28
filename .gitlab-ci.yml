@@ -4,6 +4,7 @@ stages:
 - build
 - deploy_to_dev
 - deploy_to_stage
+- deploy_to_prod
 
 services:
 - couchdb:3.1.1
@@ -38,7 +39,7 @@ build_sw360:
   - echo "couchdb.username = ${COUCHDB_TEST_USER}" >> /etc/sw360/databasetest.properties
   - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/databasetest.properties
 
-  - apt-get -qq update && apt-get -qq -y install build-essential rsync && apt-get install zip -y --no-install-recommends && apt-get install awscli -y --no-install-recommends
+  - apt-get -qq update && apt-get -qq -y install build-essential rsync && apt-get install zip -y --no-install-recommends && apt-get install awscli -y --no-install-recommends && apt-get install python3 -y --no-install-recommends && apt-get install python3-pip -y --no-install-recommends && pip3 install setuptools && pip3 install wheel && pip3 install mkdocs && pip3 install mkdocs-material
   - ./scripts/install-thrift.sh
 
   # Check if CouchDB is running
@@ -48,7 +49,7 @@ build_sw360:
   - git checkout ${CI_COMMIT_REF_NAME}
 
   # Build code and create artifacts
-  - mvn --batch-mode clean package -P deploy -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Dmaven.repo.local=.m2/repository
+  - mvn clean package -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
   - cp ./scripts/aws_codedeploy/application* ${GITLAB_PACKAGE_PATH}/artifacts/scripts
   - cp ./scripts/aws_codedeploy/appspec.yml ${GITLAB_PACKAGE_PATH}/artifacts/
   - cd ${GITLAB_PACKAGE_PATH}/artifacts
@@ -64,6 +65,8 @@ deploy_sw360_DEV_server:
   environment:
     name: Dev
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
     - if: '$CI_COMMIT_BRANCH == $AUTO_DEPLOY_BRANCH_FOR_DEV'
       when: on_success
     - if: '$CI_COMMIT_BRANCH != $AUTO_DEPLOY_BRANCH_FOR_DEV'
@@ -90,4 +93,21 @@ deploy_sw360_STAGE_server:
   - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
   - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_STAGE} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_STAGE} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
+
+deploy_sw360_PROD_server:
+  allow_failure: true
+  stage: deploy_to_prod
+  environment:
+    name: Prod
+  when: manual
+  only:
+    - masterct
+  before_script:
+  - echo "Running deploy_sw360_Prod_server by user - ${GITLAB_USER_EMAIL}"
+  script:
+  - echo "Trigger aws CodeDeploy for Prod server"
+  - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
+  - apt-get -qq update && apt-get install awscli -y --no-install-recommends
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_PROD} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_PROD} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
