@@ -16,6 +16,7 @@ import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ProjectSearchHandler;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
@@ -99,6 +100,13 @@ public class ProjectHandler implements ProjectService.Iface {
         assertUser(user);
 
         return handler.getAccessibleProjectsSummary(user);
+    }
+
+    @Override
+    public Map<PaginationData, List<Project>> getAccessibleProjectsSummaryWithPagination(User user, PaginationData pageData) throws TException {
+        assertUser(user);
+
+        return handler.getAccessibleProjectsSummary(user, pageData);
     }
 
     @Override

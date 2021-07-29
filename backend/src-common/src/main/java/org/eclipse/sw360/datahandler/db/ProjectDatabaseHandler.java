@@ -185,6 +185,10 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return repository.getAccessibleProjectsSummary(user);
     }
 
+    public Map<PaginationData, List<Project>> getAccessibleProjectsSummary(User user, PaginationData pageData) {
+        return repository.getAccessibleProjectsSummary(user, pageData);
+    }
+
     public List<Project> searchByName(String name, User user) {
         return repository.searchByName(name, user);
     }
