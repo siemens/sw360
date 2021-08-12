@@ -231,8 +231,8 @@
             </table>
             <form class="form mt-3">
                 <div class="form-group">
-                    <button type="button" class="btn btn-primary" onclick="window.location.href='<%=scheduleSvmListUpdateURL%>'" <core_rt:if test="${trackingFeedbackIsScheduled}">disabled</core_rt:if>>Schedule SVM Release Tracking Feedback</button>
-                    <button type="button" class="btn btn-light" onclick="window.location.href='<%=unscheduleSvmListUpdateURL%>'" <core_rt:if test="${not trackingFeedbackIsScheduled}">disabled</core_rt:if>>Cancel Scheduled SVM Release Tracking Feedback</button>
+                    <button type="button" class="btn btn-primary" onclick="window.location.href='<%=scheduleTrackingFeedbackURL%>'" <core_rt:if test="${trackingFeedbackIsScheduled}">disabled</core_rt:if>>Schedule SVM Release Tracking Feedback</button>
+                    <button type="button" class="btn btn-light" onclick="window.location.href='<%=unscheduleTrackingFeedbackURL%>'" <core_rt:if test="${not trackingFeedbackIsScheduled}">disabled</core_rt:if>>Cancel Scheduled SVM Release Tracking Feedback</button>
                 </div>
             </form>
         </div>
