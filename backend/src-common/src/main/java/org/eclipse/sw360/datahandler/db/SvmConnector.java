@@ -125,7 +125,7 @@ public class SvmConnector {
     }
 
 
-    public Map<String, Integer> fetchComponentMappings() throws SW360Exception, IOException {
+    public Map<String, Map<String, Object>> fetchComponentMappings() throws SW360Exception, IOException {
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(COMPONENT_MAPPINGS_API_URL);
             try (CloseableHttpResponse httpResponse = httpClient.execute(httpGet)) {
@@ -137,7 +137,7 @@ public class SvmConnector {
                 }
                 ObjectMapper mapper = new ObjectMapper();
                 InputStream contentStream = httpResponse.getEntity().getContent();
-                HashMap<String, Integer> componentMappings = mapper.readValue(contentStream, HashMap.class);
+                HashMap<String, Map<String, Object>> componentMappings = mapper.readValue(contentStream, HashMap.class);
                 String response = statusLine.toString();
                 log.info("SVMTF SVM Server replied: " + response);
                 log.info(String.format("SVMTF: loaded %d component mappings", componentMappings.size()));

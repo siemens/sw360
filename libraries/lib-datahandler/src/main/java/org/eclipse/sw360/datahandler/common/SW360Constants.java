@@ -73,6 +73,10 @@ public class SW360Constants {
 
     public static final String SIEMENS_SVM_COMPONENT_ID = "com.siemens.svm.component.id";
     public static final String SIEMENS_MAINLINE_COMPONENT_ID = "com.siemens.mainl.component.id";
+    public static final String SIEMENS_SVM_COMPONENT_ID_KEY = "svm_component_id";
+    public static final String SIEMENS_SVM_SHORT_STATUS = "com.siemens.svm.component.short.status";
+    public static final String SIEMENS_SVM_SHORT_STATUS_KEY = "short_status";
+    public static final String SIEMENS_SVM_SCHEDULER_EMAIL = "svm.component.mapping@siemens.com";
 
     /**
      * Hashmap containing the name field for each type.
