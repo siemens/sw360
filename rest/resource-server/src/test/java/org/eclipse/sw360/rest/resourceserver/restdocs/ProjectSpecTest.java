@@ -1225,6 +1225,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("enableVulnerabilitiesDisplay").description("Displaying vulnerabilities flag."),
                                 fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
                                 fieldWithPath("phaseOutSince").description("The project phase-out date"),
+                                fieldWithPath("considerReleasesFromExternalList").description("Consider list of releases from existing external list"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
                                 subsectionWithPath("_embedded.createdBy").description("The user who created this project")
                         )));
