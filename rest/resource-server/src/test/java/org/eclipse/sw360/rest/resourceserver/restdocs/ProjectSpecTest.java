@@ -1416,6 +1416,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                      subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
                                      subsectionWithPath("_embedded.sw360:releases.[]version").description("The version of the release"),
                                      subsectionWithPath("_embedded.sw360:releases.[]createdBy").description("Email of the release creator"),
+//                                     subsectionWithPath("_embedded.sw360:releases.[]releaseType").description("The type of release"),
                                      subsectionWithPath("_embedded.sw360:releases.[]componentId").description("The component id"),
                                      subsectionWithPath("_embedded.sw360:releases.[]cpeId").description("CpeId of the release"),
                                      subsectionWithPath("_embedded.sw360:releases.[]clearingState").description("The clearing of the release, possible values are " + Arrays.asList(ClearingState.values())),

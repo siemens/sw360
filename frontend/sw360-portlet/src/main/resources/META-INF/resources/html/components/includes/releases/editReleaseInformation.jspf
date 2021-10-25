@@ -11,6 +11,7 @@
 <%@ page import="org.eclipse.sw360.datahandler.thrift.components.Component" %>
 <%@ page import="org.eclipse.sw360.datahandler.thrift.components.Release"%>
 <%@ page import="org.eclipse.sw360.datahandler.thrift.MainlineState" %>
+<%@ page import="org.eclipse.sw360.datahandler.thrift.components.ReleaseType" %>
 
 <table class="table edit-table three-columns" id="ComponentBasicInfo">
     <thead>
@@ -47,6 +48,19 @@
     <tr>
         <td>
             <div class="form-group">
+                <label for="release.type"><liferay-ui:message key="release.type" /></label>
+                <select class="form-control" id="release_type" name="<portlet:namespace/><%=Release._Fields.RELEASE_TYPE%>" >
+                    <option value=""></option>
+                    <sw360:DisplayEnumOptions type="<%=ReleaseType.class%>" selected="${release.releaseType}"/>
+                </select>
+                <small class="form-text">
+                    <sw360:DisplayEnumInfo type="<%=ReleaseType.class%>"/>
+                    <liferay-ui:message key="learn.more.about.release.types" />
+                </small>
+            </div>
+        </td>
+        <td>
+            <div class="form-group">
                 <label for="programminglanguages"><liferay-ui:message key="programming.languages" /></label>
                 <input class="form-control" name="<portlet:namespace/><%=Component._Fields.LANGUAGES%>"
                     id="programminglanguages" type="text"
@@ -63,6 +77,8 @@
                     value="<sw360:DisplayCollection value="${release.operatingSystems}" />"/>
             </div>
         </td>
+    </tr>
+    <tr>
         <td>
             <div class="form-group">
                 <label for="comp_id"><liferay-ui:message key="cpe.id3" /></label>
@@ -78,8 +94,6 @@
                 </small>
             </div>
         </td>
-    </tr>
-    <tr>
         <td>
             <div class="form-group">
                 <label for="platformsTB"><liferay-ui:message key="software.platforms" /></label>
@@ -98,13 +112,13 @@
                     value="<sw360:out value="${release.releaseDate}"/>"/>
             </div>
         </td>
+    </tr>
+
+    <tr>
         <td>
             <sw360:DisplayLicensesEdit id="<%=Release._Fields.MAIN_LICENSE_IDS.toString()%>"
                                            licenseIds="${release.mainLicenseIds}"/>
         </td>
-    </tr>
-
-    <tr>
         <td>
             <sw360:DisplayLicensesEdit id="<%=Release._Fields.OTHER_LICENSE_IDS.toString()%>" main="false"
                                            licenseIds="${release.otherLicenseIds}"/>
@@ -118,6 +132,9 @@
                     value="<sw360:out value="${release.sourceCodeDownloadurl}"/>"/>
             </div>
         </td>
+    </tr>
+
+    <tr>
         <td>
             <div class="form-group">
                 <label for="binarydownloadUrl"><liferay-ui:message key="binary.download.url" /></label>
@@ -126,9 +143,6 @@
                     value="<sw360:out value="${release.binaryDownloadurl}"/>"/>
             </div>
         </td>
-    </tr>
-
-    <tr>
         <td>
             <div class="form-group">
                 <label for="clearing_state"><liferay-ui:message key="clearing.state" /></label>
@@ -156,7 +170,9 @@
                 </small>
             </div>
         </td>
+    </tr>
 
+    <tr>
         <td>
             <div class="form-group">
                 <label for="created_on"><liferay-ui:message key="created.on" /></label>
@@ -171,9 +187,6 @@
                     readonly class="form-control"/>
             </div>
         </td>
-    </tr>
-
-    <tr>
         <td>
             <sw360:DisplayUserEdit email="${release.createdBy}" id="<%=Release._Fields.CREATED_BY.toString()%>"
                                    description="created.by" multiUsers="false" readonly="true"/>
@@ -183,6 +196,8 @@
             <sw360:DisplayUserEdit emails="${release.contributors}" id="<%=Release._Fields.CONTRIBUTORS.toString()%>"
                                    description="contributors" multiUsers="true" readonly="false"/>
         </td>
+    </tr>
+    <tr>
         <td>
             <sw360:DisplayUserEdit emails="${release.moderators}" id="<%=Release._Fields.MODERATORS.toString()%>"
                                    description="moderators" multiUsers="true" readonly="false"/>

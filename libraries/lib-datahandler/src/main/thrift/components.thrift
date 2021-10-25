@@ -269,6 +269,7 @@ struct Release {
     90: optional DocumentState documentState,
 
     200: optional map<RequestedAction, bool> permissions,
+    201: optional ReleaseType releaseType
 }
 
 enum ComponentType {
@@ -279,6 +280,11 @@ enum ComponentType {
     INNER_SOURCE = 4, //internal software with source open for customers within own company
     SERVICE = 5,
     CODE_SNIPPET = 6,
+}
+
+enum ReleaseType {
+    BINARY = 0,
+    SOURCE = 1
 }
 
 struct Component {

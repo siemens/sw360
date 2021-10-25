@@ -449,7 +449,8 @@ public class JacksonCustomizations {
                 "setBinaryDownloadurl",
                 "otherLicenseIds",
                 "otherLicenseIdsSize",
-                "setOtherLicenseIds"
+                "setOtherLicenseIds",
+                "setReleaseType"
         })
         static abstract class ReleaseMixin extends Release {
             @Override

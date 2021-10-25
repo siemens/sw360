@@ -84,6 +84,7 @@ import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -1797,6 +1798,22 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 String releaseId = request.getParameter(RELEASE_ID);
                 if (releaseId != null) {
                     release = client.getReleaseByIdForEdit(releaseId, user);
+                    //validation starts
+//                    ReleaseType releaseTypeSource = release.getReleaseType();
+//                    boolean isTargetReleaseBinary = releaseTypeSource.equals(ReleaseType.BINARY);
+//                    String[] ids = request.getParameterValues(Release._Fields.RELEASE_ID_TO_RELATIONSHIP.toString() + ReleaseLink._Fields.ID.toString());
+//                    List<Release> releases = client.getReleasesById(Sets.newHashSet(ids), user);
+//                    final List<Release> invalidReleasesTobeLinked = new ArrayList<>();
+//                    releases.stream().forEach(r -> {
+//                        boolean isSourceReleaseBinary = r.getReleaseType().equals(ReleaseType.BINARY);
+//                        if(isTargetReleaseBinary && isSourceReleaseBinary) {
+//                            invalidReleasesTobeLinked.add(release);
+//                        }else if() {
+//                            
+//                        }
+//                    });
+                    
+                    //validation ends
                     ComponentPortletUtils.updateReleaseFromRequest(request, release);
                     String ModerationRequestCommentMsg = request.getParameter(MODERATION_REQUEST_COMMENT);
                     user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);

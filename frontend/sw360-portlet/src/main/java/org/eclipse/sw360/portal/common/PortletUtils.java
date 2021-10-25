@@ -94,6 +94,10 @@ public class PortletUtils {
         return MainlineState.findByValue(parseInt(enumNumber));
     }
 
+    public static ReleaseType getReleaseTypefromString(String enumNumber) {
+        return ReleaseType.findByValue(parseInt(enumNumber));
+    }
+
     public static ModerationState getModerationStatusfromString(String enumNumber) {
         return ModerationState.findByValue(parseInt(enumNumber));
     }
@@ -188,6 +192,8 @@ public class PortletUtils {
             return getObligationLevelFromString(value);
         else if (field == Obligation._Fields.OBLIGATION_TYPE)
             return getObligationTypeFromString(value);
+        else if (field == Release._Fields.RELEASE_TYPE)
+            return getReleaseTypefromString(value);
         else {
             LOGGER.error("Missing case in enumFromString, unknown field was " + field.toString());
             return null;

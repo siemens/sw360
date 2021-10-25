@@ -46,6 +46,10 @@
             <td><sw360:DisplayUserEmail email="${release.createdBy}"/></td>
         </tr>
         <tr>
+            <td><liferay-ui:message key="release.type" />:</td>
+            <td><sw360:DisplayEnum value="${release.releaseType}"/></td>
+        </tr>
+        <tr>
             <td><liferay-ui:message key="contributors" />:</td>
             <td><sw360:DisplayUserEmailCollection value="${release.contributors}"/></td>
         </tr>

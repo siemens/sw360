@@ -655,6 +655,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         Map<String, String> release = new HashMap<>();
         release.put("version", "1.0");
         release.put("componentId", component.getId());
+        release.put("releaseType", "SOURCE");
 
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(post("/api/releases")
@@ -665,7 +666,8 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                 .andDo(this.documentationHandler.document(
                         requestFields(
                                 fieldWithPath("version").description("The version of the new release"),
-                                fieldWithPath("componentId").description("The componentId of the origin component")
+                                fieldWithPath("componentId").description("The componentId of the origin component"),
+                                fieldWithPath("releaseType").description("The type of the release")
                         ),
                         responseFields(
                                 fieldWithPath("name").description("The name of the release, optional"),
