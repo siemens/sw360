@@ -1382,29 +1382,27 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             json.put("application_version", p.getVersion());
             json.put("business_unit", p.getBusinessUnit());
             json.put("user_gids", stringCollectionToJsonArray(nullToEmptySet(p.getSecurityResponsibles())));
-            json.put("children_application_ids", stringCollectionToJsonArray(linkedProjectIds));
-            json.put("components", serializeReleasesToJson(
-                    nullToEmptyMap(p.getReleaseIdToUsage())
-                    .keySet()
-                    .stream()
-                    .map(releaseMap::get)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList()), componentMap));
+            json.put("children_application_ids",
+                    p.isConsiderReleasesFromExternalList() ? JSONFactoryUtil.createJSONArray()
+                            : stringCollectionToJsonArray(linkedProjectIds));
+            json.put("components",
+                    p.isConsiderReleasesFromExternalList() ? JSONFactoryUtil.createJSONArray()
+                            : serializeReleasesToJson(nullToEmptyMap(p.getReleaseIdToUsage()).keySet().stream()
+                                    .map(releaseMap::get).filter(Objects::nonNull).collect(Collectors.toList()),
+                                    componentMap));
 
-            if (p.isConsiderReleasesFromExternalList()) {
-                Set<String> externalIdValueSet = new TreeSet<>();
-                String externalIdValues = p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
-                if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdValues)) {
-                    try {
-                        externalIdValueSet = mapper.readValue(externalIdValues, Set.class);
-                    } catch (IOException e) {
-                        externalIdValueSet.add(externalIdValues);
-                    }
-                    Set<String> filteredExternalIds = externalIdValueSet.stream()
-                            .filter(externalId -> externalId.length() == 8).collect(Collectors.toSet());
-                    if (CommonUtils.isNotEmpty(filteredExternalIds)) {
-                        json.put("svm_children_ml_ids", stringCollectionToJsonArray(filteredExternalIds));
-                    }
+            Set<String> externalIdValueSet = new TreeSet<>();
+            String externalIdValues = p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
+            if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdValues)) {
+                try {
+                    externalIdValueSet = mapper.readValue(externalIdValues, Set.class);
+                } catch (IOException e) {
+                    externalIdValueSet.add(externalIdValues);
+                }
+                Set<String> filteredExternalIds = externalIdValueSet.stream()
+                        .filter(externalId -> externalId.length() == 8).collect(Collectors.toSet());
+                if (CommonUtils.isNotEmpty(filteredExternalIds)) {
+                    json.put("svm_children_ml_ids", stringCollectionToJsonArray(filteredExternalIds));
                 }
             }
             serializedProjects.put(json);
