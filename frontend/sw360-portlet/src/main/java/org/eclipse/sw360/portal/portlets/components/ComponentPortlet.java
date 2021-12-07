@@ -283,11 +283,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     // delete file after user download
     private void deleteFileExport(String outputFormat, String releaseId, String filename) {
         try {
-            if (outputFormat.equals("RDF")) {
+            if (!outputFormat.equals("SPDX")) {
                 Files.delete(Paths.get(releaseId + ".spdx"));
-            } else if (!outputFormat.equals("SPDX")) {
-                Files.delete(Paths.get(releaseId + ".spdx"));
-                Files.delete(Paths.get(releaseId + ".rdf"));
             }
             Files.delete(Paths.get(filename));
         } catch (IOException e) {

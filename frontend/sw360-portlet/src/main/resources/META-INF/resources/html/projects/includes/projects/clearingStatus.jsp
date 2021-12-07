@@ -55,7 +55,8 @@
 <div class="tab-content" id="pills-clearingStatusTab">
     <div class="tab-pane fade show active" id="pills-treeView" role="tabpanel" aria-labelledby="pills-tree-tab">
     <div class="btn-group mx-1" role="group">
-        <button type="button" class="btn btn-outline-dark" id="addLicenseToRelease"><liferay-ui:message key="add.license.info.to.release" /></button>
+        <!-- <button type="button" class="btn btn-outline-dark" id="addLicenseToRelease"><liferay-ui:message key="add.license.info.to.release" /></button> -->
+        <button type="button" class="btn btn-outline-dark" id="addLicenseToRelease">Import SPDX Info to Release</button>
     </div>
     <div class="float-right mx-2">
         <input type="search" id="search_table" class="form-control form-control-sm mb-1 float-right" placeholder="<liferay-ui:message key="search" />">
@@ -143,7 +144,7 @@
 <script>
 AUI().use('liferay-portlet-url', function () {
     var PortletURL = Liferay.PortletURL;
-    require(['jquery', 'modules/ajax-treetable', 'utils/render', 'bridges/datatables', 'modules/dialog', 'utils/render'], function($, ajaxTreeTable, render, datatables, dialog, render) {
+    require(['jquery', 'modules/ajax-treetable', 'utils/render', 'bridges/datatables', 'modules/dialog', 'utils/render', 'modules/button'], function($, ajaxTreeTable, render, datatables, dialog, render, button) {
         var clearingStatuslisturl= '<%=clearingStatuslisturl%>';
         var emptyMsg = '<liferay-ui:message key="no.linked.releases.or.projects" />';
         var licenseToSourceFileMap = new Map();
@@ -767,17 +768,22 @@ AUI().use('liferay-portlet-url', function () {
                                 });
                             }
                             if($(oneList).find('li').length) {
-                                $dialog.success('<liferay-ui:message key="success.please.reload.page.to.see.the.changes" />:' + $(oneList)[0].outerHTML);
+                                /* $dialog.success('<liferay-ui:message key="success.please.reload.page.to.see.the.changes" />:' + $(oneList)[0].outerHTML); */
+                                $dialog.success('Success! Please goto release <i>SPDX Document</i> tab in release details page to see the changes:' + $(oneList)[0].outerHTML);
                             }
                             if($(multipleList).find('li').length) {
-                                $dialog.warning('<liferay-ui:message key="multiple.approved.cli.are.found.in.the.release" />: ' + $(multipleList)[0].outerHTML);
+                                /* $dialog.warning('<liferay-ui:message key="multiple.approved.cli.are.found.in.the.release" />: ' + $(multipleList)[0].outerHTML); */
+                                $dialog.warning('Multiple Approved SPDX SBOM are found in release: ' + $(multipleList)[0].outerHTML);
                             }
                             if($(nilList).find('li').length) {
-                                $dialog.warning('<liferay-ui:message key="approved.cli.not.found.in.the.release" />:' + $(nilList)[0].outerHTML);
+                                /* $dialog.warning('<liferay-ui:message key="approved.cli.not.found.in.the.release" />:' + $(nilList)[0].outerHTML); */
+                                $dialog.warning('Approved SPDX SBOM is not found in release:' + $(nilList)[0].outerHTML);
                             }
+                            $dialog.find('.modal-footer button:last').prop('disabled', true);
                             return;
                         }
-                        $dialog.success('<liferay-ui:message key="success.please.reload.page.to.see.the.changes" />.');
+                        /* $dialog.success('<liferay-ui:message key="success.please.reload.page.to.see.the.changes" />.'); */
+                        $dialog.success('Success! Please goto release <i>SPDX Document</i> tab in release details page to see the changes.');
                     },
                     error: function () {
                         callback();
@@ -788,9 +794,12 @@ AUI().use('liferay-portlet-url', function () {
             $dialog = dialog.confirm(
                     'info',
                     'question-circle',
-                    '<liferay-ui:message key="add.license" />?',
-                    '<p id="addLicenseToReleaseInfo"><liferay-ui:message key="do.you.really.want.to.add.licenses.to.all.the.directly.linked.releases" />? </p>' + $(releases)[0].outerHTML,
-                    '<liferay-ui:message key="add" />',
+                    /* '<liferay-ui:message key="add.license" />?', */
+                    'Import SPDX Info?',
+                    /* '<p id="addLicenseToReleaseInfo"><liferay-ui:message key="do.you.really.want.to.add.licenses.to.all.the.directly.linked.releases" />? </p>' + $(releases)[0].outerHTML, */
+                    '<p id="addLicenseToReleaseInfo">Do you really want to import SPDX information to all the directly linked releases?</p>' + $(releases)[0].outerHTML,
+                    /* '<liferay-ui:message key="add" />', */
+                    'Import',
                     undefined,
                     function(submit, callback) {
                         addLicenseToLinkedReleaseInternal(callback);

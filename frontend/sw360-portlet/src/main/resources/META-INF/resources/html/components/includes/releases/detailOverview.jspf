@@ -106,7 +106,7 @@
                                     <clay:icon symbol="caret-bottom" />
                                 </button>
                                 <div class="dropdown-menu" aria-labelledby="btnExport">
-                                    <button class="dropdown-item export-sbom" type="button" data-type="SPDX" data-release-id="${release.id}">Tag</button>
+                                    <button class="dropdown-item export-sbom" type="button" data-type="SPDX" data-release-id="${release.id}">SPDX Tag</button>
                                     <button class="dropdown-item export-sbom" type="button" data-type="RDF" data-release-id="${release.id}">RDF/XML</button>
                                     <button class="dropdown-item export-sbom" type="button" data-type="JSON" data-release-id="${release.id}">JSON</button>
                                     <button class="dropdown-item export-sbom" type="button" data-type="XLS" data-release-id="${release.id}">XLS</button>
@@ -294,12 +294,12 @@
             }).done(function (data) {
                 $('#btnExport').prop('disabled', false)
                 $dialog = dialog.confirm(
-                    null,
+                    'warning',
                     'question-circle',
                     '<liferay-ui:message key="export.sbom" />',
-                    '<p><liferay-ui:message key="no.warning.error.export.sbom" />' +
+                    /* '<p><liferay-ui:message key="no.warning.error.export.sbom" />' +
                     '<p style="display: none;"><liferay-ui:message key="export.sbom.have.some.warning" />:' +
-                    '<p style="display: none;"><liferay-ui:message key="export.sbom.have.some.error" />:' +
+                    '<p style="display: none;"><liferay-ui:message key="export.sbom.have.some.error" />:' + */
                     '<div style="display: none;" class="alert alert-warning" id="verifySPDX"></div>',
                     '<liferay-ui:message key="export" />',
                     {},
@@ -310,16 +310,18 @@
                 $('#confirmDialog button.btn.btn-primary').prop('disabled', true)
                 var log = data.message.replaceAll('|||','<br/> - ')
                 if (log != null) {
-                    $('#confirmDialog > div > div > div.modal-body > p:nth-child(1)').attr("style","display: none;")
+                    //$('#confirmDialog > div > div > div.modal-body > p:nth-child(1)').attr("style","display: none;")
                     $('#verifySPDX').attr("style","overflow: auto; max-height: 20rem;")
                     $('#verifySPDX').append("<strong> - " +log+ "</strong>")
                 }
                 if (data.result == 'SUCCESS') {
-                    $('#confirmDialog > div > div > div.modal-body > p:nth-child(2)').attr("style","color: red;")
+                    //$('#confirmDialog > div > div > div.modal-body > p:nth-child(2)').attr("style","color: red;")
+                    $('#confirmDialog > div > div > div.modal-body > div.alert').removeClass('alert-warning').addClass('alert-success');
                     $('#confirmDialog button.btn.btn-primary').prop('disabled', false)
                     cancelExport()
                 } else {
-                    $('#confirmDialog > div > div > div.modal-body > p:nth-child(3)').attr("style","color: red;")
+                    //$('#confirmDialog > div > div > div.modal-body > p:nth-child(3)').attr("style","color: red;")
+                    $('#verifySPDX').append("<br/><strong> - " +"Error exporting SPDX!"+ "</strong>")
                 }
             });
 
