@@ -49,6 +49,7 @@ import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.Source;
@@ -186,6 +187,9 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         Map<String, Project> mapOfProjects = new HashMap<>();
         boolean isSearchByName = name != null && !name.isEmpty();
+        boolean isSearchByTag = CommonUtils.isNotNullEmptyOrWhitespace(tag);
+        boolean isSearchByType = CommonUtils.isNotNullEmptyOrWhitespace(projectType);
+        boolean isSearchByGroup = CommonUtils.isNotNullEmptyOrWhitespace(group);
         List<Project> sw360Projects = new ArrayList<>();
         Map<String, Set<String>> filterMap = new HashMap<>();
         if (luceneSearch) {
@@ -213,6 +217,12 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         } else {
             if (isSearchByName) {
                 sw360Projects.addAll(projectService.searchProjectByName(name, sw360User));
+            } else if (isSearchByGroup) {
+                sw360Projects.addAll(projectService.searchProjectByGroup(group, sw360User));
+            } else if (isSearchByTag) {
+                sw360Projects.addAll(projectService.searchProjectByTag(tag, sw360User));
+            } else if (isSearchByType) {
+                sw360Projects.addAll(projectService.searchProjectByType(projectType, sw360User));
             } else {
                 sw360Projects.addAll(projectService.getProjectsForUser(sw360User));
             }
@@ -310,6 +320,7 @@ public class ProjectController implements ResourceProcessor<RepositoryLinksResou
         sw360Project.unsetRevision();
         sw360Project.unsetAttachments();
         sw360Project.unsetClearingRequestId();
+        sw360Project.setClearingState(ProjectClearingState.OPEN);
         String linkedObligationId = sw360Project.getLinkedObligationId();
         sw360Project.unsetLinkedObligationId();
         Project createDuplicateProject = projectService.createProject(sw360Project, user);

@@ -37,7 +37,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 public class ReleaseRepository extends SummaryAwareRepository<Release> {
 
     private static final String ALL = "function(doc) { if (doc.type == 'release') emit(null, doc._id) }";
-    private static final String BYNAME = "function(doc) { if(doc.type == 'release') { emit(doc.name, doc) } }";
+    private static final String BYNAME = "function(doc) { if(doc.type == 'release') { emit(doc.name, doc._id) } }";
     private static final String BYCREATEDON = "function(doc) { if(doc.type == 'release') { emit(doc.createdOn, doc._id) } }";
     private static final String SUBSCRIBERS = "function(doc) {" +
             " if (doc.type == 'release'){" +
@@ -49,18 +49,18 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     private static final String USEDINRELEASERELATION = "function(doc) {" +
             " if(doc.type == 'release') {" +
             "   for(var id in doc.releaseIdToRelationship) {" +
-            "     emit(id, doc);" +
+            "     emit(id, doc._id);" +
             "   }" +
             " }" +
             "}";
     private static final String RELEASEBYVENDORID = "function(doc) {" +
             " if (doc.type == 'release'){" +
-            "     emit(doc.vendorId, doc);" +
+            "     emit(doc.vendorId, doc._id);" +
             "  }" +
             "}";
     private static final String RELEASESBYCOMPONENTID = "function(doc) {" +
             " if (doc.type == 'release'){" +
-            "      emit(doc.componentId, doc);" +
+            "      emit(doc.componentId, doc._id);" +
             "  }" +
             "}";
     
@@ -73,7 +73,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     private static final String RELEASEIDSBYLICENSEID = "function(doc) {" +
             "  if (doc.type == 'release'){" +
             "    for(var i in doc.mainLicenseIds) {" +
-            "      emit(doc.mainLicenseIds[i], doc);" +
+            "      emit(doc.mainLicenseIds[i], doc._id);" +
             "    }" +
             "  }" +
               "}";
@@ -152,7 +152,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public List<Release> searchByNameAndVersion(String name, String version){
-        List<Release> releasesMatchingName = queryView("byname", name);
+        List<Release> releasesMatchingName =  new ArrayList<Release>(getFullDocsById(queryForIdsAsValue("byname", name)));
         List<Release> releasesMatchingNameAndVersion = releasesMatchingName.stream()
                 .filter(r -> isNullOrEmpty(version) ? isNullOrEmpty(r.getVersion()) : version.equals(r.getVersion()))
                 .collect(Collectors.toList());
@@ -176,15 +176,20 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public List<Release> getReleasesFromVendorId(String id, User user) {
-        return  makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, queryView("releaseByVendorId", id), user);
+        Set<String> releaseIds = queryForIdsAsValue("releaseByVendorId", id);
+        return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY,
+                new ArrayList<Release>(getFullDocsById(releaseIds)), user);
     }
 
     public List<Release> getReleasesFromComponentId(String id) {
-         return queryView("releasesByComponentId", id);
+         Set<String> releaseIds = queryForIdsAsValue("releasesByComponentId", id);
+         return new ArrayList<Release>(getFullDocsById(releaseIds));
     }
 
     public List<Release> getReleasesFromComponentId(String id, User user) {
-        return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, queryView("releasesByComponentId", id), user);
+        Set<String> releaseIds = queryForIdsAsValue("releasesByComponentId", id);
+        return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, 
+                new ArrayList<Release>(getFullDocsById(releaseIds)), user);
     }
 
     public List<Release> getReleasesIgnoringNotFound(Collection<String> ids) {
@@ -192,7 +197,8 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public List<Release> getReleasesFromVendorIds(Set<String> ids) {
-        return makeSummaryFromFullDocs(SummaryType.SHORT, queryByIds("releaseByVendorId", ids));
+        Set<String> releaseIds = queryForIdsAsValue("releaseByVendorId", ids);
+        return makeSummaryFromFullDocs(SummaryType.SHORT, new ArrayList<Release>(getFullDocsById(releaseIds)));
     }
 
     public Set<String> getReleaseIdsFromVendorIds(Set<String> ids) {
@@ -206,11 +212,13 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     }
 
     public Set<Release> getReleasesByVendorId(String vendorId) {
-        return new HashSet<>(queryView("releaseByVendorId", vendorId));
+        Set<String> releaseIds = queryForIdsAsValue("releaseByVendorId", vendorId);
+        return getFullDocsById(releaseIds);
     }
 
     public List<Release> searchReleasesByUsingLicenseId(String licenseId) {
-        return queryView("releaseIdsByLicenseId", licenseId);
+        Set<String> releaseIds = queryForIdsAsValue("releaseIdsByLicenseId", licenseId);
+        return new ArrayList<Release>(getFullDocsById(releaseIds));
     }
 
     public Set<String> getReleaseIdsBySvmId(String svmId) {

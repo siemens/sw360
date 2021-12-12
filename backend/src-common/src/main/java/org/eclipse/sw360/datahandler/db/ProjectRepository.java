@@ -20,6 +20,7 @@ import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
 import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectData;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.jetbrains.annotations.NotNull;
@@ -165,6 +166,27 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
                     "  }" +
                     "}";
 
+    private static final String BY_TAG_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'project') {" +
+                    "    emit(doc.tag, doc._id);" +
+                    "  }" +
+                    "}";
+
+    private static final String BY_GROUP_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'project') {" +
+                    "    emit(doc.businessUnit, doc._id);" +
+                    "  }" +
+                    "}";
+
+    private static final String BY_TYPE_VIEW =
+            "function(doc) {" +
+                    "  if (doc.type == 'project') {" +
+                    "    emit(doc.projectType, doc._id);" +
+                    "  }" +
+                    "}";
+
     private static final String BY_STATE_VIEW =
             "function(doc) {" +
             "    if (doc.type == 'project') {" +
@@ -234,6 +256,9 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
         super(Project.class, db, new ProjectSummary());
         Map<String, MapReduce> views = new HashMap<String, MapReduce>();
         views.put("byname", createMapReduce(BY_NAME_VIEW, null));
+        views.put("bygroup", createMapReduce(BY_GROUP_VIEW, null));
+        views.put("bytag", createMapReduce(BY_TAG_VIEW, null));
+        views.put("bytype", createMapReduce(BY_TYPE_VIEW, null));
         views.put("byState", createMapReduce(BY_STATE_VIEW, null));
         views.put("byreleaseid", createMapReduce(BY_RELEASE_ID_VIEW, null));
         views.put("fullbyreleaseid", createMapReduce(FULL_BY_RELEASE_ID_VIEW, null));
@@ -279,12 +304,12 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
 
     public Set<Project> searchByReleaseId(String id) {
         Set<String> projectIds = queryForIdsAsValue("fullbyreleaseid", id);
-        return getFullProjectDocsById(projectIds);
+        return getFullDocsById(projectIds);
     }
 
     public Set<Project> searchByReleaseId(Set<String> ids) {
         Set<String> projectIds = queryForIdsAsValue("fullbyreleaseid", ids);
-        return getFullProjectDocsById(projectIds);
+        return getFullDocsById(projectIds);
     }
 
     public Set<Project> searchByLinkingProjectId(String id, User user) {
@@ -302,8 +327,8 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
     }
 
     private Set<Project> getMyProjects(String user) {
-        Set<String> queryForIds = queryForIds("fullmyprojects", user);
-        return getFullProjectDocsById(queryForIds);
+        Set<String> myProjectsIds = queryForIdsAsValue("fullmyprojects", user);
+        return getFullDocsById(myProjectsIds);
     }
 
     public List<Project> getMyProjectsSummary(String user) {
@@ -534,15 +559,41 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
         return getConnector().getDocumentCount(Project.class, "myfullprojectscount", keys);
     }
 
-    private Set<Project> getFullProjectDocsById(Set<String> projectIds) {
-        Set<Project> projects = new HashSet<>();
-        if (CommonUtils.isNullOrEmptyCollection(projectIds)) {
-            return projects;
+    public ProjectData searchByGroup(String group, User user) {
+        Set<String> searchIds = queryForIdsByPrefix("bygroup", group);
+        Set<Project> accessibleProjects = filterAccessibleProjectsByIds(user, searchIds);
+        return getProjectData(accessibleProjects);
+    }
+
+    public ProjectData searchByTag(String tag, User user) {
+        Set<String> searchIds = queryForIdsByPrefix("bytag", tag);
+        Set<Project> accessibleProjects = filterAccessibleProjectsByIds(user, searchIds);
+        return getProjectData(accessibleProjects);
+    }
+
+    public ProjectData searchByType(String type, User user) {
+        Set<String> searchIds = queryForIdsByPrefix("bytype", type);
+        Set<Project> accessibleProjects = filterAccessibleProjectsByIds(user, searchIds);
+        return getProjectData(accessibleProjects);
+    }
+    
+    private ProjectData getProjectData(Set<Project> accessibleProjects) {
+        int totalSize = accessibleProjects.size();
+        ProjectData projectData = new ProjectData();
+        projectData.setTotalNumberOfProjects(totalSize);
+        List<Project> first250Projects = new ArrayList<>(totalSize > 250 ? 250 : totalSize);
+        List<String> listOfRemainingIds = new LinkedList<>();
+        int i = 0;
+        Iterator<Project> iterator = accessibleProjects.iterator();
+        while (iterator.hasNext()) {
+            Project nextPrj = iterator.next();
+            if (i < 250) {
+                first250Projects.add(nextPrj);
+                i++;
+            } else {
+                listOfRemainingIds.add(nextPrj.getId());
+            }
         }
-        List<Project> listOfProjects = get(projectIds);
-        if (CommonUtils.isNotEmpty(listOfProjects)) {
-            projects.addAll(listOfProjects);
-        }
-        return projects;
+        return projectData.setFirst250Projects(first250Projects).setProjectIdsOfRemainingProject(listOfRemainingIds);
     }
 }
