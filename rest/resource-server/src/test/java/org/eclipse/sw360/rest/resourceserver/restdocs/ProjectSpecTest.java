@@ -203,6 +203,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project.setSpecialRisks3rdParty("Lorem Ipsum");
         project.setDeliveryChannels("Lorem Ipsum");
         project.setRemarksAdditionalRequirements("Lorem Ipsum");
+        //project.setVendor(new Vendor("Test", "Test short", "http://testvendoraddress.com"));
+         project.setVendor(new Vendor().setType("vendor"));
         linkedReleases.put("3765276512", projectReleaseRelationship);
         project.setReleaseIdToUsage(linkedReleases);
         linkedProjects.put("376570", new ProjectProjectRelationship(ProjectRelationship.CONTAINED).setEnableSvm(true));
@@ -308,7 +310,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .setCreatedBy("admin@sw360.org")
                         .setPhaseOutSince("2020-06-25")
                         .setState(ProjectState.ACTIVE)
-                        .setCreatedOn(new SimpleDateFormat("yyyy-MM-dd").format(new Date())));
+                        .setCreatedOn(new SimpleDateFormat("yyyy-MM-dd").format(new Date())).setVendor((new Vendor("Test", "Test short", "http://testvendoraddress.com"))));
 
         Release release = new Release();
         release.setId("3765276512");
@@ -592,6 +594,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.sw360:projects.[]externalIds").description("When projects are imported from other tools, the external ids can be stored here. Store as 'Single String' when single value, or 'Array of String' when multi-values"),
                                 subsectionWithPath("_embedded.sw360:projects.[]additionalData").description("A place to store additional data used by external tools").optional(),
                                 subsectionWithPath("_embedded.sw360:projects.[]ownerAccountingUnit").description("The owner accounting unit of the project"),
+                                
+                                subsectionWithPath("_embedded.sw360:projects.[]vendor").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
+                                
                                 subsectionWithPath("_embedded.sw360:projects.[]ownerGroup").description("The owner group of the project"),
                                 subsectionWithPath("_embedded.sw360:projects.[]ownerCountry").description("The owner country of the project"),
                                 subsectionWithPath("_embedded.sw360:projects.[]obligationsText").description("The obligations text of the project"),
@@ -682,6 +687,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.createdBy").description("The user who created this project"),
                                 subsectionWithPath("_embedded.sw360:projects").description("An array of <<resources-projects, Projects resources>>"),
                                 subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
+                                subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
                                 subsectionWithPath("_embedded.sw360:moderators").description("An array of all project moderators with email and link to their <<resources-user-get,User resource>>"),
                                 subsectionWithPath("_embedded.sw360:attachments").description("An array of all project attachments and link to their <<resources-attachment-get,Attachment resource>>")
                         )));
@@ -1170,6 +1176,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
                                 fieldWithPath("phaseOutSince").description("The project phase-out date"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
                                 subsectionWithPath("_embedded.createdBy").description("The user who created this project")
                         )));
     }
@@ -1228,7 +1235,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
                                 fieldWithPath("phaseOutSince").description("The project phase-out date"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
-                                subsectionWithPath("_embedded.createdBy").description("The user who created this project")
+                                subsectionWithPath("_embedded.createdBy").description("The user who created this project"),
+                                subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>")
                         )));
     }
     
@@ -1315,6 +1323,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         subsectionWithPath("_embedded.sw360:moderators").description("An array of moderators"),
                         subsectionWithPath("_embedded.sw360:projects").description("An array of <<resources-projects, Projects resources>>"),
                         subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
+                        subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
                         subsectionWithPath("_embedded.sw360:attachments").description("An array of all project attachments and link to their <<resources-attachment-get,Attachment resource>>"))));
     }
 
