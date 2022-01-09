@@ -1392,7 +1392,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                                     componentMap));
 
             Set<String> externalIdValueSet = new TreeSet<>();
-            String externalIdValues = p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
+            String externalIdValues = p.getExternalIds() == null ? null
+                    : p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
             if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdValues)) {
                 try {
                     externalIdValueSet = mapper.readValue(externalIdValues, Set.class);

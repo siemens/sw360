@@ -192,7 +192,7 @@ public class ScheduleAdminPortlet extends Sw360Portlet {
             RequestStatus requestStatus = new ThriftClients().makeProjectClient().exportForMonitoringList();
             setSessionMessage(request, requestStatus, "Task", "perform");
         } catch (TException e) {
-            log.error(e);
+            log.error("Error while trigger svm monitoring list update.", e);
         }
     }
 

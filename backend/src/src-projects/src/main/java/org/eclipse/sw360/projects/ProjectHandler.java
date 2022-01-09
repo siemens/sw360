@@ -10,6 +10,8 @@
  */
 package org.eclipse.sw360.projects;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
@@ -28,7 +30,6 @@ import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectData;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.projects.UsedReleaseRelations;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -53,6 +54,7 @@ import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
  */
 public class ProjectHandler implements ProjectService.Iface {
 
+    private static final Logger log = LogManager.getLogger(ProjectHandler.class);
     private final ProjectDatabaseHandler handler;
     private final ProjectSearchHandler searchHandler;
 
@@ -327,7 +329,14 @@ public class ProjectHandler implements ProjectService.Iface {
 
     @Override
     public RequestStatus exportForMonitoringList() throws TException {
-        return handler.exportForMonitoringList();
+        RequestStatus status = RequestStatus.FAILURE;
+        try {
+            status = handler.exportForMonitoringList();
+        } catch (TException exp) {
+            log.error(exp);
+            throw exp;
+        }
+        return status;
     }
 
     @Override
