@@ -31,6 +31,7 @@ import com.liferay.portal.kernel.util.PortalUtil;
 import com.liferay.portal.kernel.util.ResourceBundleUtil;
 import com.liferay.portal.kernel.util.WebKeys;
 import com.liferay.portal.kernel.language.LanguageUtil;
+import com.liferay.portal.kernel.model.Organization;
 
 import org.eclipse.sw360.commonIO.SampleOptions;
 import org.eclipse.sw360.datahandler.common.*;
@@ -65,6 +66,7 @@ import org.eclipse.sw360.portal.portlets.FossologyAwarePortlet;
 import org.eclipse.sw360.portal.portlets.projects.ProjectPortletUtils;
 import org.eclipse.sw360.portal.users.LifeRayUserSession;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
+import org.eclipse.sw360.portal.users.UserUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TEnum;
@@ -174,7 +176,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             Component._Fields.COMPONENT_TYPE,
             Component._Fields.MAIN_LICENSE_IDS,
             Component._Fields.CREATED_BY,
-            Component._Fields.CREATED_ON);
+            Component._Fields.CREATED_ON,
+            Component._Fields.BUSINESS_UNIT);
 
     private static final String CONFIG_KEY_URL = "url";
 
@@ -714,10 +717,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         String id = request.getParameter(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
+        List<Organization> organizations = UserUtils.getOrganizations(request);
+        request.setAttribute(ORGANIZATIONS, organizations);
+        request.setAttribute(COMPONENT_VISIBILITY_RESTRICTION, IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED);
+
         if (id != null) {
             try {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
-                Component component = client.getComponentByIdForEdit(id, user);
+                Component component = client.getAccessibleComponentByIdForEdit(id, user);
                 Map<String, String> sortedAdditionalData = getSortedMap(component.getAdditionalData(), true);
                 component.setAdditionalData(sortedAdditionalData);
 
@@ -733,13 +740,26 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 addEditDocumentMessage(request, permissions, documentState);
                 Set<String> releaseIds = SW360Utils.getReleaseIds(component.getReleases());
                 setUsingDocs(request, user, client, releaseIds);
+            
             } catch (TException e) {
-                log.error("Error fetching component from backend!", e);
-                setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                if (e instanceof SW360Exception) {
+                    SW360Exception sw360Exp = (SW360Exception)e;
+                    if (sw360Exp.getErrorCode() == 403) {
+                        log.error("This component is restricted and / or not accessible.", sw360Exp);
+                        setSW360SessionError(request, ErrorMessages.ERROR_COMPONENT_NOT_ACCESSIBLE);
+                    } else {
+                        log.error("Error fetching component from backend!", sw360Exp);
+                        setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                    }
+                } else {
+                    log.error("Error fetching component from backend!", e);
+                    setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                }
             }
         } else {
-            if(request.getAttribute(COMPONENT) == null) {
+            if (request.getAttribute(COMPONENT) == null) {
                 Component component = new Component();
+                component.setBusinessUnit(user.getDepartment());
                 request.setAttribute(COMPONENT, component);
                 PortletUtils.setCustomFieldsEdit(request, user, component);
                 setUsingDocs(request, user, null, component.getReleaseIds());
@@ -768,14 +788,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             Release release;
 
             if (!isNullOrEmpty(releaseId)) {
-                release = client.getReleaseByIdForEdit(releaseId, user);
+                release = client.getAccessibleReleaseByIdForEdit(releaseId, user);
                 Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
                 release.setAdditionalData(sortedAdditionalData);
                 request.setAttribute(RELEASE, release);
                 request.setAttribute(DOCUMENT_ID, releaseId);
                 setAttachmentsInRequest(request, release);
 
-                putDirectlyLinkedReleaseRelationsInRequest(request, release);
+                putDirectlyLinkedReleaseRelationsWithAccessibilityInRequest(request, release, user);
                 Map<RequestedAction, Boolean> permissions = release.getPermissions();
                 DocumentState documentState = release.getDocumentState();
                 setUsingDocs(request, releaseId, user, client);
@@ -784,10 +804,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 if (isNullOrEmpty(id)) {
                     id = release.getComponentId();
                 }
-                component = client.getComponentById(id, user);
+                component = client.getAccessibleComponentById(id, user);
 
             } else {
-                component = client.getComponentById(id, user);
+                component = client.getAccessibleComponentById(id, user);
                 release = (Release) request.getAttribute(RELEASE);
                 if(release == null) {
                     release = new Release();
@@ -796,7 +816,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     release.setVendorId(component.getDefaultVendorId());
                     release.setVendor(component.getDefaultVendor());
                     request.setAttribute(RELEASE, release);
-                    putDirectlyLinkedReleaseRelationsInRequest(request, release);
+                    putDirectlyLinkedReleaseRelationsWithAccessibilityInRequest(request, release, user);
                     setAttachmentsInRequest(request, release);
                     setUsingDocs(request, null, user, client);
                     SessionMessages.add(request, "request_processed", LanguageUtil.get(resourceBundle,"new.license"));
@@ -823,10 +843,21 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             request.setAttribute(COMPONENT, component);
             request.setAttribute(IS_USER_AT_LEAST_ECC_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.ECC_ADMIN, user)
                     || PermissionUtils.isUserAtLeastDesiredRoleInSecondaryGroup(UserGroup.ECC_ADMIN, allSecRoles) ? "Yes" : "No");
-
+        
         } catch (TException e) {
-            log.error("Error fetching release from backend!", e);
-            setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+            if (e instanceof SW360Exception) {
+                SW360Exception sw360Exp = (SW360Exception)e;
+                if (sw360Exp.getErrorCode() == 403) {
+                    log.error("This release or related components are restricted and / or not accessible.", sw360Exp);
+                    setSW360SessionError(request, ErrorMessages.ERROR_RELEASE_OR_COMPONENT_NOT_ACCESSIBLE);
+                } else {
+                    log.error("Error fetching release from backend!", sw360Exp);
+                    setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+                }
+            } else {
+                log.error("Error fetching release from backend!", e);
+                setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+            }
         }
     }
 
@@ -845,7 +876,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             ComponentService.Iface client = thriftClients.makeComponentClient();
             String emailFromRequest = LifeRayUserSession.getEmailFromRequest(request);
 
-            Release release = PortletUtils.cloneRelease(emailFromRequest, client.getReleaseById(releaseId, user));
+            Release release = PortletUtils.cloneRelease(emailFromRequest, client.getAccessibleReleaseById(releaseId, user));
             Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
             release.setAdditionalData(sortedAdditionalData);
 
@@ -854,10 +885,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             if (isNullOrEmpty(id)) {
                 id = release.getComponentId();
             }
-            Component component = client.getComponentById(id, user);
+            Component component = client.getAccessibleComponentById(id, user);
             addComponentBreadcrumb(request, response, component);
             request.setAttribute(COMPONENT, component);
             request.setAttribute(RELEASE_LIST, Collections.emptyList());
+            request.setAttribute(TOTAL_INACCESSIBLE_ROWS, 0);
             setUsingDocs(request, null, user, client);
             request.setAttribute(RELEASE, release);
             request.setAttribute(PortalConstants.ATTACHMENTS, Collections.emptySet());
@@ -1320,7 +1352,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         if (!isNullOrEmpty(id)) {
             try {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
-                Component component = client.getComponentById(id, user);
+                Component component = client.getAccessibleComponentById(id, user);
                 Map<String, String> sortedAdditionalData = getSortedMap(component.getAdditionalData(), true);
                 component.setAdditionalData(sortedAdditionalData);
 
@@ -1333,8 +1365,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
                 setUsingDocs(request, user, client, releaseIds);
 
-                request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(USER_ROLE_ALLOWED_TO_MERGE_OR_SPLIT_COMPONENT, user));
-
+                if (IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED) {
+                    request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(UserGroup.ADMIN, user));
+                } else {
+                    request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(USER_ROLE_ALLOWED_TO_MERGE_OR_SPLIT_COMPONENT, user));
+                }
+                request.setAttribute(COMPONENT_VISIBILITY_RESTRICTION, IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED);
+                
                 // get vulnerabilities
                 Set<UserGroup> allSecRoles = !CommonUtils.isNullOrEmptyMap(user.getSecondaryDepartmentsAndRoles())
                         ? user.getSecondaryDepartmentsAndRoles().entrySet().stream().flatMap(entry -> entry.getValue().stream()).collect(Collectors.toSet())
@@ -1345,9 +1382,21 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(VULNERABILITY_VERIFICATION_EDITABLE, isVulEditable);
 
                 addComponentBreadcrumb(request, response, component);
+                
             } catch (TException e) {
-                log.error("Error fetching component from backend!", e);
-                setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                if (e instanceof SW360Exception) {
+                    SW360Exception sw360Exp = (SW360Exception)e;
+                    if (sw360Exp.getErrorCode() == 403) {
+                        log.error("This component is restricted and / or not accessible.", sw360Exp);
+                        setSW360SessionError(request, ErrorMessages.ERROR_COMPONENT_NOT_ACCESSIBLE);
+                    } else {
+                        log.error("Error fetching component from backend!", sw360Exp);
+                        setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                    }
+                } else {
+                    log.error("Error fetching component from backend!", e);
+                    setSW360SessionError(request, ErrorMessages.ERROR_GETTING_COMPONENT);
+                }
             }
         }
     }
@@ -1362,7 +1411,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 ProjectService.Iface projectClient = thriftClients.makeProjectClient();
                 usingProjects = projectClient.searchByReleaseIds(releaseIds, user);
                 allUsingProjectsCount = projectClient.getCountByReleaseIds(releaseIds);
-                usingComponentsForComponent = client.getUsingComponentsForComponent(releaseIds);
+                usingComponentsForComponent = client.getUsingComponentsWithAccessibilityForComponent(releaseIds, user);
             } catch (TException e) {
                 log.error("Problem filling using docs", e);
             }
@@ -1389,7 +1438,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             Release release = null;
 
             if (!isNullOrEmpty(releaseId)) {
-                release = client.getReleaseById(releaseId, user);
+                release = client.getAccessibleReleaseById(releaseId, user);
                 Map<String, String> sortedAdditionalData = getSortedMap(release.getAdditionalData(), true);
                 release.setAdditionalData(sortedAdditionalData);
 
@@ -1414,8 +1463,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 setSpdxAttachmentsInRequest(request, release);
 
                 setUsingDocs(request, releaseId, user, client);
-                putDirectlyLinkedReleaseRelationsInRequest(request, release);
-                request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(USER_ROLE_ALLOWED_TO_MERGE_OR_SPLIT_COMPONENT, user));
+                putDirectlyLinkedReleaseRelationsWithAccessibilityInRequest(request, release, user);
+                
+                if (IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED) {
+                    request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(UserGroup.ADMIN, user));
+                } else {
+                    request.setAttribute(IS_USER_ALLOWED_TO_MERGE, PermissionUtils.isUserAtLeast(USER_ROLE_ALLOWED_TO_MERGE_OR_SPLIT_COMPONENT, user));
+                }
 
                 Map<RequestedAction, Boolean> permissions = release.getPermissions();
                 
@@ -1432,7 +1486,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(VULNERABILITY_VERIFICATION_EDITABLE, isVulEditable);
             }
 
-            component = client.getComponentById(id, user);
+            component = client.getAccessibleComponentById(id, user);
             request.setAttribute(COMPONENT, component);
 
             addComponentBreadcrumb(request, response, component);
@@ -1441,10 +1495,20 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             }
 
         } catch (TException e) {
-            log.error("Error fetching release from backend!", e);
-            setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+            if (e instanceof SW360Exception) {
+                SW360Exception sw360Exp = (SW360Exception)e;
+                if (sw360Exp.getErrorCode() == 403) {
+                    log.error("This release or related components are restricted and / or not accessible.", sw360Exp);
+                    setSW360SessionError(request, ErrorMessages.ERROR_RELEASE_OR_COMPONENT_NOT_ACCESSIBLE);
+                } else {
+                    log.error("Error fetching release from backend!", sw360Exp);
+                    setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+                }
+            } else {
+                log.error("Error fetching release from backend!", e);
+                setSW360SessionError(request, ErrorMessages.ERROR_GETTING_RELEASE);
+            }
         }
-
     }
 
     private String createFossologyJobViewLink(ExternalToolProcessStep processStep,
@@ -1585,7 +1649,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             request.setAttribute(USING_PROJECTS, nullToEmptySet(usingProjects));
             int allUsingProjectsCount = projectClient.getCountByReleaseIds(Collections.singleton(releaseId));
             request.setAttribute(ALL_USING_PROJECTS_COUNT, allUsingProjectsCount);
-            final Set<Component> usingComponentsForRelease = client.getUsingComponentsForRelease(releaseId);
+            final Set<Component> usingComponentsForRelease = client.getUsingComponentsWithAccessibilityForRelease(releaseId, user);
             request.setAttribute(USING_COMPONENTS, nullToEmptySet(usingComponentsForRelease));
         } else {
             request.setAttribute(USING_PROJECTS, Collections.emptySet());
@@ -1625,8 +1689,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 .map(ThriftEnumUtils::enumToString)
                 .collect(Collectors.toList());
 
+        List<Organization> organizations = UserUtils.getOrganizations(request);
+        request.setAttribute(ORGANIZATIONS, organizations);
         request.setAttribute(VENDOR_LIST, new ThriftJsonSerializer().toJson(vendorNames));
         request.setAttribute(COMPONENT_TYPE_LIST, new ThriftJsonSerializer().toJson(componentTypeNames));
+        request.setAttribute(COMPONENT_VISIBILITY_RESTRICTION, IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED);
         setComponentViewFilterAttributes(request);
     }
 
@@ -1697,9 +1764,9 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             final User user = UserCacheHolder.getUserFromRequest(request);
             ComponentService.Iface componentClient = thriftClients.makeComponentClient();
             if (filterMap.isEmpty()) {
-                componentList = componentClient.getRecentComponentsSummary(limit, user);
+                componentList = componentClient.getAccessibleRecentComponentsSummary(limit, user);
             } else {
-                componentList = componentClient.refineSearch(null, filterMap);
+                componentList = componentClient.refineSearchAccessibleComponents(null, filterMap, user);
             }
         } catch (TException e) {
             log.error("Could not search components in backend ", e);
@@ -1719,10 +1786,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             ComponentService.Iface client = thriftClients.makeComponentClient();
 
             if (id != null) {
-                Component component = client.getComponentByIdForEdit(id, user);
+                Component component = client.getAccessibleComponentByIdForEdit(id, user);
                 ComponentPortletUtils.updateComponentFromRequest(request, component);
                 String ModerationRequestCommentMsg = request.getParameter(MODERATION_REQUEST_COMMENT);
                 user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
+                if (CommonUtils.isNullEmptyOrWhitespace(component.getBusinessUnit())) {
+                    component.setBusinessUnit(user.getDepartment());
+                }
                 RequestStatus requestStatus = client.updateComponent(component, user);
                 setSessionMessage(request, requestStatus, "Component", "update", component.getName());
                 if (RequestStatus.DUPLICATE.equals(requestStatus) || RequestStatus.NAMINGERROR.equals(requestStatus)) {
@@ -1742,6 +1812,9 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             } else {
                 Component component = new Component();
                 ComponentPortletUtils.updateComponentFromRequest(request, component);
+                if (CommonUtils.isNullEmptyOrWhitespace(component.getBusinessUnit())) {
+                    component.setBusinessUnit(user.getDepartment());
+                }
                 AddDocumentRequestSummary summary = client.addComponent(component, user);
 
                 AddDocumentRequestStatus status = summary.getRequestStatus();
@@ -1789,12 +1862,12 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         if (id != null) {
             try {
                 ComponentService.Iface client = thriftClients.makeComponentClient();
-                Component component = client.getComponentById(id, user);
+                Component component = client.getAccessibleComponentById(id, user);
 
                 Release release;
                 String releaseId = request.getParameter(RELEASE_ID);
                 if (releaseId != null) {
-                    release = client.getReleaseByIdForEdit(releaseId, user);
+                    release = client.getAccessibleReleaseByIdForEdit(releaseId, user);
                     ComponentPortletUtils.updateReleaseFromRequest(request, release);
                     String ModerationRequestCommentMsg = request.getParameter(MODERATION_REQUEST_COMMENT);
                     user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
@@ -2032,8 +2105,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         pageData.setSortColumnNumber(sortParam);
 
         Map<PaginationData, List<Component>> pageDataComponentList = getFilteredComponentList(request, pageData);
-
-        JSONArray jsonComponents = getComponentData(pageDataComponentList.values().iterator().next(), paginationParameters);
+        Map<String, Set<String>> filterMap = getComponentFilterMap(request);
+        JSONArray jsonComponents = getComponentData(pageDataComponentList.values().iterator().next(), paginationParameters, filterMap);
         JSONObject jsonResult = createJSONObject();
         jsonResult.put(DATATABLE_RECORDS_TOTAL, pageDataComponentList.keySet().iterator().next().getTotalRowCount());
         jsonResult.put(DATATABLE_RECORDS_FILTERED, pageDataComponentList.keySet().iterator().next().getTotalRowCount());
@@ -2058,7 +2131,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             if (filterMap.isEmpty()) {
                 pageDataComponents = componentClient.getRecentComponentsSummaryWithPagination(user, pageData);
             } else {
-                componentList = componentClient.refineSearch(null, filterMap);
+                componentList = componentClient.refineSearchWithAccessibility(null, filterMap, user);
                 pageDataComponents.put(pageData.setTotalRowCount(componentList.size()), componentList);
             }
         } catch (TException e) {
@@ -2108,49 +2181,79 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         }
     }
 
-    public JSONArray getComponentData(List<Component> componentList, PaginationParameters componentParameters) {
+    public JSONArray getComponentData(List<Component> componentList, PaginationParameters componentParameters,
+            Map<String, Set<String>> filterMap) {
         List<Component> sortedComponents = sortComponentList(componentList, componentParameters);
         int count = getComponentDataCount(componentParameters, componentList.size());
         VendorService.Iface vendorClient = thriftClients.makeVendorClient();
+        final int start = filterMap.isEmpty() ? 0 : componentParameters.getDisplayStart();
 
         JSONArray componentData = createJSONArray();
-        for (int i = 0; i < count; i++) {
+        for (int i = start; i < count; i++) {
             JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
             Component comp = sortedComponents.get(i);
-            jsonObject.put("id", comp.getId());
-            jsonObject.put("DT_RowId", comp.getId());
-            jsonObject.put("name", SW360Utils.printName(comp));
-            jsonObject.put("cType", nullToEmptyString(comp.getComponentType()));
-            jsonObject.put("lRelsSize", String.valueOf(comp.getReleaseIdsSize()));
-            jsonObject.put("attsSize", String.valueOf(comp.getAttachmentsSize()));
-
-            JSONArray vendorArray = createJSONArray();
-            Set<String> vendorNames = new HashSet<>();
-            if (comp.isSetDefaultVendorId()) {
-                Vendor defaultVendor = null;
-                try {
-                    if(!isNullOrEmpty(comp.getDefaultVendorId())) {
-                        defaultVendor = vendorClient.getByID(comp.getDefaultVendorId());
+            
+            boolean isAccessibleComponent = false;
+            if (!CommonUtils.isNullOrEmptyMap(comp.permissions)) {
+                isAccessibleComponent = comp.permissions.get(RequestedAction.READ);
+            } else {
+                log.error("Could not get component [" + comp.getId() + "] permissions.");
+            }
+            
+            if (isAccessibleComponent) {
+                jsonObject.put("id", comp.getId());
+                jsonObject.put("DT_RowId", comp.getId());
+                jsonObject.put("name", SW360Utils.printName(comp));
+                jsonObject.put("cType", nullToEmptyString(comp.getComponentType()));
+                jsonObject.put("lRelsSize", String.valueOf(comp.getReleaseIdsSize()));
+                jsonObject.put("attsSize", String.valueOf(comp.getAttachmentsSize()));
+    
+                JSONArray vendorArray = createJSONArray();
+                Set<String> vendorNames = new HashSet<>();
+                if (comp.isSetDefaultVendorId()) {
+                    Vendor defaultVendor = null;
+                    try {
+                        if(!isNullOrEmpty(comp.getDefaultVendorId())) {
+                            defaultVendor = vendorClient.getByID(comp.getDefaultVendorId());
+                        }
+                    } catch (TException e) {
+                        log.error("Could not get vendor for id [" + comp.getDefaultVendorId() + "] in component with id ["
+                                + comp.getId() + "] because of: ", e);
                     }
-                } catch (TException e) {
-                    log.error("Could not get vendor for id [" + comp.getDefaultVendorId() + "] in component with id ["
-                            + comp.getId() + "] because of: ", e);
+                    if (defaultVendor != null) {
+                        vendorNames.add(defaultVendor.getShortname());
+                    }
                 }
-                if (defaultVendor != null) {
-                    vendorNames.add(defaultVendor.getShortname());
+                if (comp.isSetVendorNames()) {
+                    vendorNames.addAll(comp.getVendorNames());
                 }
+                vendorNames.stream().sorted().forEach(vendorArray::put);
+                jsonObject.put("vndrs", vendorArray);
+    
+                JSONArray licenseArray = createJSONArray();
+                if (comp.isSetMainLicenseIds()) {
+                    comp.getMainLicenseIds().stream().sorted().forEach(licenseArray::put);
+                }
+                jsonObject.put("lics", licenseArray);
+                
+                jsonObject.put("isAccessible", isAccessibleComponent);
+                
+            } else {
+                jsonObject.put("id", "");
+                jsonObject.put("DT_RowId", "");
+                jsonObject.put("name", "");
+                jsonObject.put("cType", nullToEmptyString(null));
+                jsonObject.put("lRelsSize", String.valueOf(0));
+                jsonObject.put("attsSize", String.valueOf(0));
+    
+                JSONArray vendorArray = createJSONArray();
+                jsonObject.put("vndrs", vendorArray);
+    
+                JSONArray licenseArray = createJSONArray();
+                jsonObject.put("lics", licenseArray);
+                
+                jsonObject.put("isAccessible", isAccessibleComponent);
             }
-            if (comp.isSetVendorNames()) {
-                vendorNames.addAll(comp.getVendorNames());
-            }
-            vendorNames.stream().sorted().forEach(vendorArray::put);
-            jsonObject.put("vndrs", vendorArray);
-
-            JSONArray licenseArray = createJSONArray();
-            if (comp.isSetMainLicenseIds()) {
-                comp.getMainLicenseIds().stream().sorted().forEach(licenseArray::put);
-            }
-            jsonObject.put("lics", licenseArray);
 
             componentData.put(jsonObject);
         }

@@ -339,6 +339,10 @@ public class ProjectHandler implements ProjectService.Iface {
         return status;
     }
 
+    public List<ReleaseClearingStatusData> getReleaseClearingStatusesWithAccessibility(String projectId, User user) throws SW360Exception {
+        return handler.getReleaseClearingStatusesWithAccessibility(projectId, user);
+    }
+
     @Override
     public RequestStatus removeAttachmentFromProject(String projectId, User user, String attachmentContentId) throws TException {
         Project projectByIdForEdit = getProjectByIdForEdit(projectId, user);
@@ -418,7 +422,13 @@ public class ProjectHandler implements ProjectService.Iface {
     @Override
     public List<Map<String, String>> getClearingStateInformationForListView(String projectId,User user) throws SW360Exception {
         assertNotNull(projectId);
-        return handler.getClearingStateInformationForListView(projectId,user);
+        return handler.getClearingStateInformationForListView(projectId,user,false);
+    }
+    
+    @Override
+    public List<Map<String, String>> getAccessibleClearingStateInformationForListView(String projectId,User user) throws SW360Exception {
+        assertNotNull(projectId);
+        return handler.getClearingStateInformationForListView(projectId,user,true);
     }
 
     @Override
