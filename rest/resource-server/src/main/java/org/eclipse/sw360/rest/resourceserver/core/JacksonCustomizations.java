@@ -185,7 +185,9 @@ public class JacksonCustomizations {
                 "setConsiderReleasesFromExternalList",
                 "externalUrlsSize",
                 "setExternalUrls",
-                "externalUrls"
+                "externalUrls",
+                "setVendor",
+                "setVendorId"
         })
         static abstract class ProjectMixin extends Project {
 

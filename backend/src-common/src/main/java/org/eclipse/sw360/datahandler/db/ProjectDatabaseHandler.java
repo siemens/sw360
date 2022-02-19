@@ -196,7 +196,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public List<Project> getAccessibleProjectsSummary(User user) {
-        return repository.getAccessibleProjectsSummary(user);
+        return repository.getAccessibleProjectsSummary(user, vendorRepository);
     }
 
     public Map<PaginationData, List<Project>> getAccessibleProjectsSummary(User user, PaginationData pageData) {
@@ -295,7 +295,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         if(!makePermission(project, user).isActionAllowed(RequestedAction.READ)) {
             throw fail(403, "User: %s is not allowed to view the requested project: %s", user.getEmail(), project.getId());
         }
-
+        vendorRepository.fillVendor(project);
         return project;
     }
 
@@ -374,7 +374,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         project.createdOn = getCreatedOn();
         project.businessUnit = getBUFromOrganisation(user.getDepartment());
         setRequestedDateAndTrimComment(project, null, user);
-
+        project.unsetVendor();
         // Add project to database and return ID
         repository.add(project);
 
@@ -422,6 +422,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             project.setAttachments( getAllAttachmentsToKeep(toSource(actual), actual.getAttachments(), project.getAttachments()) );
             setReleaseRelations(project, user, actual);
             updateProjectDependentLinkedFields(project, actual);
+            project.unsetVendor();
             repository.update(project);
 
             List<ChangeLogs> referenceDocLogList=new LinkedList<>();
@@ -507,6 +508,11 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         if (isValidDependentIds && project.isSetLinkedObligationId()) {
             String obligationId = project.getLinkedObligationId();
             isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(obligationId), obligationRepository);
+        }
+
+        if (isValidDependentIds && CommonUtils.isNotNullEmptyOrWhitespace(project.getVendorId())) {
+            isValidDependentIds = DatabaseHandlerUtil.isAllIdInSetExists(Sets.newHashSet(project.getVendorId()),
+                    vendorRepository);
         }
         return isValidDependentIds;
     }
@@ -828,7 +834,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (project != null) {
                 projectLink = new ProjectLink(id, project.name);
                 if (project.isSetReleaseIdToUsage() && (maxDepth < 0 || visitedIds.size() < maxDepth)){ // ProjectLink on the last level does not get children added
-                    List<ReleaseLink> linkedReleases = componentDatabaseHandler.getLinkedReleases(project, visitedIds);
+                    List<ReleaseLink> linkedReleases = componentDatabaseHandler.getLinkedReleasesWithAccessibility(project, visitedIds, user);
                     fillMainlineStates(linkedReleases, project.getReleaseIdToUsage());
                     projectLink.setLinkedReleases(nullToEmptyList(linkedReleases));
                 }
@@ -941,7 +947,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public Set<Project> getAccessibleProjects(User user) {
-        return repository.getAccessibleProjects(user);
+        return repository.getAccessibleProjects(user, vendorRepository);
     }
 
     public Map<String, List<String>> getDuplicateProjects() {
@@ -1030,6 +1036,41 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         return releaseClearingStatuses;
     }
+
+    public List<ReleaseClearingStatusData> getReleaseClearingStatusesWithAccessibility(String projectId, User user) throws SW360Exception {
+        Project project = getProjectById(projectId, user);
+        SetMultimap<String, ProjectWithReleaseRelationTuple> releaseIdsToProject = releaseIdToProjects(project, user);
+        List<Release> releasesById = componentDatabaseHandler.getDetailedReleasesWithAccessibilityForExport(releaseIdsToProject.keySet(), user);
+        Map<String, Component> componentsById = ThriftUtils.getIdMap(
+                componentDatabaseHandler.getComponentsShort(
+                        releasesById.stream().map(Release::getComponentId).collect(Collectors.toSet())));
+
+        List<ReleaseClearingStatusData> releaseClearingStatuses = new ArrayList<>();
+        for (Release release : releasesById) {
+            List<String> projectNames = new ArrayList<>();
+            List<String> mainlineStates = new ArrayList<>();
+
+            for (ProjectWithReleaseRelationTuple projectWithReleaseRelation : releaseIdsToProject.get(release.getId())) {
+                projectNames.add(printName(projectWithReleaseRelation.getProject()));
+                mainlineStates.add(ThriftEnumUtils.enumToString(projectWithReleaseRelation.getRelation().getMainlineState()));
+                if (projectNames.size() > 3) {
+                    projectNames.add("...");
+                    mainlineStates.add("...");
+                    break;
+                }
+
+            }
+            ReleaseClearingStatusData releaseClearingStatusData = new ReleaseClearingStatusData(release)
+                    .setProjectNames(joinStrings(projectNames))
+                    .setMainlineStates(joinStrings(mainlineStates))
+                    .setComponentType(componentsById.get(release.getComponentId()).getComponentType()); 
+
+            boolean isAccessible = componentDatabaseHandler.isReleaseActionAllowed(release, user, RequestedAction.READ);
+            releaseClearingStatusData.setAccessible(isAccessible);
+            releaseClearingStatuses.add(releaseClearingStatusData);
+        }
+        return releaseClearingStatuses;
+     }
 
     SetMultimap<String, ProjectWithReleaseRelationTuple> releaseIdToProjects(Project project, User user) throws SW360Exception {
         Set<String> visitedProjectIds = new HashSet<>();
@@ -1641,7 +1682,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         project.setTag(DatabaseHandlerUtil.trimProjectTag(project.getTag()));
     }
 
-    public List<Map<String, String>> getClearingStateInformationForListView(String projectId, User user)
+    public List<Map<String, String>> getClearingStateInformationForListView(String projectId, User user, boolean isInaccessibleLinkMasked)
             throws SW360Exception {
         Project projectById = getProjectById(projectId, user);
         List<Map<String, String>> clearingStatusList = new ArrayList<Map<String, String>>();
@@ -1652,10 +1693,10 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         Map<String, ProjectReleaseRelationship> releaseIdToUsage = projectById.getReleaseIdToUsage();
         if (linkedProjects != null && !linkedProjects.isEmpty()) {
             flattenClearingStatusForLinkedProject(linkedProjects, projectOrigin, releaseOrigin, clearingStatusList,
-                    user);
+                    user, isInaccessibleLinkMasked);
         }
         if (releaseIdToUsage != null && !releaseIdToUsage.isEmpty()) {
-            flattenClearingStatusForReleases(releaseIdToUsage, projectOrigin, releaseOrigin, clearingStatusList, user);
+            flattenClearingStatusForReleases(releaseIdToUsage, projectOrigin, releaseOrigin, clearingStatusList, user, isInaccessibleLinkMasked);
         }
 
         return clearingStatusList;
@@ -1663,7 +1704,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     private void flattenClearingStatusForLinkedProject(Map<String, ProjectProjectRelationship> linkedProjects,
             LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user) {
+            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
 
         linkedProjects.entrySet().stream().forEach(lp -> wrapTException(() -> {
             String projId = lp.getKey();
@@ -1678,12 +1719,12 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
             if (linkedReleases != null && !linkedReleases.isEmpty()) {
                 flattenClearingStatusForReleases(linkedReleases, projectOrigin, releaseOrigin, clearingStatusList,
-                        user);
+                        user, isInaccessibleLinkMasked);
             }
 
             if (subprojects != null && !subprojects.isEmpty()) {
                 flattenClearingStatusForLinkedProject(subprojects, projectOrigin, releaseOrigin, clearingStatusList,
-                        user);
+                        user, isInaccessibleLinkMasked);
             }
 
             projectOrigin.remove(projId);
@@ -1693,7 +1734,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     private void flattenClearingStatusForReleases(Map<String, ProjectReleaseRelationship> linkedReleases,
             LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user) {
+            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
 
         linkedReleases.entrySet().stream().forEach(rl -> wrapTException(() -> {
             String relation = ThriftEnumUtils.enumToString(rl.getValue().getReleaseRelation());
@@ -1703,22 +1744,29 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (releaseOrigin.containsKey(releaseId))
                 return;
             Release rel = componentDatabaseHandler.getRelease(releaseId, user);
-            Map<String, ReleaseRelationship> releaseIdToRelationship = rel.getReleaseIdToRelationship();
-            releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-            Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment);
-            if (releaseIdToRelationship != null && !releaseIdToRelationship.isEmpty()) {
-                flattenlinkedReleaseOfRelease(releaseIdToRelationship, projectOrigin, releaseOrigin, clearingStatusList,
-                        user);
+            
+            if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
+                Map<String, ReleaseRelationship> releaseIdToRelationship = rel.getReleaseIdToRelationship();
+                releaseOrigin.put(releaseId, SW360Utils.printName(rel));
+                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment);
+                if (releaseIdToRelationship != null && !releaseIdToRelationship.isEmpty()) {
+                    flattenlinkedReleaseOfRelease(releaseIdToRelationship, projectOrigin, releaseOrigin, clearingStatusList,
+                                user, isInaccessibleLinkMasked);
+                }
+                releaseOrigin.remove(releaseId);
+                row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
+                row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
+            } else {
+                Map<String, String> row = createInaccessibleReleaseCSRow(clearingStatusList);
+                row.put("projectOrigin", "");
+                row.put("releaseOrigin", "");
             }
-            releaseOrigin.remove(releaseId);
-            row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
-            row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
         }));
     }
 
     private void flattenlinkedReleaseOfRelease(Map<String, ReleaseRelationship> releaseIdToRelationship,
             LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user) {
+            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
         releaseIdToRelationship.entrySet().stream().forEach(rl -> wrapTException(() -> {
             String relation = ThriftEnumUtils.enumToString(rl.getValue());
             String projectMailLineState = "";
@@ -1726,16 +1774,23 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (releaseOrigin.containsKey(releaseId))
                 return;
             Release rel = componentDatabaseHandler.getRelease(releaseId, user);
-            Map<String, ReleaseRelationship> subReleaseIdToRelationship = rel.getReleaseIdToRelationship();
-            releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-            Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, "");
-            if (subReleaseIdToRelationship != null && !subReleaseIdToRelationship.isEmpty()) {
-                flattenlinkedReleaseOfRelease(subReleaseIdToRelationship, projectOrigin, releaseOrigin,
-                        clearingStatusList, user);
+            
+            if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
+                Map<String, ReleaseRelationship> subReleaseIdToRelationship = rel.getReleaseIdToRelationship();
+                releaseOrigin.put(releaseId, SW360Utils.printName(rel));
+                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, "");
+                if (subReleaseIdToRelationship != null && !subReleaseIdToRelationship.isEmpty()) {
+                    flattenlinkedReleaseOfRelease(subReleaseIdToRelationship, projectOrigin, releaseOrigin,
+                                clearingStatusList, user, isInaccessibleLinkMasked);
+                }
+                releaseOrigin.remove(releaseId);
+                row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
+                row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
+            } else {
+                Map<String, String> row = createInaccessibleReleaseCSRow(clearingStatusList);
+                row.put("projectOrigin", "");
+                row.put("releaseOrigin", "");
             }
-            releaseOrigin.remove(releaseId);
-            row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
-            row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
         }));
     }
 
@@ -1750,6 +1805,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         row.put("isRelease", "false");
         row.put("clearingState", ThriftEnumUtils.enumToString(prj.getClearingState()));
         row.put("projectState", ThriftEnumUtils.enumToString(prj.getState()));
+        row.put("isAccessible", "true");
         clearingStatusList.add(row);
         return row;
     }
@@ -1770,6 +1826,24 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         row.put("clearingState", ThriftEnumUtils.enumToString(rl.getClearingState()));
         row.put("projectMainlineState", projectMailLineState);
         row.put("comment", CommonUtils.nullToEmptyString(comment));
+        row.put("isAccessible", "true");
+        clearingStatusList.add(row);
+        return row;
+    }
+    
+    private Map<String, String> createInaccessibleReleaseCSRow(List<Map<String, String>> clearingStatusList) throws SW360Exception {
+        Map<String, String> row = new HashMap<>();
+        row.put("id", "");
+        row.put("name", "");
+        row.put("type", "");
+        row.put("relation", "");
+        row.put("mainLicenses", "");
+        row.put("isRelease", "true");
+        row.put("releaseMainlineState", "");
+        row.put("clearingState", "");
+        row.put("projectMainlineState", "");
+        row.put("comment", "");
+        row.put("isAccessible", "false");
         clearingStatusList.add(row);
         return row;
     }

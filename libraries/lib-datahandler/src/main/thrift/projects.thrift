@@ -42,6 +42,7 @@ typedef sw360.AddDocumentRequestSummary AddDocumentRequestSummary
 typedef licenses.Obligation Obligation
 typedef licenses.ObligationType ObligationType
 typedef licenses.ObligationLevel ObligationLevel
+typedef vendors.Vendor Vendor
 
 const string CLEARING_TEAM_UNKNOWN = "Unknown"
 
@@ -158,6 +159,8 @@ struct Project {
 
     // Urls for the project
     201: optional map<string, string> externalUrls,
+    202: optional Vendor vendor,
+    203: optional string vendorId,
 }
 
 struct ProjectLink {
@@ -415,6 +418,11 @@ service ProjectService {
     list<ReleaseClearingStatusData> getReleaseClearingStatuses(1: string projectId, 2: User user) throws (1: SW360Exception exp);
 
     /**
+     * get clearing status data with accessibility for all releases linked by the given project and its subprojects
+     */
+    list<ReleaseClearingStatusData> getReleaseClearingStatusesWithAccessibility(1: string projectId, 2: User user) throws (1: SW360Exception exp);
+
+    /**
      * get the count value of projects which have `id` in releaseIdToUsage
      */
     i32 getCountByReleaseIds(1: set<string> ids);
@@ -484,6 +492,11 @@ service ProjectService {
      * get clearing state information for list view
      */
     list<map<string,string>> getClearingStateInformationForListView(1:string projectId, 2: User user) throws (1: SW360Exception exp);
+    
+    /**
+     * get accessible clearing state information for list view
+     */
+    list<map<string,string>> getAccessibleClearingStateInformationForListView(1:string projectId, 2: User user) throws (1: SW360Exception exp);
 
     /**
     * filter groups from the projects
