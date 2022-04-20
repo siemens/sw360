@@ -63,6 +63,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     private static final Logger log = LogManager.getLogger(AttachmentAwarePortlet.class);
 
     private static class AttachmentSerializer extends StdSerializer<Attachment> {
+        private static final long serialVersionUID = 1L;
         private static final TSerializer JSON_SERIALIZER = getJsonSerializer();
 
         public AttachmentSerializer(Class<Attachment> clazz) {
@@ -75,7 +76,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
             try {
                 jsonGenerator.writeRawValue(JSON_SERIALIZER.toString(attachment));
             } catch (TException exception) {
-                throw new JsonGenerationException(exception);
+                throw new JsonGenerationException(exception, jsonGenerator);
             }
         }
     }
@@ -192,7 +193,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     }
 
     private String getDocumentType(ResourceRequest request) {
-        return request.getParameter(PortalConstants.DOCUMENT_TYPE);
+        return request.getRenderParameters().getValue(PortalConstants.DOCUMENT_TYPE);
     }
 
     protected abstract Set<Attachment> getAttachments(String documentId, String documentType, User user);
@@ -226,7 +227,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     }
 
     private void doGetAttachmentForDisplay(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
-        final String attachmentId = request.getParameter(PortalConstants.ATTACHMENT_ID);
+        final String attachmentId = request.getRenderParameters().getValue(PortalConstants.ATTACHMENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         Attachment attachment = attachmentPortletUtils.getAttachmentForDisplay(user, attachmentId);
@@ -239,7 +240,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
 
     private void serveAttachmentSet(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
         final String documentType = getDocumentType(request);
-        final String documentId = request.getParameter(PortalConstants.DOCUMENT_ID);
+        final String documentId = request.getRenderParameters().getValue(PortalConstants.DOCUMENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         // this is the raw attachment data
@@ -294,9 +295,9 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     }
 
     private void storeUploadedAttachmentIdInHistory(ResourceRequest request){
-        String documentId = request.getParameter(PortalConstants.DOCUMENT_ID);
+        String documentId = request.getRenderParameters().getValue(PortalConstants.DOCUMENT_ID);
         String userEmail = UserCacheHolder.getUserFromRequest(request).getEmail();
-        String attachmentId = request.getParameter("resumableIdentifier");
+        String attachmentId = request.getRenderParameters().getValue("resumableIdentifier");
 
         if(!uploadHistoryPerUserEmailAndDocumentId.containsKey(userEmail)){
             Map<String,Set<String>> documentIdsToAttachmentIds = new HashMap<>();
@@ -348,7 +349,7 @@ public abstract class AttachmentAwarePortlet extends Sw360Portlet {
     public void attachmentDeleteOnCancel(ActionRequest request, ActionResponse response){
         String userEmail = UserCacheHolder.getUserFromRequest(request).getEmail();
         if(uploadHistoryPerUserEmailAndDocumentId.containsKey(userEmail)) {
-            String documentId = request.getParameter(PortalConstants.DOCUMENT_ID);
+            String documentId = request.getRenderParameters().getValue(PortalConstants.DOCUMENT_ID);
             Set<String> uploadedAttachmentIds = nullToEmptySet(uploadHistoryPerUserEmailAndDocumentId.get(userEmail).get(documentId));
             attachmentPortletUtils.deleteAttachments(uploadedAttachmentIds);
             cleanUploadHistory(userEmail, documentId);

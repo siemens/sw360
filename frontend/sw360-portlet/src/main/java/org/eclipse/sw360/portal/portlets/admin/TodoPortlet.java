@@ -9,30 +9,47 @@
  */
 package org.eclipse.sw360.portal.portlets.admin;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.eclipse.sw360.portal.common.PortalConstants.ACTION;
+import static org.eclipse.sw360.portal.common.PortalConstants.OBLIGATION_ELEMENT_LIST;
+import static org.eclipse.sw360.portal.common.PortalConstants.OBLIGATION_ELEMENT_SEARCH;
+import static org.eclipse.sw360.portal.common.PortalConstants.OBLIGATION_NODE_LIST;
+import static org.eclipse.sw360.portal.common.PortalConstants.PAGENAME;
+import static org.eclipse.sw360.portal.common.PortalConstants.PAGENAME_ADD;
+import static org.eclipse.sw360.portal.common.PortalConstants.REMOVE_TODO;
+import static org.eclipse.sw360.portal.common.PortalConstants.TODOS_PORTLET_NAME;
+import static org.eclipse.sw360.portal.common.PortalConstants.TODO_LIST;
+import static org.eclipse.sw360.portal.common.PortalConstants.VIEW_IMPORT_OBLIGATION_ELEMENTS;
+import static org.eclipse.sw360.portal.common.PortalConstants.WHERE;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+
+import javax.portlet.ActionRequest;
+import javax.portlet.ActionResponse;
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.PortletRequest;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationElement;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationNode;
 import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.portal.common.UsedAsLiferayAction;
 import org.eclipse.sw360.portal.portlets.Sw360Portlet;
 import org.eclipse.sw360.portal.portlets.components.ComponentPortletUtils;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
-
-import javax.portlet.*;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import static com.google.common.base.Strings.isNullOrEmpty;
-
-import static org.eclipse.sw360.portal.common.PortalConstants.*;
 
 @org.osgi.service.component.annotations.Component(
     immediate = true,
@@ -41,8 +58,8 @@ import static org.eclipse.sw360.portal.common.PortalConstants.*;
         "/org/eclipse/sw360/portal/portlets/admin.properties"
     },
     property = {
+        "javax.portlet.version=3.0",
         "javax.portlet.name=" + TODOS_PORTLET_NAME,
-
         "javax.portlet.display-name=Obligations",
         "javax.portlet.info.short-title=Obligations",
         "javax.portlet.info.title=Obligations",
@@ -59,13 +76,11 @@ public class TodoPortlet extends Sw360Portlet {
 
     //! Serve resource and helpers
     @Override
-
     public void serveResource(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
-        String action = request.getParameter(ACTION);
-        String where = request.getParameter(WHERE);
-        final String id = request.getParameter("id");
+        String action = request.getRenderParameters().getValue(ACTION);
+        String where = request.getRenderParameters().getValue(WHERE);
+        final String id = request.getRenderParameters().getValue("id");
         final User user = UserCacheHolder.getUserFromRequest(request);
-
         LicenseService.Iface licenseClient = thriftClients.makeLicenseClient();
 
         if (REMOVE_TODO.equals(action)) {
@@ -102,9 +117,7 @@ public class TodoPortlet extends Sw360Portlet {
     //! VIEW and helpers
     @Override
     public void doView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
-
-
-        String pageName = request.getParameter(PAGENAME);
+        String pageName = request.getRenderParameters().getValue(PAGENAME);
         if (PAGENAME_ADD.equals(pageName)) {
             List<ObligationNode> obligationNodeList;
             List<ObligationElement> obligationElementList;
@@ -133,27 +146,22 @@ public class TodoPortlet extends Sw360Portlet {
     private void prepareStandardView(RenderRequest request) {
         List<Obligation> obligList;
         try {
-            final User user = UserCacheHolder.getUserFromRequest(request);
             LicenseService.Iface licenseClient = thriftClients.makeLicenseClient();
-
             obligList = licenseClient.getObligations();
-
         } catch (TException e) {
             log.error("Could not get Obligation from backend ", e);
             obligList = Collections.emptyList();
         }
-
         request.setAttribute(TODO_LIST, obligList);
     }
 
     @UsedAsLiferayAction
     public void addObligations(ActionRequest request, ActionResponse response) {
-
         final Obligation oblig = new Obligation();
         ComponentPortletUtils.updateTodoFromRequest(request, oblig);
         LicenseService.Iface licenseClient = thriftClients.makeLicenseClient();
         final User user = UserCacheHolder.getUserFromRequest(request);
-        String jsonString = request.getParameter(Obligation._Fields.TEXT.toString());
+        String jsonString = request.getRenderParameters().getValue(Obligation._Fields.TEXT.toString());
         try {
             String obligationNode = licenseClient.addNodes(jsonString, user);
             String obligationText = licenseClient.buildObligationText(obligationNode, "0");

@@ -10,6 +10,39 @@
  */
 package org.eclipse.sw360.licenses.db;
 
+import static org.eclipse.sw360.datahandler.common.CommonUtils.COMMA_JOINER;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.addRequestSummaries;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.getRequestSummary;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.isInProgressOrPending;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.isTemporaryObligation;
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
+import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareLicense;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareLicenseType;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareObligationElement;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareObligationNode;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.prepareTodo;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.validateExistingLicense;
+import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.validateNewLicense;
+
+import java.net.MalformedURLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import org.apache.http.HttpStatus;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseRepositoryCloudantClient;
@@ -20,40 +53,35 @@ import org.eclipse.sw360.datahandler.db.ReleaseRepository;
 import org.eclipse.sw360.datahandler.db.VendorRepository;
 import org.eclipse.sw360.datahandler.entitlement.LicenseModerator;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
-import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.CustomProperties;
+import org.eclipse.sw360.datahandler.thrift.DocumentState;
+import org.eclipse.sw360.datahandler.thrift.Quadratic;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
+import org.eclipse.sw360.datahandler.thrift.ThriftUtils;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
-import org.eclipse.sw360.datahandler.thrift.licenses.*;
+import org.eclipse.sw360.datahandler.thrift.licenses.License;
+import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
+import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationElement;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationElementStatus;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationNode;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
-import org.eclipse.sw360.licenses.tools.SpdxConnector;
 import org.eclipse.sw360.licenses.tools.OSADLObligationConnector;
-import org.apache.http.HttpStatus;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.eclipse.sw360.licenses.tools.SpdxConnector;
 import org.ektorp.DocumentOperationResult;
 import org.jetbrains.annotations.NotNull;
-import org.json.simple.JSONObject;
+import org.json.simple.JsonObject;
 
 import com.cloudant.client.api.CloudantClient;
 import com.cloudant.client.api.model.Response;
 import com.google.common.collect.Sets;
-
-import java.net.MalformedURLException;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.*;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-
-import static org.eclipse.sw360.datahandler.common.CommonUtils.*;
-import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
-import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
-import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.*;
-
-import com.liferay.portal.kernel.json.JSONFactoryUtil;
 import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
 /**
  * Class for accessing the CouchDB database
  *
@@ -876,8 +904,8 @@ public class LicenseDatabaseHandler {
         IMPORT_TIME = currentTime;
         final List<License> sw360Licenses = licenseRepository.getAll();
         final List<Obligation> sw360Obligations = obligRepository.getAll();
-        JSONObject licensesMissing = new JSONObject();
-        JSONObject licensesSuccess = new JSONObject();
+        JsonObject licensesMissing = new JsonObject();
+        JsonObject licensesSuccess = new JsonObject();
         OSADLObligationConnector osadlConnector = new OSADLObligationConnector();
 
         try {

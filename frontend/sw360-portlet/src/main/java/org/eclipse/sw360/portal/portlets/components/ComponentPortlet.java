@@ -71,7 +71,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TEnum;
 import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
-import org.apache.thrift.protocol.TSimpleJSONProtocol;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.apache.commons.lang.StringUtils;
 
@@ -82,7 +81,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -109,8 +107,8 @@ import org.apache.thrift.transport.TTransportException;
             "/org/eclipse/sw360/portal/portlets/default.properties"
     },
     property = {
+        "javax.portlet.version=3.0",
         "javax.portlet.name=" + COMPONENT_PORTLET_NAME,
-
         "javax.portlet.display-name=Components",
         "javax.portlet.info.short-title=Components",
         "javax.portlet.info.title=Components",
@@ -183,7 +181,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     //! Serve resource and helpers
     @Override
     public void serveResource(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
-        String action = request.getParameter(PortalConstants.ACTION);
+        String action = request.getRenderParameters().getValue(PortalConstants.ACTION);
 
         if (VIEW_VENDOR.equals(action)) {
             serveViewVendor(request, response);
@@ -244,7 +242,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void evaluateCLIAttachments(ResourceRequest request, ResourceResponse response) throws IOException {
         User user = UserCacheHolder.getUserFromRequest(request);
-        String releaseId = request.getParameter(RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
         final LicenseInfoService.Iface client = thriftClients.makeLicenseInfoClient();
         Map<String, Map<String, String>> result = new HashMap<String, Map<String, String>>();
         try {
@@ -265,14 +263,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void importBom(ResourceRequest request, ResourceResponse response) {
         final ComponentService.Iface componentClient = thriftClients.makeComponentClient();
         User user = UserCacheHolder.getUserFromRequest(request);
-        String attachmentContentId = request.getParameter(ATTACHMENT_CONTENT_ID);
+        String attachmentContentId = request.getRenderParameters().getValue(ATTACHMENT_CONTENT_ID);
 
         try {
             final RequestSummary requestSummary = componentClient.importBomFromAttachmentContent(user, attachmentContentId);
 
             LiferayPortletURL releaseUrl = createDetailLinkTemplate(request);
-            releaseUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_RELEASE_DETAIL);
-            releaseUrl.setParameter(RELEASE_ID, requestSummary.getMessage());
+            releaseUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_RELEASE_DETAIL);
+            releaseUrl.getRenderParameters().setValue(RELEASE_ID, requestSummary.getMessage());
             JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
             jsonObject.put("redirectUrl", releaseUrl.toString());
 
@@ -301,8 +299,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void serveViewVendor(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
-        String what = request.getParameter(PortalConstants.WHAT);
-        String where = request.getParameter(PortalConstants.WHERE);
+        String what = request.getRenderParameters().getValue(PortalConstants.WHAT);
+        String where = request.getRenderParameters().getValue(PortalConstants.WHERE);
 
         if ("vendorSearch".equals(what)) {
             renderVendorSearch(request, response, where);
@@ -349,7 +347,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         List<Component> resultComponents = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
-        String cName = request.getParameter(PortalConstants.COMPONENT_NAME);
+        String cName = request.getRenderParameters().getValue(PortalConstants.COMPONENT_NAME);
 
         if (cName != null && !cName.isEmpty()) {
             List<Component> similarComponents = new ArrayList<>();
@@ -421,7 +419,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         jsonGenerator.writeFieldName("links");
         jsonGenerator.writeStartArray();
         similarComponents.stream().forEach(c -> {
-            componentUrl.setParameter(PortalConstants.COMPONENT_ID, c.getId());
+            componentUrl.getRenderParameters().setValue(PortalConstants.COMPONENT_ID, c.getId());
 
             try {
                 jsonGenerator.writeStartObject();
@@ -445,7 +443,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         LiferayPortletURL componentUrl = PortletURLFactoryUtil.create(request, portletId, plid,
                 PortletRequest.RENDER_PHASE);
-        componentUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_DETAIL);
+        componentUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_DETAIL);
 
         return componentUrl;
     }
@@ -465,7 +463,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         try {
-            boolean extendedByReleases = Boolean.valueOf(request.getParameter(PortalConstants.EXTENDED_EXCEL_EXPORT));
+            boolean extendedByReleases = Boolean.valueOf(request.getRenderParameters().getValue(PortalConstants.EXTENDED_EXCEL_EXPORT));
             List<Component> components = getFilteredComponentList(request);
             ComponentExporter exporter = new ComponentExporter(thriftClients.makeComponentClient(), components, user,
                     extendedByReleases);
@@ -500,13 +498,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void serveLinkedReleases(ResourceRequest request, ResourceResponse response) throws IOException, PortletException {
-        String what = request.getParameter(PortalConstants.WHAT);
+        String what = request.getRenderParameters().getValue(PortalConstants.WHAT);
 
         if (PortalConstants.LIST_NEW_LINKED_RELEASES.equals(what)) {
-            String[] where = request.getParameterValues(PortalConstants.WHERE_ARRAY);
+            String[] where = request.getRenderParameters().getValues(PortalConstants.WHERE_ARRAY);
             serveNewTableRowLinkedRelease(request, response, where);
         } else if (PortalConstants.RELEASE_SEARCH.equals(what)) {
-            String where = request.getParameter(PortalConstants.WHERE);
+            String where = request.getRenderParameters().getValue(PortalConstants.WHERE);
             serveReleaseSearchResults(request, response, where);
         }
     }
@@ -514,7 +512,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void serveProjectSearch(ResourceRequest request, ResourceResponse response) throws PortletException {
         ProjectSearchUtils utils = new ProjectSearchUtils(thriftClients);
         User user = UserCacheHolder.getUserFromRequest(request);
-        String searchTerm = request.getParameter(PortalConstants.WHERE);
+        String searchTerm = request.getRenderParameters().getValue(PortalConstants.WHERE);
 
         List<Project> projects = utils.searchProjects(user, searchTerm);
         try {
@@ -557,23 +555,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         serveReleaseSearch(request, response, searchText);
     }
 
-    private void writeJsonResponse(String json, ResourceResponse response) throws IOException {
-        byte[] bytes = json.getBytes(Charset.forName("UTF-8"));
-        response.setContentType(ContentTypes.APPLICATION_JSON);
-        response.setContentLength(bytes.length);
-        OutputStream outputStream = response.getPortletOutputStream();
-        outputStream.write(bytes, 0, bytes.length);
-        response.flushBuffer();
-    }
-
     private void loadSpdxLicenseInfo(ResourceRequest request, ResourceResponse response) {
         ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
 
         User user = UserCacheHolder.getUserFromRequest(request);
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
-        String attachmentContentId = request.getParameter(PortalConstants.ATTACHMENT_ID);
-        String attachmentName = request.getParameter(PortalConstants.ATTACHMENT_NAME);
-        boolean includeConcludedLicense = new Boolean(request.getParameter(PortalConstants.INCLUDE_CONCLUDED_LICENSE));
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
+        String attachmentContentId = request.getRenderParameters().getValue(PortalConstants.ATTACHMENT_ID);
+        String attachmentName = request.getRenderParameters().getValue(PortalConstants.ATTACHMENT_NAME);
+        boolean includeConcludedLicense = Boolean.valueOf(request.getRenderParameters().getValue(PortalConstants.INCLUDE_CONCLUDED_LICENSE));
 
         ComponentService.Iface componentClient = thriftClients.makeComponentClient();
         LicenseInfoService.Iface licenseInfoClient = thriftClients.makeLicenseInfoClient();
@@ -639,13 +628,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void writeSpdxLicenseInfoIntoRelease(ResourceRequest request, ResourceResponse response) {
         User user = UserCacheHolder.getUserFromRequest(request);
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         ComponentService.Iface componentClient = thriftClients.makeComponentClient();
 
         RequestStatus result = null;
         try {
             Release release = componentClient.getReleaseById(releaseId, user);
-            JsonNode input = OBJECT_MAPPER.readValue(request.getParameter(SPDX_LICENSE_INFO), JsonNode.class);
+            JsonNode input = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(SPDX_LICENSE_INFO), JsonNode.class);
             JsonNode licenesIdsNode = input.get(LICENSE_IDS);
             if (null != licenesIdsNode) {
                 if (licenesIdsNode.isArray()) {
@@ -678,7 +667,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     //! VIEW and helpers
     @Override
     public void doView(RenderRequest request, RenderResponse response) throws IOException, PortletException {
-        String pageName = request.getParameter(PAGENAME);
+        String pageName = request.getRenderParameters().getValue(PAGENAME);
 
         if (PAGENAME_DETAIL.equals(pageName)) {
             prepareDetailView(request, response);
@@ -713,7 +702,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void prepareComponentEdit(RenderRequest request) {
         ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
 
-        String id = request.getParameter(COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
         List<Organization> organizations = UserUtils.getOrganizations(request);
@@ -771,8 +760,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void prepareReleaseEdit(RenderRequest request, RenderResponse response) throws PortletException {
         ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
 
-        String id = request.getParameter(COMPONENT_ID);
-        String releaseId = request.getParameter(RELEASE_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
+        String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
         request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
@@ -861,8 +850,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareReleaseDuplicate(RenderRequest request, RenderResponse response) throws PortletException {
-        String id = request.getParameter(COMPONENT_ID);
-        String releaseId = request.getParameter(RELEASE_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
+        String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
         final User user = UserCacheHolder.getUserFromRequest(request);
         request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user));
@@ -900,7 +889,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void prepareComponentForMergeOrSplit(RenderRequest request, RenderResponse response, String pageName) throws PortletException {
         final User user = UserCacheHolder.getUserFromRequest(request);
-        String componentId = request.getParameter(COMPONENT_ID);
+        String componentId = request.getRenderParameters().getValue(COMPONENT_ID);
 
         if (isNullOrEmpty(componentId)) {
             throw new PortletException("Component ID not set!");
@@ -914,12 +903,12 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
             addComponentBreadcrumb(request, response, component);
             PortletURL mergeOrSplitUrl = response.createRenderURL();
-            mergeOrSplitUrl.setParameter(PortalConstants.COMPONENT_ID, componentId);
+            mergeOrSplitUrl.getRenderParameters().setValue(PortalConstants.COMPONENT_ID, componentId);
             if (PortalConstants.PAGENAME_MERGE_COMPONENT.equals(pageName)) {
-                mergeOrSplitUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_MERGE_COMPONENT);
+                mergeOrSplitUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_MERGE_COMPONENT);
                 addBreadcrumbEntry(request, "Merge", mergeOrSplitUrl);
             } else {
-                mergeOrSplitUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_SPLIT_COMPONENT);
+                mergeOrSplitUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_SPLIT_COMPONENT);
                 addBreadcrumbEntry(request, "Split", mergeOrSplitUrl);
             }
         } catch (TException e) {
@@ -929,7 +918,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     @UsedAsLiferayAction
     public void componentMergeWizardStep(ActionRequest request, ActionResponse response) throws IOException, PortletException {
-        int stepId = Integer.parseInt(request.getParameter("stepId"));
+        int stepId = Integer.parseInt(request.getRenderParameters().getValue("stepId"));
         try {
             HttpServletResponse httpServletResponse = PortalUtil.getHttpServletResponse(response);
             httpServletResponse.setContentType(ContentTypes.APPLICATION_JSON);
@@ -958,7 +947,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     @UsedAsLiferayAction
     public void componentSplitWizardStep(ActionRequest request, ActionResponse response)
             throws IOException, PortletException {
-        int stepId = Integer.parseInt(request.getParameter("stepId"));
+        int stepId = Integer.parseInt(request.getRenderParameters().getValue("stepId"));
         try {
             HttpServletResponse httpServletResponse = PortalUtil.getHttpServletResponse(response);
             httpServletResponse.setContentType(ContentTypes.APPLICATION_JSON);
@@ -986,7 +975,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateComponentMergeWizardStep0Response(ActionRequest request, JsonGenerator jsonGenerator) throws IOException, TException {
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        String srcId = request.getParameter(COMPONENT_SOURCE_ID);
+        String srcId = request.getRenderParameters().getValue(COMPONENT_SOURCE_ID);
         ComponentService.Iface cClient = thriftClients.makeComponentClient();
         List<Component> componentSummary = cClient.getComponentSummary(sessionUser);
 
@@ -1012,8 +1001,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateComponentMergeWizardStep1Response(ActionRequest request, JsonGenerator jsonGenerator) throws IOException, TException {
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        String componentTargetId = request.getParameter(COMPONENT_TARGET_ID);
-        String componentSourceId = request.getParameter(COMPONENT_SOURCE_ID);
+        String componentTargetId = request.getRenderParameters().getValue(COMPONENT_TARGET_ID);
+        String componentSourceId = request.getRenderParameters().getValue(COMPONENT_SOURCE_ID);
         ComponentService.Iface cClient = thriftClients.makeComponentClient();
         Component componentTarget = cClient.getComponentById(componentTargetId, sessionUser);
         Component componentSource = cClient.getComponentById(componentSourceId, sessionUser);
@@ -1029,9 +1018,9 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateComponentMergeWizardStep2Response(ActionRequest request, JsonGenerator jsonGenerator)
             throws IOException, TException, TTransportException {
-        Component componentSelection = OBJECT_MAPPER.readValue(request.getParameter(COMPONENT_SELECTION),
+        Component componentSelection = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(COMPONENT_SELECTION),
                 Component.class);
-        String componentSourceId = request.getParameter(COMPONENT_SOURCE_ID);
+        String componentSourceId = request.getRenderParameters().getValue(COMPONENT_SOURCE_ID);
         // FIXME: maybe validate the component
 
         jsonGenerator.writeStartObject();
@@ -1049,16 +1038,16 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         // extract request data
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        Component componentSelection = OBJECT_MAPPER.readValue(request.getParameter(COMPONENT_SELECTION),
+        Component componentSelection = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(COMPONENT_SELECTION),
                 Component.class);
-        String componentSourceId = request.getParameter(COMPONENT_SOURCE_ID);
+        String componentSourceId = request.getRenderParameters().getValue(COMPONENT_SOURCE_ID);
 
         // perform the real merge, update merge target and delete merge source
         RequestStatus status = cClient.mergeComponents(componentSelection.getId(), componentSourceId, componentSelection, sessionUser);
 
         // generate redirect url
         LiferayPortletURL componentUrl = createDetailLinkTemplate(request);
-        componentUrl.setParameter(PortalConstants.COMPONENT_ID, componentSelection.getId());
+        componentUrl.getRenderParameters().setValue(PortalConstants.COMPONENT_ID, componentSelection.getId());
 
         // write response JSON
         jsonGenerator.writeStartObject();
@@ -1075,8 +1064,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateComponentSplitWizardStep2Response(ActionRequest request, JsonGenerator jsonGenerator)
             throws IOException, TException {
-        Component srcComponent = OBJECT_MAPPER.readValue(request.getParameter(SOURCE_COMPONENT), Component.class);
-        Component targetComponent = OBJECT_MAPPER.readValue(request.getParameter(TARGET_COMPONENT), Component.class);
+        Component srcComponent = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(SOURCE_COMPONENT), Component.class);
+        Component targetComponent = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(TARGET_COMPONENT), Component.class);
         jsonGenerator.writeStartObject();
         jsonGenerator.writeRaw("\"" + SOURCE_COMPONENT + "\":" + JSON_THRIFT_SERIALIZER.toString(srcComponent) + ",");
         jsonGenerator.writeRaw("\"" + TARGET_COMPONENT + "\":" + JSON_THRIFT_SERIALIZER.toString(targetComponent));
@@ -1089,13 +1078,13 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         // extract request data
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        Component srcComponent = OBJECT_MAPPER.readValue(request.getParameter(SOURCE_COMPONENT), Component.class);
-        Component targetComponent = OBJECT_MAPPER.readValue(request.getParameter(TARGET_COMPONENT), Component.class);
+        Component srcComponent = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(SOURCE_COMPONENT), Component.class);
+        Component targetComponent = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(TARGET_COMPONENT), Component.class);
         RequestStatus status = cClient.splitComponent(srcComponent, targetComponent, sessionUser);
 
         // generate redirect url
         LiferayPortletURL componentUrl = createDetailLinkTemplate(request);
-        componentUrl.setParameter(PortalConstants.COMPONENT_ID, srcComponent.getId());
+        componentUrl.getRenderParameters().setValue(PortalConstants.COMPONENT_ID, srcComponent.getId());
 
         // write response JSON
         jsonGenerator.writeStartObject();
@@ -1113,7 +1102,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void prepareReleaseMerge(RenderRequest request, RenderResponse response) throws PortletException {
         final User user = UserCacheHolder.getUserFromRequest(request);
-        String releaseId = request.getParameter(RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
 
         if (isNullOrEmpty(releaseId)) {
             throw new PortletException("Release ID not set!");
@@ -1128,8 +1117,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             addReleaseBreadcrumb(request, response, release);
 
             PortletURL mergeUrl = response.createRenderURL();
-            mergeUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_MERGE_RELEASE);
-            mergeUrl.setParameter(PortalConstants.RELEASE_ID, releaseId);
+            mergeUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_MERGE_RELEASE);
+            mergeUrl.getRenderParameters().setValue(PortalConstants.RELEASE_ID, releaseId);
             addBreadcrumbEntry(request, "Merge", mergeUrl);
         } catch (TException e) {
             log.error("Error fetching release from backend!", e);
@@ -1138,7 +1127,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     @UsedAsLiferayAction
     public void releaseMergeWizardStep(ActionRequest request, ActionResponse response) throws IOException, PortletException {
-        int stepId = Integer.parseInt(request.getParameter("stepId"));
+        int stepId = Integer.parseInt(request.getRenderParameters().getValue("stepId"));
         try {
             HttpServletResponse httpServletResponse = PortalUtil.getHttpServletResponse(response);
             httpServletResponse.setContentType(ContentTypes.APPLICATION_JSON);
@@ -1166,8 +1155,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateReleaseMergeWizardStep0Response(ActionRequest request, JsonGenerator jsonGenerator) throws IOException, TException {
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        String targetId = request.getParameter(RELEASE_TARGET_ID);
-        String componentId = request.getParameter(COMPONENT_ID);
+        String targetId = request.getRenderParameters().getValue(RELEASE_TARGET_ID);
+        String componentId = request.getRenderParameters().getValue(COMPONENT_ID);
 
         ComponentService.Iface cClient = thriftClients.makeComponentClient();
         List<Release> releases = cClient.getReleasesByComponentId(componentId, sessionUser);
@@ -1194,8 +1183,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateReleaseMergeWizardStep1Response(ActionRequest request, JsonGenerator jsonGenerator) throws IOException, TException {
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        String releaseTargetId = request.getParameter(RELEASE_TARGET_ID);
-        String releaseSourceId = request.getParameter(RELEASE_SOURCE_ID);
+        String releaseTargetId = request.getRenderParameters().getValue(RELEASE_TARGET_ID);
+        String releaseSourceId = request.getRenderParameters().getValue(RELEASE_SOURCE_ID);
 
         ComponentService.Iface cClient = thriftClients.makeComponentClient();
         Release releaseTarget = cClient.getReleaseById(releaseTargetId, sessionUser);
@@ -1298,9 +1287,9 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void generateReleaseMergeWizardStep2Response(ActionRequest request, JsonGenerator jsonGenerator)
             throws IOException, TException {
-        Release releaseSelection = OBJECT_MAPPER.readValue(request.getParameter(RELEASE_SELECTION),
+        Release releaseSelection = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(RELEASE_SELECTION),
                 Release.class);
-        String releaseSourceId = request.getParameter(RELEASE_SOURCE_ID);
+        String releaseSourceId = request.getRenderParameters().getValue(RELEASE_SOURCE_ID);
         // FIXME: maybe validate the component
 
         jsonGenerator.writeStartObject();
@@ -1318,17 +1307,17 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         // extract request data
         User sessionUser = UserCacheHolder.getUserFromRequest(request);
-        Release releaseSelection = OBJECT_MAPPER.readValue(request.getParameter(RELEASE_SELECTION),
+        Release releaseSelection = OBJECT_MAPPER.readValue(request.getRenderParameters().getValue(RELEASE_SELECTION),
                 Release.class);
-        String releaseSourceId = request.getParameter(RELEASE_SOURCE_ID);
+        String releaseSourceId = request.getRenderParameters().getValue(RELEASE_SOURCE_ID);
 
         // perform the real merge, update merge target and delete merge source
         RequestStatus status = cClient.mergeReleases(releaseSelection.getId(), releaseSourceId, releaseSelection, sessionUser);
 
         // generate redirect url
         LiferayPortletURL releaseUrl = createDetailLinkTemplate(request);
-        releaseUrl.setParameter(PortalConstants.PAGENAME, PortalConstants.PAGENAME_RELEASE_DETAIL);
-        releaseUrl.setParameter(PortalConstants.RELEASE_ID, releaseSelection.getId());
+        releaseUrl.getRenderParameters().setValue(PortalConstants.PAGENAME, PortalConstants.PAGENAME_RELEASE_DETAIL);
+        releaseUrl.getRenderParameters().setValue(PortalConstants.RELEASE_ID, releaseSelection.getId());
 
         // write response JSON
         jsonGenerator.writeStartObject();
@@ -1345,7 +1334,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareDetailView(RenderRequest request, RenderResponse response) {
-        String id = request.getParameter(COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         if (!isNullOrEmpty(id)) {
@@ -1422,8 +1411,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareReleaseDetailView(RenderRequest request, RenderResponse response) throws PortletException {
-        String id = request.getParameter(COMPONENT_ID);
-        String releaseId = request.getParameter(RELEASE_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
+        String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         if (isNullOrEmpty(id) && isNullOrEmpty(releaseId)) {
@@ -1659,16 +1648,16 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void addComponentBreadcrumb(RenderRequest request, RenderResponse response, Component component) {
         PortletURL componentUrl = response.createRenderURL();
-        componentUrl.setParameter(PAGENAME, PAGENAME_DETAIL);
-        componentUrl.setParameter(COMPONENT_ID, component.getId());
+        componentUrl.getRenderParameters().setValue(PAGENAME, PAGENAME_DETAIL);
+        componentUrl.getRenderParameters().setValue(COMPONENT_ID, component.getId());
 
         addBreadcrumbEntry(request, printName(component), componentUrl);
     }
 
     private void addReleaseBreadcrumb(RenderRequest request, RenderResponse response, Release release) {
         PortletURL releaseURL = response.createRenderURL();
-        releaseURL.setParameter(PAGENAME, PAGENAME_RELEASE_DETAIL);
-        releaseURL.setParameter(RELEASE_ID, release.getId());
+        releaseURL.getRenderParameters().setValue(PAGENAME, PAGENAME_RELEASE_DETAIL);
+        releaseURL.getRenderParameters().setValue(RELEASE_ID, release.getId());
 
         addBreadcrumbEntry(request, printName(release), releaseURL);
     }
@@ -1698,11 +1687,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void setComponentViewFilterAttributes(PortletRequest request) {
         for (Component._Fields filteredField : componentFilteredFields) {
-            String parameter = request.getParameter(filteredField.toString());
+            String parameter = request.getRenderParameters().getValue(filteredField.toString());
             request.setAttribute(filteredField.getFieldName(), nullToEmpty(parameter));
         }
-        request.setAttribute(PortalConstants.DATE_RANGE, nullToEmpty(request.getParameter(PortalConstants.DATE_RANGE)));
-        request.setAttribute(PortalConstants.END_DATE, nullToEmpty(request.getParameter(PortalConstants.END_DATE)));
+        request.setAttribute(PortalConstants.DATE_RANGE, nullToEmpty(request.getRenderParameters().getValue(PortalConstants.DATE_RANGE)));
+        request.setAttribute(PortalConstants.END_DATE, nullToEmpty(request.getRenderParameters().getValue(PortalConstants.END_DATE)));
         try {
             final User user = UserCacheHolder.getUserFromRequest(request);
             ComponentService.Iface componentClient = thriftClients.makeComponentClient();
@@ -1715,14 +1704,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private Map<String, Set<String>> getComponentFilterMap(PortletRequest request) {
         Map<String, Set<String>> filterMap = new HashMap<>();
         for (Component._Fields filteredField : componentFilteredFields) {
-            String parameter = request.getParameter(filteredField.toString());
+            String parameter = request.getRenderParameters().getValue(filteredField.toString());
             if (!isNullOrEmpty(parameter) && !(filteredField.equals(Component._Fields.COMPONENT_TYPE)
                     && parameter.equals(PortalConstants.NO_FILTER))) {
 
-                if (filteredField.equals(Component._Fields.CREATED_ON) && isNotNullEmptyOrWhitespace(request.getParameter(PortalConstants.DATE_RANGE))) {
+                if (filteredField.equals(Component._Fields.CREATED_ON) && isNotNullEmptyOrWhitespace(request.getRenderParameters().getValue(PortalConstants.DATE_RANGE))) {
                     Date date = new Date();
                     String upperLimit = new SimpleDateFormat(SampleOptions.DATE_OPTION).format(date);
-                    String dateRange = request.getParameter(PortalConstants.DATE_RANGE);
+                    String dateRange = request.getRenderParameters().getValue(PortalConstants.DATE_RANGE);
                     String query = new StringBuilder("[%s ").append(PortalConstants.TO).append(" %s]").toString();
                     DateRange range = ThriftEnumUtils.stringToEnum(dateRange, DateRange.class);
                     switch (range) {
@@ -1735,7 +1724,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                         parameter = String.format(query, parameter, upperLimit);
                         break;
                     case BETWEEN:
-                        String endDate = request.getParameter(PortalConstants.END_DATE);
+                        String endDate = request.getRenderParameters().getValue(PortalConstants.END_DATE);
                         if (isNullEmptyOrWhitespace(endDate)) {
                             endDate = upperLimit;
                         }
@@ -1778,7 +1767,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     //! Actions
     @UsedAsLiferayAction
     public void updateComponent(ActionRequest request, ActionResponse response) throws PortletException, IOException {
-        String id = request.getParameter(COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         try {
@@ -1787,7 +1776,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             if (id != null) {
                 Component component = client.getAccessibleComponentByIdForEdit(id, user);
                 ComponentPortletUtils.updateComponentFromRequest(request, component);
-                String ModerationRequestCommentMsg = request.getParameter(MODERATION_REQUEST_COMMENT);
+                String ModerationRequestCommentMsg = request.getRenderParameters().getValue(MODERATION_REQUEST_COMMENT);
                 user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
                 if (CommonUtils.isNullEmptyOrWhitespace(component.getBusinessUnit())) {
                     component.setBusinessUnit(user.getDepartment());
@@ -1802,14 +1791,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                         setSW360SessionError(request, ErrorMessages.COMPONENT_NAMING_ERROR);
                     else
                         setSW360SessionError(request, ErrorMessages.DUPLICATE_ATTACHMENT);
-                    response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
+                    response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT);
                     request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_COMPONENT);
                     request.setAttribute(DOCUMENT_ID, id);
                     prepareRequestForEditAfterDuplicateOrNamingError(request, component);
                 } else {
                     cleanUploadHistory(user.getEmail(), id);
-                    response.setRenderParameter(PAGENAME, PAGENAME_DETAIL);
-                    response.setRenderParameter(COMPONENT_ID, request.getParameter(COMPONENT_ID));
+                    response.getRenderParameters().setValue(PAGENAME, PAGENAME_DETAIL);
+                    response.getRenderParameters().setValue(COMPONENT_ID, request.getRenderParameters().getValue(COMPONENT_ID));
                 }
             } else {
                 Component component = new Component();
@@ -1824,22 +1813,22 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     case SUCCESS:
                         String successMsg = "Component " + component.getName() + " added successfully";
                         SessionMessages.add(request, "request_processed", successMsg);
-                        response.setRenderParameter(COMPONENT_ID, summary.getId());
-                        response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
+                        response.getRenderParameters().setValue(COMPONENT_ID, summary.getId());
+                        response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT);
                         break;
                     case DUPLICATE:
                         setSW360SessionError(request, ErrorMessages.COMPONENT_DUPLICATE);
-                        response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
+                        response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT);
                         prepareRequestForEditAfterDuplicateOrNamingError(request, component);
                         break;
                     case NAMINGERROR:
                         setSW360SessionError(request, ErrorMessages.COMPONENT_NAMING_ERROR);
-                        response.setRenderParameter(PAGENAME, PAGENAME_EDIT);
+                        response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT);
                         prepareRequestForEditAfterDuplicateOrNamingError(request, component);
                         break;
                     default:
                         setSW360SessionError(request, ErrorMessages.COMPONENT_NOT_ADDED);
-                        response.setRenderParameter(PAGENAME, PAGENAME_VIEW);
+                        response.getRenderParameters().setValue(PAGENAME, PAGENAME_VIEW);
                 }
             }
 
@@ -1858,7 +1847,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     @UsedAsLiferayAction
     public void updateRelease(ActionRequest request, ActionResponse response) throws PortletException, IOException {
-        String id = request.getParameter(COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(COMPONENT_ID);
         final User user = UserCacheHolder.getUserFromRequest(request);
 
         if (id != null) {
@@ -1867,11 +1856,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 Component component = client.getAccessibleComponentById(id, user);
 
                 Release release;
-                String releaseId = request.getParameter(RELEASE_ID);
+                String releaseId = request.getRenderParameters().getValue(RELEASE_ID);
                 if (releaseId != null) {
                     release = client.getAccessibleReleaseByIdForEdit(releaseId, user);
                     ComponentPortletUtils.updateReleaseFromRequest(request, release);
-                    String ModerationRequestCommentMsg = request.getParameter(MODERATION_REQUEST_COMMENT);
+                    String ModerationRequestCommentMsg = request.getRenderParameters().getValue(MODERATION_REQUEST_COMMENT);
                     user.setCommentMadeDuringModerationRequest(ModerationRequestCommentMsg);
 
                     String cyclicLinkedReleasePath = client.getCyclicLinkedReleasePath(release, user);
@@ -1880,8 +1869,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                                 PAGENAME_EDIT_RELEASE, request, response);
                         prepareRequestForReleaseEditAfterDuplicateError(request, release);
                         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
-                        response.setRenderParameter(COMPONENT_ID, id);
-                        response.setRenderParameter(RELEASE_ID, releaseId);
+                        response.getRenderParameters().setValue(COMPONENT_ID, id);
+                        response.getRenderParameters().setValue(RELEASE_ID, releaseId);
                         return;
                     }
 
@@ -1895,10 +1884,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                             setSW360SessionError(request, ErrorMessages.RELEASE_NAME_VERSION_ERROR);
                         else
                             setSW360SessionError(request, ErrorMessages.DUPLICATE_ATTACHMENT);
-                        response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
+                        response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT_RELEASE);
                         request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
-                        response.setRenderParameter(COMPONENT_ID, id);
-                        response.setRenderParameter(RELEASE_ID, releaseId);
+                        response.getRenderParameters().setValue(COMPONENT_ID, id);
+                        response.getRenderParameters().setValue(RELEASE_ID, releaseId);
                         prepareRequestForReleaseEditAfterDuplicateError(request, release);
                     } else {
                         cleanUploadHistory(user.getEmail(), releaseId);
@@ -1912,9 +1901,9 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
                         LiferayPortletURL redirectUrl = PortletURLFactoryUtil.create(request, portletId, plid,
                                 PortletRequest.RENDER_PHASE);
-                        redirectUrl.setParameter(PAGENAME, PAGENAME_RELEASE_DETAIL);
-                        redirectUrl.setParameter(COMPONENT_ID, id);
-                        redirectUrl.setParameter(RELEASE_ID, releaseId);
+                        redirectUrl.getRenderParameters().setValue(PAGENAME, PAGENAME_RELEASE_DETAIL);
+                        redirectUrl.getRenderParameters().setValue(COMPONENT_ID, id);
+                        redirectUrl.getRenderParameters().setValue(RELEASE_ID, releaseId);
 
                         request.setAttribute(WebKeys.REDIRECT, redirectUrl.toString());
                         sendRedirect(request, response);
@@ -1930,7 +1919,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                         FossologyAwarePortlet.addCustomErrorMessage(CYCLIC_LINKED_RELEASE + cyclicLinkedReleasePath,
                                 PAGENAME_EDIT_RELEASE, request, response);
                         prepareRequestForReleaseEditAfterDuplicateError(request, release);
-                        response.setRenderParameter(COMPONENT_ID, request.getParameter(COMPONENT_ID));
+                        response.getRenderParameters().setValue(COMPONENT_ID, request.getRenderParameters().getValue(COMPONENT_ID));
                         return;
                     }
 
@@ -1939,27 +1928,27 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                     AddDocumentRequestStatus status = summary.getRequestStatus();
                     switch(status){
                         case SUCCESS:
-                            response.setRenderParameter(RELEASE_ID, summary.getId());
+                            response.getRenderParameters().setValue(RELEASE_ID, summary.getId());
                             String successMsg = "Release " + printName(release) + " added successfully";
                             SessionMessages.add(request, "request_processed", successMsg);
-                            response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
+                            response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT_RELEASE);
                             break;
                         case DUPLICATE:
                             setSW360SessionError(request, ErrorMessages.RELEASE_DUPLICATE);
-                            response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
+                            response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT_RELEASE);
                             prepareRequestForReleaseEditAfterDuplicateError(request, release);
                             break;
                         case NAMINGERROR:
                             setSW360SessionError(request, ErrorMessages.RELEASE_NAME_VERSION_ERROR);
-                            response.setRenderParameter(PAGENAME, PAGENAME_EDIT_RELEASE);
+                            response.getRenderParameters().setValue(PAGENAME, PAGENAME_EDIT_RELEASE);
                             prepareRequestForReleaseEditAfterDuplicateError(request, release);
                             break;
                         default:
                             setSW360SessionError(request, ErrorMessages.RELEASE_NOT_ADDED);
-                            response.setRenderParameter(PAGENAME, PAGENAME_DETAIL);
+                            response.getRenderParameters().setValue(PAGENAME, PAGENAME_DETAIL);
                     }
 
-                    response.setRenderParameter(COMPONENT_ID, request.getParameter(COMPONENT_ID));
+                    response.getRenderParameters().setValue(COMPONENT_ID, request.getRenderParameters().getValue(COMPONENT_ID));
                 }
             } catch (TException e) {
                 log.error("Error fetching release from backend!", e);
@@ -1990,12 +1979,12 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         RequestStatus requestStatus = ComponentPortletUtils.deleteRelease(request, log);
 
         String userEmail = UserCacheHolder.getUserFromRequest(request).getEmail();
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         deleteUnneededAttachments(userEmail, releaseId);
         setSessionMessage(request, requestStatus, "Release", "delete");
 
-        response.setRenderParameter(PAGENAME, PAGENAME_DETAIL);
-        response.setRenderParameter(COMPONENT_ID, request.getParameter(COMPONENT_ID));
+        response.getRenderParameters().setValue(PAGENAME, PAGENAME_DETAIL);
+        response.getRenderParameters().setValue(COMPONENT_ID, request.getRenderParameters().getValue(COMPONENT_ID));
     }
 
     @UsedAsLiferayAction
@@ -2003,7 +1992,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         RequestStatus requestStatus = ComponentPortletUtils.deleteComponent(request, log);
 
         String userEmail = UserCacheHolder.getUserFromRequest(request).getEmail();
-        String id = request.getParameter(PortalConstants.COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.COMPONENT_ID);
         deleteUnneededAttachments(userEmail, id);
         setSessionMessage(request, requestStatus, "Component", "delete");
     }
@@ -2011,14 +2000,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     @UsedAsLiferayAction
     public void applyFilters(ActionRequest request, ActionResponse response) throws PortletException, IOException {
         for (Component._Fields componentFilteredField : componentFilteredFields) {
-            response.setRenderParameter(componentFilteredField.toString(), nullToEmpty(request.getParameter(componentFilteredField.toString())));
+            response.getRenderParameters().setValue(componentFilteredField.toString(), nullToEmpty(request.getRenderParameters().getValue(componentFilteredField.toString())));
         }
-        response.setRenderParameter(PortalConstants.DATE_RANGE, nullToEmpty(request.getParameter(PortalConstants.DATE_RANGE)));
-        response.setRenderParameter(PortalConstants.END_DATE, nullToEmpty(request.getParameter(PortalConstants.END_DATE)));
+        response.getRenderParameters().setValue(PortalConstants.DATE_RANGE, nullToEmpty(request.getRenderParameters().getValue(PortalConstants.DATE_RANGE)));
+        response.getRenderParameters().setValue(PortalConstants.END_DATE, nullToEmpty(request.getRenderParameters().getValue(PortalConstants.END_DATE)));
     }
 
     private void updateVulnerabilitiesRelease(ResourceRequest request, ResourceResponse response) throws PortletException, IOException {
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         CveSearchService.Iface cveClient = thriftClients.makeCvesearchClient();
         try {
             VulnerabilityUpdateStatus importStatus = cveClient.updateForRelease(releaseId);
@@ -2031,7 +2020,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void updateVulnerabilitiesComponent(ResourceRequest request, ResourceResponse response) throws PortletException, IOException {
-        String componentId = request.getParameter(PortalConstants.COMPONENT_ID);
+        String componentId = request.getRenderParameters().getValue(PortalConstants.COMPONENT_ID);
         CveSearchService.Iface cveClient = thriftClients.makeCvesearchClient();
         try {
             VulnerabilityUpdateStatus importStatus = cveClient.updateForComponent(componentId);
@@ -2056,8 +2045,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void updateVulnerabilityVerification(ResourceRequest request, ResourceResponse response) throws IOException {
-        String[] releaseIds = request.getParameterValues(PortalConstants.RELEASE_IDS + "[]");
-        String[] vulnerabilityIds = request.getParameterValues(PortalConstants.VULNERABILITY_IDS + "[]");
+        String[] releaseIds = request.getRenderParameters().getValues(PortalConstants.RELEASE_IDS + "[]");
+        String[] vulnerabilityIds = request.getRenderParameters().getValues(PortalConstants.VULNERABILITY_IDS + "[]");
 
         User user = UserCacheHolder.getUserFromRequest(request);
         VulnerabilityService.Iface vulClient = thriftClients.makeVulnerabilityClient();
@@ -2150,8 +2139,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
     private void linkReleaseToProject(ResourceRequest request, ResourceResponse response) throws IOException {
         User user = UserCacheHolder.getUserFromRequest(request);
-        String projectId = request.getParameter(PortalConstants.PROJECT_ID);
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        String projectId = request.getRenderParameters().getValue(PortalConstants.PROJECT_ID);
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
 
 
         try {
@@ -2178,7 +2167,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     private void handlePaginationSortOrder(ResourceRequest request, PaginationParameters paginationParameters) {
         if (!paginationParameters.getSortingColumn().isPresent()) {
             for (Component._Fields filteredField : componentFilteredFields) {
-                if (!isNullOrEmpty(request.getParameter(filteredField.toString()))) {
+                if (!isNullOrEmpty(request.getRenderParameters().getValue(filteredField.toString()))) {
                     paginationParameters.setSortingColumn(Optional.of(COMPONENT_NO_SORT));
                     break;
                 }

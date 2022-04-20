@@ -28,7 +28,6 @@ import org.eclipse.sw360.portal.users.UserCacheHolder;
 import javax.portlet.PortletRequest;
 import javax.portlet.ResourceRequest;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.eclipse.sw360.datahandler.common.SW360Utils.newDefaultEccInformation;
@@ -150,14 +149,6 @@ public abstract class ComponentPortletUtils {
         }
     }
 
-    private static List<Component._Fields> extractFieldsForComponentUpdate(List<String> requestParams, Component component) {
-        return component.getId() == null
-                ? Arrays.asList(Component._Fields.values())
-                : Arrays.stream(Component._Fields.values())
-                .filter(f -> requestParams.contains(f.name()))
-                .collect(Collectors.toList());
-    }
-
     public static void updateVendorFromRequest(PortletRequest request, Vendor vendor) {
         setFieldValue(request, vendor, Vendor._Fields.FULLNAME);
         setFieldValue(request, vendor, Vendor._Fields.SHORTNAME);
@@ -177,8 +168,8 @@ public abstract class ComponentPortletUtils {
 
     private static void updateLinkedReleaseFromRequest(PortletRequest request, Map<String, ReleaseRelationship> linkedReleases) {
         linkedReleases.clear();
-        String[] ids = request.getParameterValues(Release._Fields.RELEASE_ID_TO_RELATIONSHIP.toString() + ReleaseLink._Fields.ID.toString());
-        String[] relations = request.getParameterValues(Release._Fields.RELEASE_ID_TO_RELATIONSHIP.toString() + ReleaseLink._Fields.RELEASE_RELATIONSHIP.toString());
+        String[] ids = request.getRenderParameters().getValues(Release._Fields.RELEASE_ID_TO_RELATIONSHIP.toString() + ReleaseLink._Fields.ID.toString());
+        String[] relations = request.getRenderParameters().getValues(Release._Fields.RELEASE_ID_TO_RELATIONSHIP.toString() + ReleaseLink._Fields.RELEASE_RELATIONSHIP.toString());
         if (ids != null && relations != null && ids.length == relations.length)
             for (int k = 0; k < ids.length; ++k) {
                 linkedReleases.put(ids[k], ReleaseRelationship.findByValue(Integer.parseInt(relations[k])));
@@ -222,10 +213,10 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus deleteRelease(PortletRequest request, Logger log) {
-        String releaseId = request.getParameter(PortalConstants.RELEASE_ID);
+        String releaseId = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         if (releaseId != null) {
             try {
-                String deleteCommentEncoded = request.getParameter(PortalConstants.MODERATION_REQUEST_COMMENT);
+                String deleteCommentEncoded = request.getRenderParameters().getValue(PortalConstants.MODERATION_REQUEST_COMMENT);
                 User user = UserCacheHolder.getUserFromRequest(request);
                 if(deleteCommentEncoded != null) {
                     String deleteComment = new String(Base64.getDecoder().decode(deleteCommentEncoded));
@@ -242,7 +233,7 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus deleteVendor(PortletRequest request, Logger log) {
-        String vendorId = request.getParameter(PortalConstants.VENDOR_ID);
+        String vendorId = request.getRenderParameters().getValue(PortalConstants.VENDOR_ID);
         if (vendorId != null) {
             try {
                 User user = UserCacheHolder.getUserFromRequest(request);
@@ -291,10 +282,10 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus deleteComponent(PortletRequest request, Logger log) {
-        String id = request.getParameter(PortalConstants.COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.COMPONENT_ID);
         if (id != null) {
             try {
-                String deleteCommentEncoded = request.getParameter(PortalConstants.MODERATION_REQUEST_COMMENT);
+                String deleteCommentEncoded = request.getRenderParameters().getValue(PortalConstants.MODERATION_REQUEST_COMMENT);
                 User user = UserCacheHolder.getUserFromRequest(request);
                 if(deleteCommentEncoded != null) {
                     String deleteComment = new String(Base64.getDecoder().decode(deleteCommentEncoded));
@@ -312,7 +303,7 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus subscribeComponent(ResourceRequest request, Logger log) {
-        String id = request.getParameter(PortalConstants.COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.COMPONENT_ID);
         if (id != null) {
             try {
                 ComponentService.Iface client = new ThriftClients().makeComponentClient();
@@ -327,7 +318,7 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus subscribeRelease(ResourceRequest request, Logger log) {
-        String id = request.getParameter(PortalConstants.RELEASE_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         if (id != null) {
             try {
                 ComponentService.Iface client = new ThriftClients().makeComponentClient();
@@ -342,7 +333,7 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus unsubscribeComponent(ResourceRequest request, Logger log) {
-        String id = request.getParameter(PortalConstants.COMPONENT_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.COMPONENT_ID);
         if (id != null) {
             try {
                 ComponentService.Iface client = new ThriftClients().makeComponentClient();
@@ -357,7 +348,7 @@ public abstract class ComponentPortletUtils {
     }
 
     public static RequestStatus unsubscribeRelease(ResourceRequest request, Logger log) {
-        String id = request.getParameter(PortalConstants.RELEASE_ID);
+        String id = request.getRenderParameters().getValue(PortalConstants.RELEASE_ID);
         if (id != null) {
             try {
                 ComponentService.Iface client = new ThriftClients().makeComponentClient();
@@ -379,12 +370,12 @@ public abstract class ComponentPortletUtils {
         List<VerificationStateInfo> verificationStateHistory = dbRelation.getVerificationStateInfo();
 
         VerificationState verificationState = VerificationState.findByValue(
-                Integer.parseInt(request.getParameter(PortalConstants.VULNERABILITY_VERIFICATION_VALUE)));
+                Integer.parseInt(request.getRenderParameters().getValue(PortalConstants.VULNERABILITY_VERIFICATION_VALUE)));
 
         VerificationStateInfo resultInfo = new VerificationStateInfo()
                 .setCheckedBy(UserCacheHolder.getUserFromRequest(request).getEmail())
                 .setCheckedOn(SW360Utils.getCreatedOn())
-                .setComment(request.getParameter(PortalConstants.VULNERABILITY_VERIFICATION_COMMENT))
+                .setComment(request.getRenderParameters().getValue(PortalConstants.VULNERABILITY_VERIFICATION_COMMENT))
                 .setVerificationState(verificationState);
         verificationStateHistory.add(resultInfo);
 
