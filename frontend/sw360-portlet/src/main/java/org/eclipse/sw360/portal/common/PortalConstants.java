@@ -45,6 +45,7 @@ public class PortalConstants {
     public static final String CLEARING_REPORT_TEMPLATE_TO_FILENAMEMAPPING;
     public static final String CLEARING_REPORT_TEMPLATE_FORMAT;
     public static final String DISABLE_CLEARING_REQUEST_FOR_PROJECT_WITH_GROUPS;
+    public static final Boolean SEND_PROJECT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED;
     public static final String LOAD_OPEN_MODERATION_REQUEST = "loadOpenModerationRequest";
     public static final String LOAD_CLOSED_MODERATION_REQUEST = "loadClosedModerationRequest";
 
@@ -65,6 +66,8 @@ public class PortalConstants {
 
     //! Standard keys for Lists and their size
     public static final String KEY_SUMMARY = "documents";
+    public static final String RDF_FILE_EXTENSION = ".rdf";
+    public static final String XML_FILE_EXTENSION = ".xml";
 
     public static final String KEY_LIST_SIZE = "documentssize";
 
@@ -113,6 +116,7 @@ public class PortalConstants {
     public static final String LICENSE_TYPE_GLOBAL = "global";
     public static final String LICENSE_TYPE_OTHERS = "Others";
     public static final String LICENSE_IDS = "licenseIds";
+    public static final String MAIN_LICENSE_FILES = "LICENSE.*|license|license.txt|license.html|COPYING.*|copying|copying.txt|copying.html";
 
     //! Specialized keys for moderation
     public static final String MODERATION_PORTLET_NAME = PORTLET_NAME_PREFIX + "moderations";
@@ -210,6 +214,8 @@ public class PortalConstants {
     public static final String LOAD_OBLIGATIONS_EDIT = "load_obligations_edit";
     public static final String LOAD_LICENSE_OBLIGATIONS = "load_license_obligations";
     public static final String UNUSED_RELEASES = "unusedReleases";
+    public static final String OBLIGATION_EDIT = "obligationEdit";
+    public static final String OBLIGATION_CHANGELOG = "obligation_changelog";
 
     //! Specialized keys for license types
     public static final String LICENSE_TYPE_LIST = "licenseTypeList";
@@ -297,6 +303,7 @@ public class PortalConstants {
     public static final String PROJECT_OBLIGATIONS_INFO_BY_RELEASE = "projectObligationsInfoByRelease";
     public static final String LINKED_OBLIGATIONS = "linkedObligations";
     public static final String APPROVED_OBLIGATIONS_COUNT = "approvedObligationsCount";
+    public static final String OBLIGATION_FROM_README_OSS = "obligationFromReadmeOSS";
     public static final String EXCLUDED_RELEASES = "excludedReleases";
     public static final String RELATIONSHIPS = "relations";
     public static final String PROJECT_RELEASE_TO_RELATION = "projectReleaseToRelation";
@@ -616,6 +623,8 @@ public class PortalConstants {
 
     // Excel export
     public static final String EXPORT_TO_EXCEL = "export_to_excel";
+    public static final String EMAIL_EXPORTED_EXCEL = "email_exported_excel";
+    public static final String DOWNLOAD_EXCEL = "download_excel";
     public static final String EXPORT_CLEARING_TO_EXCEL = "export_clearing_to_excel";
     public static final String EXPORT_ID = "export_id";
 
@@ -719,6 +728,7 @@ public class PortalConstants {
         IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED = Boolean.parseBoolean(
             System.getProperty("RunComponentVisibilityRestrictionTest", props.getProperty("component.visibility.restriction.enabled", "false")));
         DISABLE_CLEARING_REQUEST_FOR_PROJECT_WITH_GROUPS = props.getProperty("org.eclipse.sw360.disable.clearing.request.for.project.group", "");
+        SEND_PROJECT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.spreadsheet.export.to.mail.enabled", "false"));
     }
 
     private PortalConstants() {
