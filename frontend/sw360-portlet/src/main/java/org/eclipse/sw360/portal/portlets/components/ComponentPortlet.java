@@ -220,6 +220,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             updateVulnerabilityVerification(request, response);
         } else if (PortalConstants.EXPORT_TO_EXCEL.equals(action)) {
             exportExcel(request, response);
+        } else if (PortalConstants.DOWNLOAD_EXCEL.equals(action)) {
+            downloadExcel(request, response);
+        } else if (PortalConstants.EMAIL_EXPORTED_EXCEL.equals(action)) {
+            exportExcelWithEmail(request, response);
         } else if (PortalConstants.RELEASE_LINK_TO_PROJECT.equals(action)) {
             linkReleaseToProject(request, response);
         } else if (PortalConstants.LOAD_SPDX_LICENSE_INFO.equals(action)) {
@@ -241,6 +245,59 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         } else if (PortalConstants.EVALUATE_CLI_ATTACHMENTS.equals(action)) {
             evaluateCLIAttachments(request, response);
         }
+    }
+
+    private void exportExcelWithEmail(ResourceRequest request, ResourceResponse response) {
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        final String componentId = request.getParameter(Component._Fields.ID.toString());
+        ResourceBundle resourceBundle = ResourceBundleUtil.getBundle("content.Language", request.getLocale(), getClass());
+        String token = null;
+
+        try {
+            setSessionMessage(request, LanguageUtil.get(resourceBundle,
+                    "excel.report.generation.has.started.we.will.send.you.an.email.with.download.link.once.completed"));
+            boolean extendedByReleases = Boolean.valueOf(request.getParameter(PortalConstants.EXTENDED_EXCEL_EXPORT));
+            ComponentService.Iface client = thriftClients.makeComponentClient();
+            int total = client.getTotalComponentsCount(user);
+            PaginationData pageData = new PaginationData();
+            pageData.setAscending(true);
+            Map<PaginationData, List<Component>> pageDtToProjects;
+            Set<Component> projects = new HashSet<>();
+            int displayStart = 0;
+            int rowsPerPage = 500;
+            while (0 < total) {
+                pageData.setDisplayStart(displayStart);
+                pageData.setRowsPerPage(rowsPerPage);
+                displayStart = displayStart + rowsPerPage;
+                pageDtToProjects = getFilteredComponentList(request, pageData);
+                projects.addAll(pageDtToProjects.entrySet().iterator().next().getValue());
+                total = total - rowsPerPage;
+            }
+            List<Component> listOfComponent = new ArrayList<Component>(projects);
+            ComponentExporter exporter = new ComponentExporter(thriftClients.makeComponentClient(), listOfComponent,
+                    user, extendedByReleases);
+
+            token = exporter.makeExcelExportForProject(listOfComponent, user);
+
+            String portletId = (String) request.getAttribute(WebKeys.PORTLET_ID);
+            ThemeDisplay tD = (ThemeDisplay) request.getAttribute(WebKeys.THEME_DISPLAY);
+            long plid = tD.getPlid();
+
+            LiferayPortletURL componentUrl = PortletURLFactoryUtil.create(request, portletId, plid,
+                    PortletRequest.RESOURCE_PHASE);
+            componentUrl.setParameter("action", PortalConstants.DOWNLOAD_EXCEL);
+            componentUrl.setParameter("token", token);
+            componentUrl.setParameter(PortalConstants.EXTENDED_EXCEL_EXPORT, String.valueOf(extendedByReleases));
+
+            if(!CommonUtils.isNullEmptyOrWhitespace(token)) {
+                client.sendExportSpreadsheetSuccessMail(componentUrl.toString(), user.getEmail());
+            }
+        } catch (IOException | TException | PortletException e) {
+            log.error("An error occurred while generating the Excel export", e);
+            response.setProperty(ResourceResponse.HTTP_STATUS_CODE,
+                    Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
+        }
+
     }
 
     private void evaluateCLIAttachments(ResourceRequest request, ResourceResponse response) throws IOException {
@@ -467,13 +524,47 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         try {
             boolean extendedByReleases = Boolean.valueOf(request.getParameter(PortalConstants.EXTENDED_EXCEL_EXPORT));
-            List<Component> components = getFilteredComponentList(request);
-            ComponentExporter exporter = new ComponentExporter(thriftClients.makeComponentClient(), components, user,
+            ComponentService.Iface client = thriftClients.makeComponentClient();
+            int total = client.getTotalComponentsCount(user);
+            PaginationData pageData = new PaginationData();
+            pageData.setAscending(true);
+            Map<PaginationData, List<Component>> pageDtToProjects;
+            Set<Component> projects = new HashSet<>();
+            int displayStart = 0;
+            int rowsPerPage = 500;
+            while (0 < total) {
+                pageData.setDisplayStart(displayStart);
+                pageData.setRowsPerPage(rowsPerPage);
+                displayStart = displayStart + rowsPerPage;
+                pageDtToProjects = getFilteredComponentList(request, pageData);
+                projects.addAll(pageDtToProjects.entrySet().iterator().next().getValue());
+                total = total - rowsPerPage;
+            }
+            List<Component> listOfComponent = new ArrayList<Component>(projects);
+            ComponentExporter exporter = new ComponentExporter(thriftClients.makeComponentClient(), listOfComponent, user,
                     extendedByReleases);
             String filename = String.format("components-%s.xlsx", SW360Utils.getCreatedOn());
-            PortletResponseUtil.sendFile(request, response, filename, exporter.makeExcelExport(components),
+            PortletResponseUtil.sendFile(request, response, filename, exporter.makeExcelExport(listOfComponent),
                     CONTENT_TYPE_OPENXML_SPREADSHEET);
-        } catch (IOException | SW360Exception e) {
+        } catch (IOException | TException e) {
+            log.error("An error occurred while generating the Excel export", e);
+            response.setProperty(ResourceResponse.HTTP_STATUS_CODE,
+                    Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    private void downloadExcel(ResourceRequest request, ResourceResponse response) {
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        final String token = request.getParameter("token");
+
+        try {
+            boolean extendedByReleases = Boolean.valueOf(request.getParameter(PortalConstants.EXTENDED_EXCEL_EXPORT));
+            ComponentExporter exporter = new ComponentExporter(thriftClients.makeComponentClient(), user,
+                    extendedByReleases);
+            String filename = String.format("components-%s.xlsx", SW360Utils.getCreatedOn());
+            PortletResponseUtil.sendFile(request, response, filename, exporter.downloadExcelSheet(token),
+                    CONTENT_TYPE_OPENXML_SPREADSHEET);
+        } catch (IOException | TException e) {
             log.error("An error occurred while generating the Excel export", e);
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE,
                     Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
@@ -601,7 +692,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
             if (attachmentName.endsWith(PortalConstants.RDF_FILE_EXTENSION)) {
                 if (AttachmentType.INITIAL_SCAN_REPORT.equals(attachmentType)) {
-                    totalFileCount = licenseWithTexts.stream().map(LicenseNameWithText::getSourceFiles).filter(Objects::nonNull).mapToInt(Set::size).sum();
+                    totalFileCount = licenseInfoResult.stream().flatMap(result -> result.getLicenseInfo().getLicenseNamesWithTexts().stream())
+                            .map(LicenseNameWithText::getSourceFiles).filter(Objects::nonNull).flatMap(Set::stream).collect(Collectors.toSet()).size();
                     licenseToSrcFilesMap = licenseWithTexts.stream().collect(Collectors.toMap(LicenseNameWithText::getLicenseName,
                             LicenseNameWithText::getSourceFiles, (oldValue, newValue) -> oldValue));
                     licenseWithTexts.forEach(lwt -> {
@@ -644,7 +736,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 mainLicenseNames.forEach(licenseId -> wrapException(() -> { jsonGenerator.writeString(licenseId); }));
                 jsonGenerator.writeEndArray();
             }
-            jsonGenerator.writeStringField("otherLicense", LanguageUtil.get(resourceBundle,"other.license.id"));
+            jsonGenerator.writeStringField("otherLicense", LanguageUtil.get(resourceBundle,"other.license.ids"));
             jsonGenerator.writeArrayFieldStart("otherLicenseIds");
             otherLicenseNames.forEach(licenseId -> wrapException(() -> { jsonGenerator.writeString(licenseId); }));
             jsonGenerator.writeEndArray();
