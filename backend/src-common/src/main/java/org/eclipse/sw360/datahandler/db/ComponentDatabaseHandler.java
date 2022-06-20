@@ -504,6 +504,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         Component oldComponent = component.deepCopy();
         updateReleaseDependentFieldsForComponent(component, release);
+        updateModifiedFields(component, user.getEmail());
         componentRepository.update(component);
 
         sendMailNotificationsForNewRelease(release, user.getEmail());
@@ -676,6 +677,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             changes.add(nameFields);
             changeLog.setChanges(changes);
             release.setName(name);
+            updateModifiedFields(release, userEdited);
             releaseRepository.update(release);
             referenceDocLogList.add(changeLog);
         }
@@ -691,6 +693,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     private void updateComponentInternal(Component updated, Component current, User user) {
+        updateModifiedFields(updated, user.getEmail());
         // Update the database with the component
         componentRepository.update(updated);
 
@@ -886,6 +889,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     private void updateReleasesAfterMerge(Set<String> targetComponentReleaseIds, Set<String> srcComponentReleaseIds,
             Component mergeSelection, Component mergeTarget, User sessionUser) throws SW360Exception {
+        final String userEmail = sessionUser.getEmail();
         // Change release name if appropriate
         List<Release> targetComponentReleases = getReleasesForClearingStateSummary(targetComponentReleaseIds);
         List<Release> srcComponentReleases = getReleasesForClearingStateSummary(srcComponentReleaseIds);
@@ -904,7 +908,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 }
                 r.setComponentId(mergeTarget.getId());
                 r.setName(mergeSelection.getName());
-                dbHandlerUtil.addChangeLogs(r, releaseBefore, sessionUser.getEmail(), Operation.UPDATE,
+                updateModifiedFields(r, userEmail);
+                dbHandlerUtil.addChangeLogs(r, releaseBefore, userEmail, Operation.UPDATE,
                             attachmentConnector, Lists.newArrayList(), mergeTarget.getId(), Operation.MERGE_COMPONENT);
                 return r;
             }).collect(Collectors.toList());
@@ -931,7 +936,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private void updateComponentCompletelyWithoutDeletingAttachment(Component component, User user) throws SW360Exception {
         // Prepare component for database
         prepareComponent(component);
-
+        updateModifiedFields(component, user.getEmail());
         componentRepository.update(component);
 
         sendMailNotificationsForComponentUpdate(component, user.getEmail());
@@ -994,10 +999,11 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 }
 
                 checkSuperAttachmentExists(release);
+                updateModifiedFields(release, user.getEmail());
                 releaseRepository.update(release);
                 String componentId=release.getComponentId();
                 Component oldComponent = componentRepository.get(componentId);
-                Component updatedComponent = updateReleaseDependentFieldsForComponentId(componentId);
+                Component updatedComponent = updateReleaseDependentFieldsForComponentId(componentId, user);
                 // clean up attachments in database
                 attachmentConnector.deleteAttachmentDifference(nullToEmptySet(actual.getAttachments()),
                         nullToEmptySet(release.getAttachments()));
@@ -1220,9 +1226,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     }
 
-    public Component updateReleaseDependentFieldsForComponentId(String componentId) {
+    public Component updateReleaseDependentFieldsForComponentId(String componentId, User user) {
         Component component = componentRepository.get(componentId);
         recomputeReleaseDependentFields(component, null);
+        updateModifiedFields(component, user.getEmail());
         componentRepository.update(component);
 
         return component;
@@ -1451,6 +1458,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         if(updateClearingState) {
             autosetReleaseClearingState(release, actual);
         }
+        updateModifiedFields(release, user.getEmail());
         releaseRepository.update(release);
 
         //clean up attachments in database
@@ -1465,6 +1473,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private void updateReleaseReferencesInProjects(String mergeTargetId, String mergeSourceId, User sessionUser) throws TException {
         ProjectService.Iface projectClient = new ThriftClients().makeProjectClient();
 
+        final String userEmail = sessionUser.getEmail();
         Set<Project> projects = projectClient.searchByReleaseId(mergeSourceId, sessionUser);
         for(Project project : projects) {
             // retrieve full document, other method only retrieves summary
@@ -1475,9 +1484,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if(!project.getReleaseIdToUsage().containsKey(mergeTargetId)) {
                 project.putToReleaseIdToUsage(mergeTargetId, relationship);
             }
+            updateModifiedFields(project, userEmail);
             projectClient.updateProject(project, sessionUser);
 
-            dbHandlerUtil.addChangeLogs(project, projectBefore, sessionUser.getEmail(), Operation.UPDATE,
+            dbHandlerUtil.addChangeLogs(project, projectBefore, userEmail, Operation.UPDATE,
                     attachmentConnector, Lists.newArrayList(), mergeTargetId, Operation.MERGE_RELEASE);
         }
     }
@@ -1583,7 +1593,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
 
             for (Release release : releaseRepository.get(nullToEmptySet(component.releaseIds))) {
-                component = removeReleaseAndCleanUp(release);
+                component = removeReleaseAndCleanUp(release, user);
             }
 
             // Remove the component with attachments
@@ -1631,11 +1641,11 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return (usingProjects.size() > 0);
     }
 
-    private Component removeReleaseAndCleanUp(Release release) throws SW360Exception {
+    private Component removeReleaseAndCleanUp(Release release, User user) throws SW360Exception {
         attachmentConnector.deleteAttachments(release.getAttachments());
         attachmentDatabaseHandler.deleteUsagesBy(Source.releaseId(release.getId()));
 
-        Component component = updateReleaseDependentFieldsForComponentId(release.getComponentId());
+        Component component = updateReleaseDependentFieldsForComponentId(release.getComponentId(), user);
 
         //TODO notify using projects!?? Or stop if there are any
 
@@ -1655,7 +1665,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             Component componentBefore = componentRepository.get(release.getComponentId());
             // Remove release id from component
             removeReleaseId(id, release.componentId);
-            Component componentAfter=removeReleaseAndCleanUp(release);
+            Component componentAfter=removeReleaseAndCleanUp(release, user);
             dbHandlerUtil.addChangeLogs(null, release, user.getEmail(), Operation.DELETE, attachmentConnector,
                     Lists.newArrayList(), null, null);
             dbHandlerUtil.addChangeLogs(componentAfter, componentBefore, user.getEmail(), Operation.UPDATE,
@@ -2246,8 +2256,9 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 recomputeReleaseDependentFields(srcComponentFromDB, null);
                 targetComponentFromDB.unsetReleases();
                 srcComponentFromDB.unsetReleases();
+                updateModifiedFields(targetComponentFromDB, user.getEmail());
                 componentRepository.update(targetComponentFromDB);
-
+                updateModifiedFields(srcComponentFromDB, user.getEmail());
                 componentRepository.update(srcComponentFromDB);
 
                 updateReleaseAfterComponentSplit(srcComponentFromDBOriginal, targetComponentFromDBOriginal,
@@ -2568,6 +2579,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         List<Release> srcComponentReleasesMoved = getReleasesForClearingStateSummary(srcComponentReleaseIdsMovedFromSrc);
         Set<String> targetComponentReleaseVersions = targetComponentReleases.stream().map(Release::getVersion)
                 .collect(Collectors.toSet());
+        final String userEmail = user.getEmail();
 
         List<Release> releasesToUpdate = srcComponentReleasesMoved.stream().map(r -> {
             Release releaseBefore = r.deepCopy();
@@ -2578,7 +2590,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             }
             r.setComponentId(targetComponentFromDB.getId());
             r.setName(targetComponentFromDB.getName());
-            dbHandlerUtil.addChangeLogs(r, releaseBefore, user.getEmail(), Operation.UPDATE, attachmentConnector,
+            updateModifiedFields(r, userEmail);
+            dbHandlerUtil.addChangeLogs(r, releaseBefore, userEmail, Operation.UPDATE, attachmentConnector,
                     Lists.newArrayList(), srcComponentFromDB.getId(), Operation.SPLIT_COMPONENT);
             return r;
         }).collect(Collectors.toList());
@@ -2603,5 +2616,11 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                         }
                     });
         }
+    }
+
+    public void sendExportSpreadsheetSuccessMail(String url, String recepient) throws TException {
+        mailUtil.sendMail(recepient, MailConstants.SUBJECT_SPREADSHEET_EXPORT_SUCCESS,
+                MailConstants.TEXT_SPREADSHEET_EXPORT_SUCCESS, SW360Constants.NOTIFICATION_CLASS_COMPONENT, "", false,
+                "component", url);
     }
 }
