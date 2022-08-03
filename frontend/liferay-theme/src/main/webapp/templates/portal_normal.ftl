@@ -62,6 +62,7 @@
 	<header id="banner" role="banner">
 		<div id="heading" class="container">
             <#if is_signed_in>
+                ${liferay_user.getExpandoBridge().getAttribute("BannerMessage")!(liferay_user.getExpandoBridge().addAttribute("BannerMessage"))}
                 <#assign expandoAttribute = liferay_user.getExpandoBridge().getAttribute("BannerMessage") />
                 <#if expandoAttribute?has_content>
                     <div id="updateMessage" class="alert alert-warning">
