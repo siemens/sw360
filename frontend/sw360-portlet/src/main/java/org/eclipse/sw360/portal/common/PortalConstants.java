@@ -383,6 +383,7 @@ public class PortalConstants {
     public static final String CUSTOM_FIELD_COMPONENTS_VIEW_SIZE = "ComponentsViewSize";
     public static final String CUSTOM_FIELD_VULNERABILITIES_VIEW_SIZE = "VulnerabilitiesViewSize";
     public static final String CUSTOM_FIELD_PREFERRED_CLEARING_DATE_LIMIT = "PreferredClearingDateLimit";
+    public static final String CUSTOM_FIELD_BANNER_MESSAGE = "BannerMessage";
 
     //! Specialized keys for scheduling
     public static final String CVESEARCH_IS_SCHEDULED = "cveSearchIsScheduled";
@@ -548,6 +549,7 @@ public class PortalConstants {
     //component actions
     public static final String ADD_VENDOR = "add_vendor";
     public static final String VIEW_VENDOR = "view_vendor";
+    public static final String VIEW_DEPARTMENT = "view_department";
     public static final String CHECK_COMPONENT_NAME = "check_component_name";
     public static final String DELETE_COMPONENT = "delete_component";
     public static final String DELETE_RELEASE = "delete_release";
