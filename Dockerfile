@@ -12,16 +12,11 @@
 FROM eclipse-temurin:11-jdk-jammy AS builder
 
 # Set versiona as arguments
-ARG CLUCENE_VERSION=2.1.0
-ARG THRIFT_VERSION=0.16.0
-ARG MAVEN_VERSION=3.8.6
-
-# Lets get dependencies as buildkit cached
-ENV SW360_DEPS_DIR=/var/cache/deps
-COPY ./scripts/docker-config/download_dependencies.sh /var/tmp/deps.sh
-RUN --mount=type=cache,mode=0755,target=/var/cache/deps,sharing=locked \
-    chmod +x /var/tmp/deps.sh \
-    && /var/tmp/deps.sh
+ARG CLUCENE_VERSION
+ARG THRIFT_VERSION
+ARG MAVEN_VERSION
+ARG LIFERAY_VERSION
+ARG LIFERAY_SOURCE
 
 RUN --mount=type=cache,mode=0755,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,mode=0755,target=/var/lib/apt,sharing=locked \
@@ -46,6 +41,14 @@ RUN --mount=type=cache,mode=0755,target=/var/cache/apt,sharing=locked \
     unzip \
     zip \
     && rm -rf /var/lib/apt/lists/*
+
+# Lets get dependencies as buildkit cached
+ENV SW360_DEPS_DIR=/var/cache/deps
+COPY ./scripts/download_dependencies.sh /var/tmp/deps.sh
+
+RUN --mount=type=cache,mode=0755,target=/var/cache/deps,sharing=locked \
+    chmod +x /var/tmp/deps.sh \
+    && /var/tmp/deps.sh
 
 # Prepare maven from binary to avoid wrong java dependencies and proxy
 RUN --mount=type=cache,mode=0755,target=/var/cache/deps \
@@ -132,7 +135,7 @@ FROM eclipse-temurin:11-jdk-jammy
 
 WORKDIR /app/
 
-ARG LIFERAY_SOURCE="liferay-ce-portal-tomcat-7.3.4-ga5-20200811154319029.tar.gz"
+ARG LIFERAY_SOURCE
 
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
