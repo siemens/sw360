@@ -15,9 +15,8 @@ import com.cloudant.client.api.CloudantClient;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.*;
-import com.liferay.portal.kernel.json.JSONArray;
-import com.liferay.portal.kernel.json.JSONFactoryUtil;
-import com.liferay.portal.kernel.json.JSONObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import org.apache.commons.lang.StringUtils;
 import org.apache.thrift.TException;
 
@@ -1412,8 +1411,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     @NotNull
-    private JSONArray serializeProjectsToJson(List<Project> projects) {
-        JSONArray serializedProjects = JSONFactoryUtil.createJSONArray();
+    private JsonArray serializeProjectsToJson(List<Project> projects) {
+        JsonArray  serializedProjects = new JsonArray();
         Map<String, Release> releaseMap = componentDatabaseHandler.getAllReleasesIdMap();
         componentDatabaseHandler.fillVendors(releaseMap.values());
         Map<String, Component> componentMap = componentDatabaseHandler.getAllComponentsIdMap();
@@ -1422,17 +1421,17 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 ProjectProjectRelationship projectProjectRelationship = entry.getValue();
                 return projectProjectRelationship != null && projectProjectRelationship.isEnableSvm();
             }).map(entry -> entry.getKey()).collect(Collectors.toSet());
-            JSONObject json = JSONFactoryUtil.createJSONObject();
-            json.put("application_id", p.getId());
-            json.put("application_name", p.getName());
-            json.put("application_version", p.getVersion());
-            json.put("business_unit", p.getBusinessUnit());
-            json.put("user_gids", stringCollectionToJsonArray(nullToEmptySet(p.getSecurityResponsibles())));
-            json.put("children_application_ids",
-                    p.isConsiderReleasesFromExternalList() ? JSONFactoryUtil.createJSONArray()
+            JsonObject json = new JsonObject();
+            json.addProperty("application_id", p.getId());
+            json.addProperty("application_name", p.getName());
+            json.addProperty("application_version", p.getVersion());
+            json.addProperty("business_unit", p.getBusinessUnit());
+            json.add("user_gids", stringCollectionToJsonArray(nullToEmptySet(p.getSecurityResponsibles())));
+            json.add("children_application_ids",
+                    p.isConsiderReleasesFromExternalList() ? new JsonArray()
                             : stringCollectionToJsonArray(linkedProjectIds));
-            json.put("components",
-                    p.isConsiderReleasesFromExternalList() ? JSONFactoryUtil.createJSONArray()
+            json.add("components",
+                    p.isConsiderReleasesFromExternalList() ? new JsonArray()
                             : serializeReleasesToJson(nullToEmptyMap(p.getReleaseIdToUsage()).keySet().stream()
                                     .map(releaseMap::get).filter(Objects::nonNull).collect(Collectors.toList()),
                                     componentMap));
@@ -1449,69 +1448,69 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 Set<String> filteredExternalIds = externalIdValueSet.stream()
                         .filter(externalId -> externalId.length() == 8).collect(Collectors.toSet());
                 if (CommonUtils.isNotEmpty(filteredExternalIds)) {
-                    json.put("svm_children_ml_ids", stringCollectionToJsonArray(filteredExternalIds));
+                    json.add("svm_children_ml_ids", stringCollectionToJsonArray(filteredExternalIds));
                 }
             }
-            serializedProjects.put(json);
+            serializedProjects.add(json);
         }
         return serializedProjects;
     }
 
-    private JSONArray stringCollectionToJsonArray(Collection<String> strings) {
-        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
-        strings.forEach(jsonArray::put);
+    private JsonArray stringCollectionToJsonArray(Collection<String> strings) {
+        JsonArray jsonArray = new JsonArray();
+        strings.forEach(jsonArray::add);
         return jsonArray;
     }
 
-    private JSONArray serializeReleasesToJson(List<Release> releases, Map<String, Component> componentMap) {
-        JSONArray serializedReleases = JSONFactoryUtil.createJSONArray();
+    private JsonArray serializeReleasesToJson(List<Release> releases, Map<String, Component> componentMap) {
+        JsonArray serializedReleases = new JsonArray();
         for (Release r: releases){
             Component c = componentMap.get(r.getComponentId());
-            JSONObject json = JSONFactoryUtil.createJSONObject();
+            JsonObject json = new JsonObject();
             Map<String, String> externalIds = CommonUtils.nullToEmptyMap(r.getExternalIds());
-            json.put("external_component_id", r.getId());
+            json.addProperty("external_component_id", r.getId());
             putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get(SW360Constants.SIEMENS_SVM_COMPONENT_ID));
             putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get(SW360Constants.SIEMENS_MAINLINE_COMPONENT_ID));
-            json.put("vendor", Optional.ofNullable(r.getVendor()).map(Vendor::getShortname).orElse(""));
-            json.put("name", r.getName());
-            json.put("version", r.getVersion());
+            json.addProperty("vendor", Optional.ofNullable(r.getVendor()).map(Vendor::getShortname).orElse(""));
+            json.addProperty("name", r.getName());
+            json.addProperty("version", r.getVersion());
             if (c == null) {
                 log.warn(String.format("Parent component of release %s (%s) with id %s was not found", r.getName(), r.getId(), r.getComponentId()));
             } else {
-                json.put("urls", getUrlsJson(r, c));
-                json.put("description", c.getDescription());
+                json.add("urls", getUrlsJson(r, c));
+                json.addProperty("description", c.getDescription());
             }
-            json.put("cpe_items", getReleaseCpeIdsJson(r));
-            serializedReleases.put(json);
+            json.add("cpe_items", getReleaseCpeIdsJson(r));
+            serializedReleases.add(json);
         }
         return serializedReleases;
     }
 
-    private void putExternalIdToJsonAsInteger(JSONObject json, String jsonKey, String extId){
+    private void putExternalIdToJsonAsInteger(JsonObject json, String jsonKey, String extId){
         if (extId == null){
-            json.put(jsonKey, (JSONObject) null);
+            json.add(jsonKey, (JsonObject) null);
         }
         try {
-            json.put(jsonKey, Integer.parseInt(extId));
+            json.addProperty(jsonKey, Integer.parseInt(extId));
         } catch (NumberFormatException e){
-            json.put(jsonKey, (JSONObject) null);
+            json.add(jsonKey, (JsonObject) null);
         }
     }
 
-    private JSONArray putIfNotEmpty(JSONArray array, String value){
+    private JsonArray putIfNotEmpty(JsonArray array, String value){
         if (!isNullOrEmpty(value)){
-            array.put(value);
+            array.add(value);
         }
         return array;
     }
-    private JSONArray getReleaseCpeIdsJson(Release r) {
-        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+    private JsonArray getReleaseCpeIdsJson(Release r) {
+        JsonArray jsonArray = new JsonArray();
         putIfNotEmpty(jsonArray, r.getCpeid());
         return jsonArray;
     }
 
-    private JSONArray getUrlsJson(Release r, Component c) {
-        JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+    private JsonArray getUrlsJson(Release r, Component c) {
+        JsonArray jsonArray = new JsonArray();
         putIfNotEmpty(jsonArray, c.getHomepage());
         putIfNotEmpty(jsonArray, c.getBlog());
         putIfNotEmpty(jsonArray, c.getWiki());
@@ -1527,13 +1526,13 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         List<Project> projects = prepareProjectsForSVM(allProjects);
         log.info("SVMML: after filtering out projects with missing security responsibles, " + projects.size() + " projects are left");
         // serialize projects to json
-        JSONArray jsonResult = serializeProjectsToJson(projects);
+        JsonArray jsonResult = serializeProjectsToJson(projects);
         String jsonString = jsonResult.toString();
         log.info("SVMML: projects serialized to JSON string. String length: " + jsonString.length());
         log.info("SVMML: JSON starts with: " + StringUtils.abbreviate(jsonString, SVMML_JSON_LOG_CUTOFF_LENGTH));
 
         try {
-            DatabaseHandlerUtil.writeToFile(jsonResult.toString(4));
+            DatabaseHandlerUtil.writeToFile(jsonString);
         } catch (Exception e) {
             log.warn("Unable to write to Json Output to File . ", e);
         }
