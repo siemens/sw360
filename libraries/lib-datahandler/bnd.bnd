@@ -23,12 +23,12 @@ Export-Package: \
         com.siemens.sw360.datahandler.*, \
 	org.ektorp.*, \
 	com.cloudant.*, \
-	com.google.gson.*, \
-	com.google.common.*
+	com.google.gson.*
 
 Import-Package: \
 	com.fasterxml.jackson.*, \
 	com.google.common.*, \
+	javax.net.ssl.*, \
     org.apache.commons.io.*, \
 	org.apache.commons.codec.binary.*, \
 	org.apache.commons.csv.*, \
@@ -44,10 +44,5 @@ Conditional-Package: \
 	com.cloudant.*, \
 	com.google.gson.*
 
-# The following resources are not available as OSGI bundles and therefore will be directly included
-Include-Resource: \
-    META-INF/lib/com.google.guava.failureaccess.jar=failureaccess-[0-9]*.jar;lib:=true
-
 Bundle-Classpath: \
-    ., \
-    META-INF/lib/com.google.guava.failureaccess.jar,
+    .
