@@ -11,6 +11,7 @@ package org.eclipse.sw360.datahandler.db;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -45,6 +46,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.Level;
+import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -705,7 +707,7 @@ public class DatabaseHandlerUtil {
     }
 
     private static String getTimeStamp() {
-        SimpleDateFormat timestampPattern = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        SimpleDateFormat timestampPattern = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS");
         Date timeNow = new Date(System.currentTimeMillis());
         return timestampPattern.format(timeNow);
     }
@@ -1019,5 +1021,15 @@ public class DatabaseHandlerUtil {
 	       .add( builder.newAppenderRef("ChangeLogFile")));
 	       Configurator.reconfigure(builder.build());
        }
+
+    public static File saveAsTempFile(InputStream inputStream, String prefix, String suffix) throws IOException {
+        final File tempFile = File.createTempFile(prefix, suffix);
+        tempFile.deleteOnExit();
+        // Set append to false, overwrite if file existed
+        try (FileOutputStream outputStream = new FileOutputStream(tempFile, false)) {
+            IOUtils.copy(inputStream, outputStream);
+        }
+        return tempFile;
+    }
 }
 

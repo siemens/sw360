@@ -15,10 +15,12 @@ variables:
   PACKAGE_NAME_PREFIX: "sw360"
   COUCHDB_USER: $COUCHDB_TEST_USER
   COUCHDB_PASSWORD: $COUCHDB_TEST_PWD
+  HOME: /root
   https_proxy: $CODE_PROXY
   http_proxy: $CODE_PROXY
   no_proxy: couchdb,linux.siemens.com,.siemens.com,.siemens.de,.siemens.co.in
   _JAVA_OPTIONS: -Djdk.net.URLClassPath.disableClassPathURLCheck=true -DSPDXParser.OnlyUseLocalLicenses=true -Dhttp.proxySet=true -Dhttp.proxyHost=$CODE_PROXY_HOST -Dhttp.proxyPort=$CODE_PROXY_PORT -Dhttp.nonProxyHosts=localhost|couchdb
+  GRADLE_USER_HOME: $HOME/.gradle
 
 build_sw360:
   stage: build
@@ -28,6 +30,18 @@ build_sw360:
 
   # setting remote repos url to download mvn packages
   - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
+
+  # setting proxy for gradle, required to build thrift
+  - |
+    mkdir -p $GRADLE_USER_HOME
+    printf "systemProp.http.proxyHost=%s
+    systemProp.http.proxyPort=%s
+    systemProp.http.nonProxyHosts='%s'
+    systemProp.https.proxyHost=%s
+    systemProp.https.proxyPort=%s
+    " \
+      "$CODE_PROXY_HOST" "$CODE_PROXY_PORT" "localhost|couchdb|*.siemens.com|*.siemens.de|*.siemens.co.in" \
+      "$CODE_PROXY_HOST" "$CODE_PROXY_PORT" >> $GRADLE_USER_HOME/gradle.properties
 
   # Create couchdb-test.properties in /etc/sw360 to run testcases
   - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb-test.properties
@@ -39,7 +53,15 @@ build_sw360:
   - echo "couchdb.username = ${COUCHDB_TEST_USER}" >> /etc/sw360/databasetest.properties
   - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/databasetest.properties
 
-  - apt-get -qq update && apt-get -qq -y install build-essential rsync && apt-get install zip -y --no-install-recommends && apt-get install awscli -y --no-install-recommends && apt-get install python3 -y --no-install-recommends && apt-get install python3-pip -y --no-install-recommends && pip3 install setuptools && pip3 install wheel && pip3 install mkdocs && pip3 install mkdocs-material
+  - |
+    DEBIAN_FRONTEND=noninteractive apt-get -qq update
+    DEBIAN_FRONTEND=noninteractive apt-get -qq -y install \
+      build-essential rsync
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      zip awscli python3 python3-pip \
+      cmake pkg-config flex bison
+    python3 -m pip install setuptools wheel
+    python3 -m pip install mkdocs mkdocs-material
   - ./scripts/install-thrift.sh
 
   # Check if CouchDB is running
