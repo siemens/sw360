@@ -89,6 +89,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final int DELETION_SANITY_CHECK_THRESHOLD = 5;
     private static final String DUMMY_NEW_PROJECT_ID = "newproject";
     private static final String SHS_GROUP = "shs";
+    private static final String SE_GROUP = "se";
     public static final int SVMML_JSON_LOG_CUTOFF_LENGTH = 3000;
 
     private final ProjectRepository repository;
@@ -1601,7 +1602,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 .map(p -> projectsById.get(p.getId()))
                 .filter(p -> p.isSetSecurityResponsibles() && !p.getSecurityResponsibles().isEmpty())
                 .filter(Project::isEnableSvm)
-                .filter(p -> null != p.getBusinessUnit() && !p.getBusinessUnit().strip().toLowerCase().startsWith(SHS_GROUP))
+                .filter(p -> p.isSetBusinessUnit() && !(p.getBusinessUnit().strip().toLowerCase().startsWith(SHS_GROUP)
+                        || p.getBusinessUnit().strip().toLowerCase().startsWith(SE_GROUP)))
                 .collect(Collectors.toList());
     }
 
