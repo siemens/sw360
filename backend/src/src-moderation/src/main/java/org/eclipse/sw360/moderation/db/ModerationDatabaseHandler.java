@@ -275,6 +275,16 @@ public class ModerationDatabaseHandler {
         clearingRequestRepository.update(clearingRequest);
     }
 
+    public void updateClearingRequestForChangeInProjectBU(String crId, String businessUnit, User user) {
+        try {
+            ClearingRequest clearingRequest = clearingRequestRepository.get(crId);
+            clearingRequest.setProjectBU(businessUnit);
+            clearingRequestRepository.update(clearingRequest);
+        } catch (Exception e) {
+            log.error("Failed to update CR-ID: %s with error: %s", crId, e.getMessage());
+        }
+    }
+
     public RequestStatus addCommentToClearingRequest(String id, Comment comment, User user) {
         try {
             comment.setCommentedOn(System.currentTimeMillis());
@@ -736,6 +746,11 @@ public class ModerationDatabaseHandler {
         request.setRequestDocumentDelete(isDeleteRequest);
         request.setModerators(Sets.filter(moderators, notEmptyOrNull()));
         request.setRequestingUserDepartment(user.getDepartment());
+
+        List<String> inactive = new ArrayList<>();
+        List<User> users = getAllSW360Users();
+        inactive = users.stream().filter(sw360user -> sw360user.isDeactivated()).map(sw360user -> sw360user.getEmail()).collect(Collectors.toList());
+        moderators.removeAll(inactive);
 
         fillRequestWithCommentOfUser(request, user);;
 
