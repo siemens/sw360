@@ -26,6 +26,7 @@ import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
+import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
@@ -181,25 +182,10 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         release.setName(componentById.getName());
     }
 
-    public RequestStatus updateRelease(Release release, User sw360User, boolean isMainLicenseModified) throws TException {
+    public RequestStatus updateRelease(Release release, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         rch.checkForCyclicOrInvalidDependencies(sw360ComponentClient, release, sw360User);
 
-        if (isMainLicenseModified) {
-            List <String> licenseIncorrect = new ArrayList<>();
-            if (release.isSetMainLicenseIds() && !release.getMainLicenseIds().isEmpty()) {
-                for (String licenseId : release.getMainLicenseIds()) {
-                    try {
-                        licenseService.getLicenseById(licenseId);
-                    } catch (Exception e) {
-                        licenseIncorrect.add(licenseId);
-                    }
-                }
-            }
-            if (!licenseIncorrect.isEmpty()) {
-                throw new HttpMessageNotReadableException("License with ids " + licenseIncorrect + " not existed.");
-            }
-        }
         RequestStatus requestStatus = sw360ComponentClient.updateRelease(release, sw360User);
         if (requestStatus == RequestStatus.INVALID_INPUT) {
             throw new HttpMessageNotReadableException("Dependent document Id/ids not valid.");
@@ -636,9 +622,8 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
     }
 
     private ComponentService.Iface getThriftComponentClient() throws TTransportException {
-        THttpClient thriftClient = new THttpClient(thriftServerUrl + "/components/thrift");
-        TProtocol protocol = new TCompactProtocol(thriftClient);
-        return new ComponentService.Client(protocol);
+        ComponentService.Iface componentClient = new ThriftClients().makeComponentClient();
+        return componentClient;
     }
 
     private FossologyService.Iface getThriftFossologyClient() throws TTransportException {
