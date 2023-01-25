@@ -88,8 +88,10 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private static final Logger log = LogManager.getLogger(ProjectDatabaseHandler.class);
     private static final int DELETION_SANITY_CHECK_THRESHOLD = 5;
     private static final String DUMMY_NEW_PROJECT_ID = "newproject";
+
     private static final String SHS_GROUP = "shs";
     private static final String SE_GROUP = "se";
+
     public static final int SVMML_JSON_LOG_CUTOFF_LENGTH = 3000;
 
     private final ProjectRepository repository;
@@ -98,6 +100,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final ProjectModerator moderator;
     private final AttachmentConnector attachmentConnector;
     private final ComponentDatabaseHandler componentDatabaseHandler;
+
     private static final User EMPTY_USER = new User().setId("").setEmail("").setExternalid("").setDepartment("").setLastname("").setGivenname("");
 
     private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
@@ -1455,7 +1458,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
             Set<String> externalIdValueSet = new TreeSet<>();
             String externalIdValues = p.getExternalIds() == null ? null
-                    : p.getExternalIds().get("com.siemens.svm.monitoringlist.id");
+                    : p.getExternalIds().get(SW360Constants.SVM_MONITORINGLIST_ID);
             if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdValues)) {
                 try {
                     externalIdValueSet = mapper.readValue(externalIdValues, Set.class);
@@ -1486,8 +1489,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             JsonObject json = new JsonObject();
             Map<String, String> externalIds = CommonUtils.nullToEmptyMap(r.getExternalIds());
             json.addProperty("external_component_id", r.getId());
-            putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get(SW360Constants.SIEMENS_SVM_COMPONENT_ID));
-            putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get(SW360Constants.SIEMENS_MAINLINE_COMPONENT_ID));
+            putExternalIdToJsonAsInteger(json, "svm_component_id", externalIds.get(SW360Constants.SVM_COMPONENT_ID));
+            putExternalIdToJsonAsInteger(json, "swml_component_id", externalIds.get(SW360Constants.MAINLINE_COMPONENT_ID));
             json.addProperty("vendor", Optional.ofNullable(r.getVendor()).map(Vendor::getShortname).orElse(""));
             json.addProperty("name", r.getName());
             json.addProperty("version", r.getVersion());
@@ -1520,6 +1523,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
         return array;
     }
+
     private JsonArray getReleaseCpeIdsJson(Release r) {
         JsonArray jsonArray = new JsonArray();
         putIfNotEmpty(jsonArray, r.getCpeid());

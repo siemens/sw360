@@ -66,6 +66,8 @@ public class PortalConstants {
     public static final String ROLENAME_SECURITY_ADMIN = "Security Admin";
     public static final String ROLENAME_SW360_ADMIN = "SW360 Admin";
 
+    //! Key for Exact Match CheckBox
+    public static final String EXACT_MATCH_CHECKBOX = "exactMatchCheckBox";
 
     //! Standard keys for Lists and their size
     public static final String KEY_SUMMARY = "documents";
@@ -248,7 +250,7 @@ public class PortalConstants {
     // ! Specialized keys for changelog
     public static final String LOAD_CHANGE_LOGS = "load_change_logs";
     public static final String VIEW_CHANGE_LOGS = "view_change_logs";
-    
+
     //! Specialized keys for projects
     public static final String PROJECTS = "projects";
     public static final String PROJECT_PORTLET_NAME = PORTLET_NAME_PREFIX + PROJECTS;
@@ -364,13 +366,6 @@ public class PortalConstants {
     public static final String VULNERABILITY_VERIFICATION_TOOLTIPS = "vulnerabilityVerificationTooltips";
     public static final String VULNERABILITY_VERIFICATIONS = "vulnerabilityVerifications";
     public static final String VULNERABILITY_MATCHED_BY_HISTOGRAM = "vulnerabilityMatchedByHistogram";
-    public static final String VM_MESSAGE = "vmMessage";
-    public static final String VM_PROCESS = "vmProcess";
-    public static final String VM_PROCESS_ID = "vmProcessId";
-    public static final String VM_PROCESS_LIST = "vmProcessList";
-    public static final String VM_MATCH_ID = "vmMatchId";
-    public static final String VM_MATCH_STATE = "vmMatchState";
-    public static final String VM_MATCH_LIST = "vmMatchList";
     
     public static final String VULNERABILITY_IMPACT_KEY = "impactKey";
     public static final String VULNERABILITY_IMPACT_VALUE = "impactValue";
@@ -391,6 +386,13 @@ public class PortalConstants {
     public static final String FIND_BY_EXTERNAL_ID = "findByExternalId";
     public static final String PUBLISH_DATE = "publishDate";
     public static final String PUBLISH_TIME = "publishTime";
+    public static final String VM_MESSAGE = "vmMessage";
+    public static final String VM_PROCESS = "vmProcess";
+    public static final String VM_PROCESS_ID = "vmProcessId";
+    public static final String VM_PROCESS_LIST = "vmProcessList";
+    public static final String VM_MATCH_ID = "vmMatchId";
+    public static final String VM_MATCH_STATE = "vmMatchState";
+    public static final String VM_MATCH_LIST = "vmMatchList";
 
     //! Specialized keys for account sign-up
     public static final String PASSWORD = "password";
@@ -429,6 +431,7 @@ public class PortalConstants {
     public static final String SVM_TRACKING_FEEDBACK_OFFSET = "trackingFeedbackOffset";
     public static final String SVM_TRACKING_FEEDBACK_INTERVAL = "trackingFeedbackInterval";
     public static final String SVM_TRACKING_FEEDBACK_NEXT_SYNC = "trackingFeedbackNextSync";
+    public static final String SVM_MONITORINGLIST_ID = "svmMonitoringListID";
     public static final String DELETE_ATTACHMENT_IS_SCHEDULED = "deleteAttachmentIsScheduled";
     public static final String DELETE_ATTACHMENT_OFFSET = "deleteAttachmentOffset";
     public static final String DELETE_ATTACHMENT_INTERVAL = "deleteAttachmentInterval";
@@ -720,6 +723,8 @@ public class PortalConstants {
     public static final String PREDEFINED_TAGS;
     public static final boolean SSO_LOGIN_ENABLED;
     public static final boolean IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED;
+    
+    public static final boolean IS_SVM_ENABLED;
 
     static {
         Properties props = CommonUtils.loadProperties(PortalConstants.class, PROPERTIES_FILE_PATH);
@@ -767,6 +772,7 @@ public class PortalConstants {
         DISABLE_CLEARING_REQUEST_FOR_PROJECT_WITH_GROUPS = props.getProperty("org.eclipse.sw360.disable.clearing.request.for.project.group", "");
         SEND_PROJECT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.spreadsheet.export.to.mail.enabled", "false"));
         SEND_COMPONENT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.component.spreadsheet.export.to.mail.enabled", "false"));
+        IS_SVM_ENABLED = Boolean.parseBoolean(props.getProperty("enable.security.vulnerability.monitoring", "false"));
     }
 
     private PortalConstants() {

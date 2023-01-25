@@ -49,8 +49,6 @@ public class VendorRepository extends DatabaseRepositoryCloudantClient<Vendor> {
 
     private static final String ALL = "function(doc) { if (doc.type == 'vendor') emit(null, doc._id) }";
 
-    private static final String BY_FULL_NAME = "function(doc) { if (doc.type == 'vendor' && doc.fullname != null) emit(doc.fullname.toLowerCase(), doc._id) }";
-
     public VendorRepository(DatabaseConnectorCloudant db) {
         super(db, Vendor.class);
         Map<String, MapReduce> views = new HashMap<String, MapReduce>();
@@ -91,6 +89,7 @@ public class VendorRepository extends DatabaseRepositoryCloudantClient<Vendor> {
     public void fillVendor(Release release) {
         fillVendor(release, null);
     }
+
     public void fillVendor(Release release, Map<String, Vendor> vendorCache) {
         if (release.isSetVendorId()) {
             final String vendorId = release.getVendorId();
