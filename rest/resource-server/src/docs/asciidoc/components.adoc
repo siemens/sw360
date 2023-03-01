@@ -48,6 +48,22 @@ include::{snippets}/should_document_get_components_with_fields/http-response.ado
 ===== Links
 include::{snippets}/should_document_get_components_with_fields/links.adoc[]
 
+[[resources-recent-components-list-with-fields]]
+==== Listing recent components with fields
+
+A `GET` request will list all of the service's recent components.
+
+===== Response structure
+include::{snippets}/should_document_get_recent_components/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_recent_components/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_recent_components/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_get_recent_components/links.adoc[]
 
 [[resources-components-list-by-name]]
 ==== Listing by name

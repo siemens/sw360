@@ -96,6 +96,11 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         return sw360ComponentClient.getUsingComponentsForComponent(releaseIds);
     }
 
+    public List<Component> getRecentComponents(User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.getRecentComponentsSummary(5, sw360User);
+    }
+
     @Override
     public Set<Component> searchByExternalIds(Map<String, Set<String>> externalIds, User user) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
