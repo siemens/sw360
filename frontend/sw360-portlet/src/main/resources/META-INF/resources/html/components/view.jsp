@@ -38,6 +38,7 @@
 <jsp:useBean id="componentVisibilityRestriction" class="java.lang.Boolean" scope="request"/>
 <jsp:useBean id="exactMatchCheckBox" class="java.lang.String" scope="request"/>
 
+
 <core_rt:set var="programmingLanguages" value='<%=PortalConstants.PROGRAMMING_LANGUAGES%>'/>
 <core_rt:set var="operatingSystemsAutoC" value='<%=PortalConstants.OPERATING_SYSTEMS%>'/>
 <core_rt:set var="softwarePlatformsAutoC" value='<%=PortalConstants.SOFTWARE_PLATFORMS%>'/>
@@ -335,7 +336,6 @@
                 var componentsTable = datatables.create('#componentsTable', {
                     bServerSide: true,
                     sAjaxSource: '<%=sw360ComponentsURL%>',
-
                     columns: columns,
                     columnDefs: [],
                     drawCallback: renderCallback,
@@ -344,11 +344,8 @@
                         url: "<liferay-ui:message key="datatables.lang" />",
                         loadingRecords: "<liferay-ui:message key="loading" />"
                     },
-                    order: [
-                        [1, 'asc']
-                    ]
+                   order: []
                 }, printColumns);
-
                 return componentsTable;
             }
 

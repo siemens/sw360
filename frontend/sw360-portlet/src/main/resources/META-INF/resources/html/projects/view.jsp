@@ -320,6 +320,7 @@
                 projectsTable = datatables.create('#projectsTable', {
                     // the following two parameters must not be removed, otherwise it won't work anymore (probably due to datatable plugins)
                     bServerSide: true,
+                    order:[],
                     sAjaxSource: '<%=loadProjectsURL%>',
 
                     columns: [

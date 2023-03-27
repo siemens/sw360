@@ -505,7 +505,7 @@ AUI().use('liferay-portlet-url', function () {
                     $(tableId + ' .TogglerModeratorsList').on('click', toggleModeratorsList );
                     docReady();
                 },
-                "order": [[ 0, "desc" ]],
+                "order": [],
             }, [0,1,2,3,4,5,6], [7]);
         }
 

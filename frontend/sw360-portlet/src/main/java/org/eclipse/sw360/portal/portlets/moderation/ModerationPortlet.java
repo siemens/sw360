@@ -167,7 +167,7 @@ public class ModerationPortlet extends FossologyAwarePortlet {
         PaginationData pageData = new PaginationData();
         pageData.setRowsPerPage(paginationParameters.getDisplayLength());
         pageData.setDisplayStart(paginationParameters.getDisplayStart());
-        pageData.setAscending(paginationParameters.isAscending().get());
+        //pageData.setAscending(paginationParameters.isAscending().get());
         if(paginationParameters.getSortingColumn().isPresent()) {
             int sortParam = paginationParameters.getSortingColumn().get();
             if(sortParam == 0 &&  Integer.valueOf(paginationParameters.getEcho()) == 1) {

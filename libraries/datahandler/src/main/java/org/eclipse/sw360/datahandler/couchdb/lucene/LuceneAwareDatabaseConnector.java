@@ -113,6 +113,7 @@ public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
      * Search, sort and translate Lucene Result
      */
     public <T> List<T> searchAndSortByScore(Class<T> type, LuceneSearchView function, String queryString) {
+        log.warn("Inside searchAndSortByScore()");
         LuceneResult queryLuceneResult = searchView(function, queryString);
         Collections.sort(queryLuceneResult.getRows(), new LuceneResultComparator());
         List<T> results = new ArrayList<T>();
@@ -259,7 +260,7 @@ public class LuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
         }
 
         String query  = AND.join(subQueries);
-        return searchView(type, luceneSearchView, query);
+        return searchAndSortByScore(type, luceneSearchView, query);
     }
 
     public List<Project> searchProjectViewWithRestrictionsAndFilter(LuceneSearchView luceneSearchView, String text,

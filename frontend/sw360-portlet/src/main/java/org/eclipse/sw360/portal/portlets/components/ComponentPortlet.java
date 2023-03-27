@@ -2321,15 +2321,20 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         PaginationData pageData = new PaginationData();
         pageData.setRowsPerPage(paginationParameters.getDisplayLength());
         pageData.setDisplayStart(paginationParameters.getDisplayStart());
-        pageData.setAscending(paginationParameters.isAscending().get());
+        //pageData.setAscending(paginationParameters.isAscending().get());
         int sortParam = -1;
         if (paginationParameters.getSortingColumn().isPresent()) {
             sortParam = paginationParameters.getSortingColumn().get();
         }
         pageData.setSortColumnNumber(sortParam);
-
         Map<PaginationData, List<Component>> pageDataComponentList = getFilteredComponentList(request, pageData);
         Map<String, Set<String>> filterMap = getComponentFilterMap(request);
+        if (filterMap.isEmpty()) {
+            request.setAttribute("filteredSearch", Boolean.FALSE);
+        }
+        else {
+            request.setAttribute("filteredSearch", Boolean.TRUE);
+        }
         JSONArray jsonComponents = getComponentData(pageDataComponentList.values().iterator().next(), paginationParameters, filterMap);
         JSONObject jsonResult = createJSONObject();
         jsonResult.put(DATATABLE_RECORDS_TOTAL, pageDataComponentList.keySet().iterator().next().getTotalRowCount());
@@ -2354,9 +2359,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
             ComponentService.Iface componentClient = thriftClients.makeComponentClient();
             if (filterMap.isEmpty()) {
                 pageDataComponents = componentClient.getRecentComponentsSummaryWithPagination(user, pageData);
+                request.setAttribute("filteredSearch", false);
             } else {
                 componentList = componentClient.refineSearchWithAccessibility(null, filterMap, user);
                 pageDataComponents.put(pageData.setTotalRowCount(componentList.size()), componentList);
+                request.setAttribute("filteredSearch", true);
             }
         } catch (TException e) {
             log.error("Could not search components in backend ", e);

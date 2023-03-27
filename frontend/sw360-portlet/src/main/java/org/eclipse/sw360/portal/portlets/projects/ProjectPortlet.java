@@ -3022,7 +3022,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         PaginationData pageData = new PaginationData();
         pageData.setRowsPerPage(paginationParameters.getDisplayLength());
         pageData.setDisplayStart(paginationParameters.getDisplayStart());
-        pageData.setAscending(paginationParameters.isAscending().get());
+        //pageData.setAscending(paginationParameters.isAscending().get());
         int sortParam = -1;
         if (paginationParameters.getSortingColumn().isPresent()) {
             sortParam = paginationParameters.getSortingColumn().get();
