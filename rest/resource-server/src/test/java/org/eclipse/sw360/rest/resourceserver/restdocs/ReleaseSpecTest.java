@@ -9,14 +9,14 @@
  */
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.thrift.Source;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.*;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
-import org.eclipse.sw360.datahandler.thrift.MainlineState;
-import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
-import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.components.COTSDetails;
@@ -36,9 +36,11 @@ import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
+import org.eclipse.sw360.rest.resourceserver.core.JacksonCustomizations;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
+import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,6 +51,8 @@ import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -85,11 +89,13 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
     private Sw360ReleaseService releaseServiceMock;
 
     @MockBean
+    private Sw360VulnerabilityService vulnerabilityServiceMock;
+
+    @MockBean
     private Sw360AttachmentService attachmentServiceMock;
 
     @MockBean
     private Sw360LicenseService licenseServiceMock;
-
     private Release release, release3;
     private Attachment attachment;
     Component component;
@@ -321,8 +327,30 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         when(releaseServiceMock.getExternalToolProcess(release3)).thenReturn(fossologyProcess);
 
         releaseIdToRelationship1 = ImmutableMap.of(release2.getId(), ReleaseRelationship.DYNAMICALLY_LINKED, release3.getId(), ReleaseRelationship.CONTAINED);
-    }
 
+        List<VulnerabilityDTO> vulDtos = new ArrayList<VulnerabilityDTO>();
+        VulnerabilityDTO vulDto = new VulnerabilityDTO();
+        vulDto.setComment("Lorem Ipsum");
+        vulDto.setExternalId("12345");
+        vulDto.setProjectRelevance("IRRELEVANT");
+        vulDto.setIntReleaseId("3765276512");
+        vulDto.setIntReleaseName("Angular 2.3.0");
+        vulDto.setAction("Update to Fixed Version");
+        vulDto.setPriority("2 - major");
+        vulDtos.add(vulDto);
+
+        VulnerabilityDTO vulDto1 = new VulnerabilityDTO();
+        vulDto1.setComment("Lorem Ipsum");
+        vulDto1.setExternalId("23105");
+        vulDto1.setProjectRelevance("APPLICABLE");
+        vulDto1.setIntReleaseId("3765276512");
+        vulDto1.setIntReleaseName("Angular 2.3.0");
+        vulDto1.setAction("Update to Fixed Version");
+        vulDto1.setPriority("1 - critical");
+        vulDtos.add(vulDto1);
+
+        given(this.vulnerabilityServiceMock.getVulnerabilitiesByReleaseId(any(), any())).willReturn(vulDtos);
+    }
     @Test
     public void should_document_get_releases() throws Exception {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
@@ -608,9 +636,12 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_releases_by_externalIds() throws Exception {
+        MultiValueMap<String, String> externalIds = new LinkedMultiValueMap<>();
+        externalIds.put("mainline-id-component", List.of("1432","4876"));
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-        mockMvc.perform(get("/api/releases/searchByExternalIds?mainline-id-component=1432&mainline-id-component=4876")
+        mockMvc.perform(get("/api/releases/searchByExternalIds")
                 .contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(externalIds))
                 .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -773,5 +804,24 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                         subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                 )
         );
+    }
+    
+    @Test
+    public void should_document_get_release_vulnerabilities() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/releases/" + release.getId()+ "/vulnerabilities")
+                        .contentType(MediaTypes.HAL_JSON)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:vulnerabilities.[]externalId").description("The external Id of the vulnerability"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilities").description("An array of <<resources-vulnerabilities, Vulnerabilities resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
     }
 }
