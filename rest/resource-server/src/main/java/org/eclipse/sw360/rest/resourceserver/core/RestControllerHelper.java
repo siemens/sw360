@@ -23,6 +23,7 @@ import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.Vulnerability;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityApiDTO;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.CVEReference;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentController;
@@ -30,6 +31,7 @@ import org.eclipse.sw360.rest.resourceserver.component.ComponentController;
 import org.eclipse.sw360.rest.resourceserver.license.LicenseController;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProject;
+import org.eclipse.sw360.rest.resourceserver.vulnerability.VulnerabilityController;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.eclipse.sw360.rest.resourceserver.project.ProjectController;
@@ -119,7 +121,14 @@ public class RestControllerHelper<T> {
 
     public User getSw360UserFromAuthentication() {
         try {
-            String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            String userId;
+            Object principle = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principle instanceof String) {
+                userId = principle.toString();
+            } else {
+                org.springframework.security.core.userdetails.User user = (org.springframework.security.core.userdetails.User) principle;
+                userId = user.getUsername();
+            }
             return userService.getUserByEmailOrExternalId(userId);
         } catch (RuntimeException e) {
             throw new AuthenticationServiceException("Could not load user from authentication.");
@@ -135,6 +144,18 @@ public class RestControllerHelper<T> {
             paginationResult = new PaginationResult<>(resources);
         }
         return paginationResult;
+    }
+
+    public PaginationResult<T> paginationResultFromPaginatedList(HttpServletRequest request, Pageable pageable,
+                                                                 List<T> resources, String resourceType, int totalCount)
+            throws ResourceClassNotFoundException {
+        if (!requestContainsPaging(request)) {
+            request.setAttribute(PAGINATION_PARAM_PAGE, pageable.getPageNumber());
+            request.setAttribute(PAGINATION_PARAM_PAGE_ENTRIES, pageable.getPageSize());
+        }
+        PaginationOptions<T> paginationOptions = paginationOptionsFromPageable(pageable, resourceType);
+        return resourceListController.getPaginationResultFromPaginatedList(resources,
+                paginationOptions, totalCount);
     }
 
     private boolean requestContainsPaging(HttpServletRequest request) {
@@ -622,6 +643,12 @@ public class RestControllerHelper<T> {
         embeddedVulnerability.setLastExternalUpdate(vulnerability.getLastExternalUpdate());
 
         embeddedVulnerability.setPublishDate(vulnerability.getPublishDate());
+        return embeddedVulnerability;
+    }
+
+    public Vulnerability convertToEmbeddedVulnerability(VulnerabilityDTO vulnerabilityDto) {
+        Vulnerability embeddedVulnerability = new Vulnerability(vulnerabilityDto.getExternalId());
+        embeddedVulnerability.setId(vulnerabilityDto.getId());
         return embeddedVulnerability;
     }
 
