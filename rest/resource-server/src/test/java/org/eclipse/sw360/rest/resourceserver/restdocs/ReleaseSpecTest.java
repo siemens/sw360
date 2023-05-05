@@ -96,7 +96,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
 
     @MockBean
     private Sw360LicenseService licenseServiceMock;
-    private Release release, release3;
+    private Release release, release3, release4;
     private Attachment attachment;
     Component component;
     private Project project;
@@ -205,6 +205,43 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release.setSoftwarePlatforms(new HashSet<>(Arrays.asList("Java SE", ".NET")));
         releaseList.add(release);
 
+        List<Release> releaseList2 = new ArrayList<>();
+        release4 = new Release();
+        Map<String, String> releaseExternalIds2 = new HashMap<>();
+        releaseExternalIds2.put("mainline-id-component", "1432");
+        releaseExternalIds2.put("ws-component-id", "[\"2365\",\"5487923\"]");
+
+        release4.setId(releaseId);
+        owner.setReleaseId(release.getId());
+        release4.setName("Spring Core 4.3.4");
+        release4.setCpeid("cpe:/a:pivotal:spring-core:4.3.4:");
+        release4.setReleaseDate("2016-12-07");
+        release4.setVersion("4.3.4");
+        release4.setCreatedOn("2016-12-18");
+        release4.setCreatedBy("admin@sw360.org");
+        release4.setModerators(new HashSet<>(Arrays.asList("admin@sw360.org", "jane@sw360.org")));
+        release4.setCreatedBy("admin@sw360.org");
+        release4.setSourceCodeDownloadurl("http://www.google.com");
+        release4.setBinaryDownloadurl("http://www.google.com/binaries");
+        release4.setComponentId(component.getId());
+        release4.setClearingState(ClearingState.APPROVED);
+        release4.setMainlineState(MainlineState.SPECIFIC);
+        release4.setExternalIds(releaseExternalIds);
+        release4.setComponentType(ComponentType.OSS);
+        release4.setAdditionalData(Collections.singletonMap("Key", "Value"));
+        release4.setAttachments(attachments);
+        release4.setLanguages(new HashSet<>(Arrays.asList("C++", "Java")));
+        release4.setMainLicenseIds(new HashSet<>(Arrays.asList("GPL-2.0-or-later", "Apache-2.0")));
+        release4.setOtherLicenseIds(new HashSet<>(Arrays.asList("MIT", "BSD-3-Clause")));
+        release4.setOperatingSystems(ImmutableSet.of("Windows", "Linux"));
+        release4.setSoftwarePlatforms(new HashSet<>(Arrays.asList("Java SE", ".NET")));
+        release4.setContributors(new HashSet<>(Arrays.asList("admin@sw360.org", "jane@sw360.org")));
+        release4.setVendor(new Vendor("TV", "Test Vendor", "http://testvendor.com"));
+        release4.setReleaseIdToRelationship(releaseIdToRelationship);
+        release4.setCotsDetails(cotsDetails);
+        release4.setClearingInformation(clearingInfo);
+        releaseList2.add(release4);
+
         Release release2 = new Release();
         Map<String, String> release2ExternalIds = new HashMap<>();
         release2ExternalIds.put("mainline-id-component", "4876");
@@ -241,6 +278,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         release3.setCreatedOn("2016-12-18");
         release3.setCreatedBy("admin@sw360.org");
         release3.setComponentId("1234");
+        release3.setComponentType(ComponentType.OSS);
         Attachment attachment3 = new Attachment(attachment);
         attachment3.setAttachmentContentId("34535345");
         attachment3.setAttachmentType(AttachmentType.SOURCE);
@@ -263,6 +301,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         given(this.releaseServiceMock.getUsingComponentsForRelease(eq(release.getId()), any())).willReturn(usedByComponent);
         given(this.releaseServiceMock.deleteRelease(eq(release.getId()), any())).willReturn(RequestStatus.SUCCESS);
         given(this.releaseServiceMock.searchByExternalIds(eq(externalIds), any())).willReturn((new HashSet<>(releaseList)));
+        given(this.releaseServiceMock.setComponentDependentFieldsInRelease(any(), any())).willReturn(release4);
         given(this.releaseServiceMock.convertToEmbeddedWithExternalIds(eq(release))).willReturn(
                 new Release("Angular", "2.3.0", component.getId())
                         .setId(releaseId)

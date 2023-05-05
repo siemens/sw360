@@ -91,6 +91,7 @@ public class ReleaseTest extends TestIntegrationBase {
         given(this.releaseServiceMock.getReleaseForUserById(eq(TestHelper.getDummyReleaseListForTest().get(0).getId()),eq(user))).willReturn(TestHelper.getDummyReleaseListForTest().get(0));
         given(this.releaseServiceMock.getReleasesForUser(any())).willReturn(TestHelper.getDummyReleaseListForTest());
         given(this.releaseServiceMock.getReleaseForUserById(eq(TestHelper.getDummyReleaseListForTest().get(1).getId()),eq(user))).willReturn(TestHelper.getDummyReleaseListForTest().get(1));
+        given(this.releaseServiceMock.setComponentDependentFieldsInRelease(any(), any())).willReturn(TestHelper.getDummyReleaseForComponentDepartmentTest());
 
         given(this.licenseServiceMock.getLicenseById("Apache-2.0")).willReturn(
                 new License("Apache 2.0 License")
