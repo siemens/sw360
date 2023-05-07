@@ -1717,114 +1717,76 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     public List<Map<String, String>> getClearingStateInformationForListView(String projectId, User user, boolean isInaccessibleLinkMasked)
             throws SW360Exception {
-        Project projectById = getProjectById(projectId, user);
-        List<Map<String, String>> clearingStatusList = new ArrayList<Map<String, String>>();
-        LinkedHashMap<String, String> projectOrigin = new LinkedHashMap<>();
-        projectOrigin.put(projectId, SW360Utils.printName(projectById));
-        LinkedHashMap<String, String> releaseOrigin = new LinkedHashMap<>();
-        Map<String, ProjectProjectRelationship> linkedProjects = projectById.getLinkedProjects();
-        Map<String, ProjectReleaseRelationship> releaseIdToUsage = projectById.getReleaseIdToUsage();
-        if (linkedProjects != null && !linkedProjects.isEmpty()) {
-            flattenClearingStatusForLinkedProject(linkedProjects, projectOrigin, releaseOrigin, clearingStatusList,
-                    user, isInaccessibleLinkMasked);
-        }
-        if (releaseIdToUsage != null && !releaseIdToUsage.isEmpty()) {
-            flattenClearingStatusForReleases(releaseIdToUsage, projectOrigin, releaseOrigin, clearingStatusList, user, isInaccessibleLinkMasked);
+        Project rootProject = getProjectById(projectId, user);
+        return traverse(rootProject, user);
+    }
+
+    private List<Map<String, String>> traverse(Project root, User user) throws SW360Exception {
+        if (root == null) {
+            return Lists.newArrayList();
         }
 
+        List<Map<String, String>> clearingStatusList = new ArrayList<>();
+        Map<String, String> rootRow = createProjectRow(root, "");
+        clearingStatusList.add(rootRow);
+
+        Queue<? super org.apache.thrift.TBase> queue = new LinkedList<>();
+        queue.offer(root);
+
+        while (!queue.isEmpty()) {
+            int levelSize = queue.size();
+            for (int i = 0; i < levelSize; i++) {
+                Object curr = queue.poll();
+                if (curr instanceof Project) {
+                    Project proj = (Project) curr;
+//                    System.out.println("project->" + proj.getName());
+                    Map<String, ProjectProjectRelationship> childProjectsAndRel = CommonUtils.nullToEmptyMap(proj.getLinkedProjects());
+                    Map<String, ProjectReleaseRelationship> childReleasesAndRel = CommonUtils.nullToEmptyMap(proj.getReleaseIdToUsage());
+                    List<Project> projList = getProjectsById(Lists.newArrayList(childProjectsAndRel.keySet()), user);
+                    List<Release> releaseList = releaseRepository
+                            .getReleasesIgnoringNotFound(childReleasesAndRel.keySet());
+                    for (Release child : releaseList) {
+                        ProjectReleaseRelationship projectReleaseRelationship = childReleasesAndRel.get(child.getId());
+                        ReleaseRelationship releaseRelation = projectReleaseRelationship.getReleaseRelation();
+                        String relation = ThriftEnumUtils.enumToString(releaseRelation);
+                        MainlineState mainlineState = projectReleaseRelationship.getMainlineState();
+                        String projectMailLineState = ThriftEnumUtils.enumToString(mainlineState);
+                        String comment = projectReleaseRelationship.getComment();
+                        Map<String, String> rrow = createReleaseCSRow(child, relation, projectMailLineState, user, comment);
+                        clearingStatusList.add(rrow);
+                                    
+                        if (child != null) {
+                            queue.offer(child);
+                        }
+                    }
+                    for (Project child : projList) {
+                        ProjectRelationship projectRelationship = childProjectsAndRel.get(child.getId()).getProjectRelationship();
+                        String projectRelationshipEnumToString = ThriftEnumUtils.enumToString(projectRelationship);
+                        Map<String, String> row = createProjectRow(child, projectRelationshipEnumToString);
+                        clearingStatusList.add(row);
+                        if (child != null) {
+                            queue.offer(child);
+                        }
+                    }
+                } else {
+                    Release rel = (Release) curr;
+//                    System.out.println("Release->" + rel.getName());
+                    Map<String, ReleaseRelationship> relIdToRelationship = CommonUtils.nullToEmptyMap(rel.getReleaseIdToRelationship());
+                    List<Release> releaseList = releaseRepository
+                            .getReleasesIgnoringNotFound(relIdToRelationship.keySet());
+                    for (Release child : releaseList) {
+                        ReleaseRelationship releaseRelationship = relIdToRelationship.get(child.getId());
+                        String relation = ThriftEnumUtils.enumToString(releaseRelationship);
+                        Map<String, String> rrow = createReleaseCSRow(child, relation, "", user, "");
+                        clearingStatusList.add(rrow);
+                        if (child != null) {
+                            queue.offer(child);
+                        }
+                    }
+                }
+            }
+        }
         return clearingStatusList;
-    }
-
-    private void flattenClearingStatusForLinkedProject(Map<String, ProjectProjectRelationship> linkedProjects,
-            LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
-
-        linkedProjects.entrySet().stream().forEach(lp -> wrapTException(() -> {
-            String projId = lp.getKey();
-            String relation = ThriftEnumUtils.enumToString(lp.getValue().getProjectRelationship());
-            if (projectOrigin.containsKey(projId))
-                return;
-            Project linkedProjectById = getProjectById(projId, user);
-            projectOrigin.put(projId, SW360Utils.printName(linkedProjectById));
-            Map<String, String> row = createProjectCSRow(relation, linkedProjectById, clearingStatusList);
-            Map<String, ProjectProjectRelationship> subprojects = linkedProjectById.getLinkedProjects();
-            Map<String, ProjectReleaseRelationship> linkedReleases = linkedProjectById.getReleaseIdToUsage();
-
-            if (linkedReleases != null && !linkedReleases.isEmpty()) {
-                flattenClearingStatusForReleases(linkedReleases, projectOrigin, releaseOrigin, clearingStatusList,
-                        user, isInaccessibleLinkMasked);
-            }
-
-            if (subprojects != null && !subprojects.isEmpty()) {
-                flattenClearingStatusForLinkedProject(subprojects, projectOrigin, releaseOrigin, clearingStatusList,
-                        user, isInaccessibleLinkMasked);
-            }
-
-            projectOrigin.remove(projId);
-            row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
-        }));
-    }
-
-    private void flattenClearingStatusForReleases(Map<String, ProjectReleaseRelationship> linkedReleases,
-            LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
-
-        linkedReleases.entrySet().stream().forEach(rl -> wrapTException(() -> {
-            String relation = ThriftEnumUtils.enumToString(rl.getValue().getReleaseRelation());
-            String projectMailLineState = ThriftEnumUtils.enumToString(rl.getValue().getMainlineState());
-            String comment = rl.getValue().getComment();
-            String releaseId = rl.getKey();
-            if (releaseOrigin.containsKey(releaseId))
-                return;
-            Release rel = componentDatabaseHandler.getRelease(releaseId, user);
-            
-            if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
-                Map<String, ReleaseRelationship> releaseIdToRelationship = rel.getReleaseIdToRelationship();
-                releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment);
-                if (releaseIdToRelationship != null && !releaseIdToRelationship.isEmpty()) {
-                    flattenlinkedReleaseOfRelease(releaseIdToRelationship, projectOrigin, releaseOrigin, clearingStatusList,
-                                user, isInaccessibleLinkMasked);
-                }
-                releaseOrigin.remove(releaseId);
-                row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
-                row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
-            } else {
-                Map<String, String> row = createInaccessibleReleaseCSRow(clearingStatusList);
-                row.put("projectOrigin", "");
-                row.put("releaseOrigin", "");
-            }
-        }));
-    }
-
-    private void flattenlinkedReleaseOfRelease(Map<String, ReleaseRelationship> releaseIdToRelationship,
-            LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
-            List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
-        releaseIdToRelationship.entrySet().stream().forEach(rl -> wrapTException(() -> {
-            String relation = ThriftEnumUtils.enumToString(rl.getValue());
-            String projectMailLineState = "";
-            String releaseId = rl.getKey();
-            if (releaseOrigin.containsKey(releaseId))
-                return;
-            Release rel = componentDatabaseHandler.getRelease(releaseId, user);
-            
-            if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
-                Map<String, ReleaseRelationship> subReleaseIdToRelationship = rel.getReleaseIdToRelationship();
-                releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, "");
-                if (subReleaseIdToRelationship != null && !subReleaseIdToRelationship.isEmpty()) {
-                    flattenlinkedReleaseOfRelease(subReleaseIdToRelationship, projectOrigin, releaseOrigin,
-                                clearingStatusList, user, isInaccessibleLinkMasked);
-                }
-                releaseOrigin.remove(releaseId);
-                row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
-                row.put("releaseOrigin", String.join(" -> ", releaseOrigin.values()));
-            } else {
-                Map<String, String> row = createInaccessibleReleaseCSRow(clearingStatusList);
-                row.put("projectOrigin", "");
-                row.put("releaseOrigin", "");
-            }
-        }));
     }
 
     public void sendExportSpreadsheetSuccessMail(String url, String recepient) throws TException {
@@ -1846,6 +1808,39 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         row.put("projectState", ThriftEnumUtils.enumToString(prj.getState()));
         row.put("isAccessible", "true");
         clearingStatusList.add(row);
+        return row;
+    }
+    
+    private Map<String, String> createProjectRow(Project proj, String relation) {
+        String projectId = proj.getId();
+        Map<String, String> row = new HashMap<>();
+        row.put("id", projectId);
+        row.put("name", SW360Utils.printName(proj));
+        row.put("type", ThriftEnumUtils.enumToString(proj.getProjectType()));
+        row.put("relation", relation);
+        row.put("isRelease", "false");
+        row.put("clearingState", ThriftEnumUtils.enumToString(proj.getClearingState()));
+        row.put("projectState", ThriftEnumUtils.enumToString(proj.getState()));
+        row.put("isAccessible", "true");
+        return row;
+    }
+    
+    private Map<String, String> createReleaseCSRow(Release rl, String relation, String projectMailLineState, User user, String comment) throws SW360Exception {
+        Map<String, String> row = new HashMap<>();
+        Component component = componentDatabaseHandler.getComponent(rl.getComponentId(), user);
+        String releaseId = rl.getId();
+        row.put("id", releaseId);
+        row.put("name", SW360Utils.printName(rl));
+        row.put("type", ThriftEnumUtils.enumToString(component.getComponentType()));
+        Set<String> collectedLicIds = CommonUtils.nullToEmptySet(rl.getMainLicenseIds());
+        row.put("relation", relation);
+        row.put("mainLicenses", String.join(",", collectedLicIds));
+        row.put("isRelease", "true");
+        row.put("releaseMainlineState", ThriftEnumUtils.enumToString(rl.getMainlineState()));
+        row.put("clearingState", ThriftEnumUtils.enumToString(rl.getClearingState()));
+        row.put("projectMainlineState", projectMailLineState);
+        row.put("comment", CommonUtils.nullToEmptyString(comment));
+        row.put("isAccessible", "true");
         return row;
     }
 
