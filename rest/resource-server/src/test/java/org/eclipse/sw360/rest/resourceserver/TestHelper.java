@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.Source;
@@ -164,6 +165,34 @@ public class TestHelper {
         attachments.add(attachment2);
 
         return attachments;
+    }
+
+    public static Release getDummyReleaseForComponentTypeTest() {
+        List<Release> releases = new ArrayList<>();
+
+        Release release1 = new Release();
+        release1.setName("Release 1");
+        release1.setId(release1Id);
+        release1.setComponentId("component123");
+        release1.setVersion("1.0.4");
+        release1.setCpeid("cpe:id-1231");
+        release1.setMainlineState(MainlineState.MAINLINE);
+        release1.setClearingState(ClearingState.APPROVED);
+        release1.setComponentType(ComponentType.OSS);
+        releases.add(release1);
+
+        Release release2 = new Release();
+        release2.setName("Release 2");
+        release2.setId(releaseId2);
+        release2.setComponentId("component456");
+        release2.setVersion("2.0.0");
+        release2.setCpeid("cpe:id-4567");
+        release2.setMainlineState(MainlineState.OPEN);
+        release2.setClearingState(ClearingState.NEW_CLEARING);
+        release2.setComponentType(ComponentType.OSS);
+        releases.add(release2);
+
+        return release2;
     }
 
     public static List<AttachmentInfo> getDummyAttachmentInfoListForTest() {

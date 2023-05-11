@@ -136,7 +136,7 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             releaseService.setComponentDependentFieldsInRelease(release, sw360User);
         }
 
-        sw360Releases = sw360Releases.stream()
+        sw360Releases = sw360Releases.stream().map(release -> releaseService.setComponentDependentFieldsInRelease(release, sw360User))
                 .filter(release -> name == null || name.isEmpty() || release.getName().equalsIgnoreCase(name))
                 .collect(Collectors.toList());
         PaginationResult<Release> paginationResult = restControllerHelper.createPaginationResult(request, pageable, sw360Releases, SW360Constants.TYPE_RELEASE);
