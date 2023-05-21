@@ -42,8 +42,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
 
-import static com.github.rnewson.couchdb.lucene.util.ServletUtils.getUri;
-
 public final class LuceneServlet extends HttpServlet {
 
     private static final Logger LOG = LoggerFactory.getLogger(LuceneServlet.class);
@@ -179,7 +177,7 @@ public final class LuceneServlet extends HttpServlet {
 
     private void doGetInternal(final HttpServletRequest req, final HttpServletResponse resp)
             throws ServletException, IOException, JSONException {
-        switch (StringUtils.countMatches(getUri(req), "/")) {
+        switch (StringUtils.countMatches(req.getRequestURI(), "/")) {
             case 1:
                 handleWelcomeReq(req, resp);
                 return;
@@ -214,9 +212,9 @@ public final class LuceneServlet extends HttpServlet {
 
     private void doPostInternal(final HttpServletRequest req, final HttpServletResponse resp)
             throws IOException, JSONException {
-       switch (StringUtils.countMatches(getUri(req), "/")) {
+        switch (StringUtils.countMatches(req.getRequestURI(), "/")) {
             case 3:
-               if (req.getRequestURI().endsWith("/_cleanup")) {
+                if (req.getPathInfo().endsWith("/_cleanup")) {
                     cleanup(req, resp);
                     return;
                 }
@@ -237,6 +235,5 @@ public final class LuceneServlet extends HttpServlet {
         }
         ServletUtils.sendJsonError(req, resp, 400, "bad_request");
     }
-
 
 }
