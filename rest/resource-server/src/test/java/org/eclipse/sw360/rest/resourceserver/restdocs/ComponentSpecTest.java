@@ -14,6 +14,9 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 import com.google.common.collect.ImmutableSet;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.Visibility;
+import org.eclipse.sw360.datahandler.thrift.VerificationState;
+import org.eclipse.sw360.datahandler.thrift.VerificationStateInfo;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
@@ -24,10 +27,13 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.component.Sw360ComponentService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
+import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -75,6 +81,9 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
 
     @MockBean
     private Sw360AttachmentService attachmentServiceMock;
+
+    @MockBean
+    private Sw360VulnerabilityService vulnerabilityServiceMock;
 
     private Component angularComponent;
 
@@ -244,6 +253,63 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         release2.setComponentId(springComponent.getId());
         releaseList.add(release2);
 
+        List<VulnerabilityDTO> vulDtos = new ArrayList<VulnerabilityDTO>();
+
+        VerificationStateInfo verificationStateInfo = new VerificationStateInfo();
+        verificationStateInfo.setCheckedBy("admin@sw360.org");
+        verificationStateInfo.setCheckedOn("2018-12-18");
+        verificationStateInfo.setComment("Change status not checked");
+        verificationStateInfo.setVerificationState(VerificationState.NOT_CHECKED);
+
+        List<VerificationStateInfo> verificationStateInfos = new ArrayList<>();
+        verificationStateInfos.add(verificationStateInfo);
+
+        ReleaseVulnerabilityRelation relation = new ReleaseVulnerabilityRelation();
+        relation.setReleaseId("3765276512");
+        relation.setVulnerabilityId("1333333333");
+        relation.setVerificationStateInfo(verificationStateInfos);
+
+        VulnerabilityDTO vulDto = new VulnerabilityDTO();
+        vulDto.setTitle("12345_Title");
+        vulDto.setComment("Lorem Ipsum");
+        vulDto.setExternalId("12345");
+        vulDto.setProjectRelevance("IRRELEVANT");
+        vulDto.setIntReleaseId("3765276512");
+        vulDto.setIntReleaseName("Angular 2.3.0");
+        vulDto.setAction("Update to Fixed Version");
+        vulDto.setPriority("2 - major");
+        vulDto.setReleaseVulnerabilityRelation(relation);
+        vulDtos.add(vulDto);
+
+
+
+        List<VerificationStateInfo> verificationStateInfos1 = new ArrayList<>();
+        VerificationStateInfo verificationStateInfo1 = new VerificationStateInfo();
+        verificationStateInfo1.setCheckedBy("user@sw360.org");
+        verificationStateInfo1.setCheckedOn("2016-12-18");
+        verificationStateInfo1.setComment("Change status checked");
+        verificationStateInfo1.setVerificationState(VerificationState.CHECKED);
+        verificationStateInfos1.add(verificationStateInfo1);
+
+        ReleaseVulnerabilityRelation relation1 = new ReleaseVulnerabilityRelation();
+        relation1.setReleaseId("3765276512");
+        relation1.setVulnerabilityId("122222222");
+        relation1.setVerificationStateInfo(verificationStateInfos1);
+
+        VulnerabilityDTO vulDto1 = new VulnerabilityDTO();
+        vulDto1.setTitle("23105_Title");
+        vulDto1.setComment("Lorem Ipsum");
+        vulDto1.setExternalId("23105");
+        vulDto1.setProjectRelevance("APPLICABLE");
+        vulDto1.setIntReleaseId("3765276512");
+        vulDto1.setIntReleaseName("Angular 2.3.0");
+        vulDto1.setAction("Update to Fixed Version");
+        vulDto1.setPriority("1 - critical");
+        vulDto1.setReleaseVulnerabilityRelation(relation1);
+        vulDtos.add(vulDto1);
+
+        given(this.componentServiceMock.getVulnerabilitiesByComponent(any(), any())).willReturn(vulDtos);
+
         angularComponent.setReleases(releaseList);
     }
 
@@ -280,6 +346,75 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("page.number").description("Number of the current page")
                         )));
     }
+
+    @Test
+    public void should_document_get_components_with_all_details() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/components")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .param("allDetails", "true")
+                        .param("page", "0")
+                        .param("page_entries", "5")
+                        .param("sort", "name,desc")
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        requestParameters(
+                                parameterWithName("allDetails").description("Flag to get components with all details. Possible values are `<true|false>`"),
+                                parameterWithName("page").description("Page of components"),
+                                parameterWithName("page_entries").description("Amount of components per page"),
+                                parameterWithName("sort").description("Defines order of the components")
+                        ),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+
+                                subsectionWithPath("_embedded.sw360:components.[]name").description("The name of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]description").description("The component description"),
+                                subsectionWithPath("_embedded.sw360:components.[]createdOn").description("The date the component was created"),
+                                subsectionWithPath("_embedded.sw360:components.[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
+                                subsectionWithPath("_embedded.sw360:components.[]componentOwner").description("The owner of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]ownerAccountingUnit").description("The owner accounting unit of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]ownerGroup").description("The owner group of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]ownerCountry").description("The owner country of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]visbility").description("The component visibility, possible values are: " + Arrays.asList(Visibility.values())),
+                                subsectionWithPath("_embedded.sw360:components.[]externalIds").description("When components are imported from other tools, the external ids can be stored here. Store as 'Single String' when single value, or 'Array of String' when multi-values"),
+                                subsectionWithPath("_embedded.sw360:components.[]additionalData").description("A place to store additional data used by external tools").optional(),
+
+                                subsectionWithPath("_embedded.sw360:components.[]categories").description("The component categories"),
+                                subsectionWithPath("_embedded.sw360:components.[]languages").description("The language of the component"),
+
+                                subsectionWithPath("_embedded.sw360:components.[]operatingSystems").description("The OS on which the component operates"),
+                                subsectionWithPath("_embedded.sw360:components.[]mailinglist").description("Component mailing lists"),
+                                subsectionWithPath("_embedded.sw360:components.[]setVisbility").description("The visibility of the component"),
+
+                                subsectionWithPath("_embedded.sw360:components.[]setBusinessUnit").description("The business unit this component belongs to"),
+                                subsectionWithPath("_embedded.sw360:components.[]_links").description("Self <<resources-index-links,Links>> to Component resource").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:moderators").description("An array of all component moderators with email").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:releases").description("An array of all releases").optional(),
+
+                                subsectionWithPath("_embedded.sw360:components.[]homepage").description("The homepage url of the component").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy.email").description("The email of user who created this Component").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy.deactivated").description("The user is activated or deactivated").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy._links").description("Self <<resources-index-links,Links>> to Component resource").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]filename").description("Attached file name").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]sha1").description("The attachment sha1 value").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]_links").description("Self <<resources-index-links,Links>> to Component resource").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:vendors").description("The vendors list").optional(),
+
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of components per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing components"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+
+                        )));
+    }
+
     @Test
     public void should_document_get_mysubscriptions_components() throws Exception {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
@@ -630,6 +765,16 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_component_attachment_bundle() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/components/" + angularComponent.getId() + "/attachments/download")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .accept("application/zip"))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document());
+    }
+
+    @Test
     public void should_document_get_components_by_externalIds() throws Exception {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/components/searchByExternalIds?component-id-key=1831A3&component-id-key=c77321")
@@ -713,5 +858,25 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                         .description("An array of <<resources-components, Components resources>>"),
                                 subsectionWithPath("_links")
                                         .description("<<resources-index-links,Links>> to other resources"))));
+    }
+
+    @Test
+    public void should_document_get_component_vulnerabilities() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/components/" + angularComponent.getId()+ "/vulnerabilities")
+                        .contentType(MediaTypes.HAL_JSON)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .accept(MediaTypes.HAL_JSON))
+                        .andExpect(status().isOk())
+                        .andDo(this.documentationHandler.document(
+                            links(
+                                    linkWithRel("curies").description("Curies are used for online documentation")
+                            ),
+                            responseFields(
+                                    subsectionWithPath("_embedded.sw360:vulnerabilityDTOes.[]externalId").description("The external Id of the vulnerability"),
+                                    subsectionWithPath("_embedded.sw360:vulnerabilityDTOes").description("An array of <<resources-vulnerabilities, Vulnerabilities resources>>"),
+                                    subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                            )
+                        ));
     }
 }

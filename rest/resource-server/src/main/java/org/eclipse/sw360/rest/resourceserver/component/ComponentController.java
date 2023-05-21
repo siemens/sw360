@@ -24,6 +24,7 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
@@ -341,6 +342,16 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
         attachmentService.downloadAttachmentWithContext(component, attachmentId, response, sw360User);
     }
 
+    @GetMapping(value = COMPONENTS_URL + "/{componentId}/attachments/download", produces="application/zip")
+    public void downloadAttachmentBundleFromComponent(
+            @PathVariable("componentId") String componentId,
+            HttpServletResponse response) throws TException, IOException {
+        final User user = restControllerHelper.getSw360UserFromAuthentication();
+        final Component component = componentService.getComponentForUserById(componentId, user);
+        Set<Attachment> attachments = component.getAttachments();
+        attachmentService.downloadAttachmentBundleWithContext(component, attachments, user, response);
+    }
+
     @DeleteMapping(COMPONENTS_URL + "/{componentId}/attachments/{attachmentIds}")
     public ResponseEntity<HalResource<Component>> deleteAttachmentsFromComponent(
             @PathVariable("componentId") String componentId,
@@ -368,6 +379,15 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
     public RepositoryLinksResource process(RepositoryLinksResource resource) {
         resource.add(linkTo(ComponentController.class).slash("api/components").withRel("components"));
         return resource;
+    }
+
+    @GetMapping(value = COMPONENTS_URL + "/{id}/vulnerabilities")
+    public ResponseEntity<CollectionModel<VulnerabilityDTO>> getVulnerabilitiesOfComponent(
+            @PathVariable("id") String id) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        List<VulnerabilityDTO> allVulnerabilityDTOs = componentService.getVulnerabilitiesByComponent(id, user);
+        CollectionModel<VulnerabilityDTO> resources = CollectionModel.of(allVulnerabilityDTOs);
+        return new ResponseEntity<>(resources,HttpStatus.OK);
     }
 
     private HalResource<Component> createHalComponent(Component sw360Component, User user) throws TException {
@@ -414,7 +434,8 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             restControllerHelper.addEmbeddedAttachments(halComponent, sw360Component.getAttachments());
         }
 
-        restControllerHelper.addEmbeddedUser(halComponent, componentCreator, "createdBy");
+        if(null!= componentCreator)
+            restControllerHelper.addEmbeddedUser(halComponent, componentCreator, "createdBy");
 
         return halComponent;
     }
