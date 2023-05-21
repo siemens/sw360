@@ -22,10 +22,6 @@
     <artifactId>third-party</artifactId>
     <packaging>pom</packaging>
 
-    <modules>
-        <module>couchdb-lucene</module>
-    </modules>
-
     <build>
         <pluginManagement>
             <plugins>
