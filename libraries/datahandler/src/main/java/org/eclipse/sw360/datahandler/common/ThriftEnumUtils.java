@@ -93,7 +93,8 @@ public class ThriftEnumUtils {
             ProjectType.INTERNAL, "Internal Project" ,
             ProjectType.PRODUCT, "Product" ,
             ProjectType.SERVICE, "Service",
-            ProjectType.INNER_SOURCE, "Inner Source");
+            ProjectType.INNER_SOURCE, "Inner Source",
+            ProjectType.CLOUD_BACKEND, "Cloud Backend");
 
     private static final ImmutableMap<AttachmentType, String> MAP_ATTACHMENT_TYPE_STRING = ImmutableMap.<AttachmentType, String>builder()
             .put(AttachmentType.DOCUMENT, "Document")
@@ -117,6 +118,7 @@ public class ThriftEnumUtils {
             .put(AttachmentType.SECURITY_ASSESSMENT, "Security Assessment")
             .put(AttachmentType.SBOM, "SBOM")
             .put(AttachmentType.INITIAL_SCAN_REPORT, "Initial Scan Report")
+            .put(AttachmentType.INTERNAL_USE_SCAN, "Initial Use Scan")
             .build();
 
     // @formatter:off
@@ -143,6 +145,7 @@ public class ThriftEnumUtils {
             .put(AttachmentType.SECURITY_ASSESSMENT, "SECA")
             .put(AttachmentType.SBOM, "SBOM")
             .put(AttachmentType.INITIAL_SCAN_REPORT, "ISR")
+            .put(AttachmentType.INTERNAL_USE_SCAN, "IUS")
             .build();
 
     private static final ImmutableMap<ClearingState, String> MAP_CLEARING_STATUS_STRING = ImmutableMap
@@ -153,6 +156,7 @@ public class ThriftEnumUtils {
             .put(ClearingState.REPORT_AVAILABLE, "Report available")
             .put(ClearingState.APPROVED, "Report approved")
             .put(ClearingState.SCAN_AVAILABLE, "Scan available")
+            .put(ClearingState.INTERNAL_USE_SCAN_AVAILABLE, "Internal use scan available")
             .build();
 
     private static final ImmutableMap<ExternalTool, String> MAP_EXTERNAL_TOOL_STRING = ImmutableMap
@@ -306,13 +310,16 @@ public class ThriftEnumUtils {
             ECCStatus.REJECTED, "Rejected"
     );
 
-    private static final ImmutableMap<DocumentType, String> MAP_DOCUMENT_TYPE_STRING = ImmutableMap.of(
-            DocumentType.COMPONENT, "component" ,
-            DocumentType.RELEASE, "release" ,
-            DocumentType.PROJECT, "project",
-            DocumentType.LICENSE, "license",
-            DocumentType.USER, "user"
-    );
+    private static final ImmutableMap<DocumentType, String> MAP_DOCUMENT_TYPE_STRING = ImmutableMap.<DocumentType, String>builder()
+            .put(DocumentType.COMPONENT, "component" )
+            .put(DocumentType.RELEASE, "release")
+            .put(DocumentType.PROJECT, "project")
+            .put(DocumentType.LICENSE, "license")
+            .put(DocumentType.USER, "user")
+            .put(DocumentType.SPDX_DOCUMENT, "spdxDocument")
+            .put(DocumentType.SPDX_PACKAGE_INFO, "spdxPackageInfo")
+            .put(DocumentType.SPDX_DOCUMENT_CREATION_INFO, "spdxDocumentCreation")
+            .build();
 
     private static final ImmutableMap<ObligationStatus, String> MAP_OBLIGATION_STATUS_STRING = ImmutableMap.<ObligationStatus, String>builder()
             .put(ObligationStatus.OPEN, "Open")

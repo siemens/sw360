@@ -125,6 +125,7 @@ enum ClearingState {
     REPORT_AVAILABLE = 3,
     APPROVED = 4,
     SCAN_AVAILABLE = 5,
+    INTERNAL_USE_SCAN_AVAILABLE = 6
 }
 
 /**
@@ -138,6 +139,7 @@ struct ReleaseClearingStateSummary {
     4: required i32 reportAvailable,
     5: required i32 approved,
     6: required i32 scanAvailable, 
+    7: required i32 internalUseScanAvailable,
 }
 
 enum ECCStatus {
@@ -275,6 +277,8 @@ struct Release {
     90: optional DocumentState documentState,
 
     200: optional map<RequestedAction, bool> permissions,
+
+    400: optional string spdxId,
     204: optional string modifiedBy, // Last Modified By User Email
     205: optional string modifiedOn, // Last Modified Date YYYY-MM-dd
 }
@@ -600,6 +604,11 @@ service ComponentService {
       * get short summary of all releases specified by ids
       **/
     list<Release> getReleasesByIdsForExport(1: set<string> ids);
+
+    /**
+      * get list Release ids from Component ID
+      **/
+    list<string> getReleaseIdsFromComponentId(1: string id, 2: User user);
 
     /**
       * get short summary with accessibility of all releases specified by ids
