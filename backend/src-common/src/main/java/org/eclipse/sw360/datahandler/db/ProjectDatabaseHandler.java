@@ -1725,10 +1725,22 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         if (root == null) {
             return Lists.newArrayList();
         }
+        
+        //Map to store path while traversing
+        Map<String, String> tpaths = new HashMap<>();
+//        List<String> pathList = new ArrayList<>();
 
         List<Map<String, String>> clearingStatusList = new ArrayList<>();
         Map<String, String> rootRow = createProjectRow(root, "");
+//        tpaths.put(SW360Utils.printName(root), null);
+//        pathList.add(SW360Utils.printName(root));
+        rootRow.put("projectOrigin", SW360Utils.printName(root));
+        
         clearingStatusList.add(rootRow);
+        
+//        row.put("projectOrigin", String.join(" -> ", projectOrigin.values()));
+        
+        
 
         Queue<? super org.apache.thrift.TBase> queue = new LinkedList<>();
         queue.offer(root);
@@ -1739,30 +1751,44 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 Object curr = queue.poll();
                 if (curr instanceof Project) {
                     Project proj = (Project) curr;
+//                    paths.put(proj.getId(), SW360Utils.printName(proj));
 //                    System.out.println("project->" + proj.getName());
                     Map<String, ProjectProjectRelationship> childProjectsAndRel = CommonUtils.nullToEmptyMap(proj.getLinkedProjects());
                     Map<String, ProjectReleaseRelationship> childReleasesAndRel = CommonUtils.nullToEmptyMap(proj.getReleaseIdToUsage());
                     List<Project> projList = getProjectsById(Lists.newArrayList(childProjectsAndRel.keySet()), user);
                     List<Release> releaseList = releaseRepository
                             .getReleasesIgnoringNotFound(childReleasesAndRel.keySet());
+//                    StringBuilder pathBuilder = new StringBuilder();
                     for (Release child : releaseList) {
+//                        paths.put(child.getId(), SW360Utils.printName(child));
                         ProjectReleaseRelationship projectReleaseRelationship = childReleasesAndRel.get(child.getId());
                         ReleaseRelationship releaseRelation = projectReleaseRelationship.getReleaseRelation();
                         String relation = ThriftEnumUtils.enumToString(releaseRelation);
                         MainlineState mainlineState = projectReleaseRelationship.getMainlineState();
                         String projectMailLineState = ThriftEnumUtils.enumToString(mainlineState);
                         String comment = projectReleaseRelationship.getComment();
+
+                        tpaths.put(SW360Utils.printName(child), SW360Utils.printName(proj));
                         Map<String, String> rrow = createReleaseCSRow(child, relation, projectMailLineState, user, comment);
+                        
+                        rrow.put("releaseOrigin", getReleasePath(tpaths, child));
+                        
+                        
+//                        pathBuilder.append("");
+                        
                         clearingStatusList.add(rrow);
-                                    
+
                         if (child != null) {
                             queue.offer(child);
                         }
                     }
                     for (Project child : projList) {
+                        tpaths.put(SW360Utils.printName(child), SW360Utils.printName(proj));
                         ProjectRelationship projectRelationship = childProjectsAndRel.get(child.getId()).getProjectRelationship();
                         String projectRelationshipEnumToString = ThriftEnumUtils.enumToString(projectRelationship);
                         Map<String, String> row = createProjectRow(child, projectRelationshipEnumToString);
+                        row.put("releaseOrigin", getProjectPath(tpaths, child));
+//                        paths.put(child.getId(), SW360Utils.printName(child));
                         clearingStatusList.add(row);
                         if (child != null) {
                             queue.offer(child);
@@ -1775,9 +1801,11 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                     List<Release> releaseList = releaseRepository
                             .getReleasesIgnoringNotFound(relIdToRelationship.keySet());
                     for (Release child : releaseList) {
+                        tpaths.put(SW360Utils.printName(child), SW360Utils.printName(rel));
                         ReleaseRelationship releaseRelationship = relIdToRelationship.get(child.getId());
                         String relation = ThriftEnumUtils.enumToString(releaseRelationship);
                         Map<String, String> rrow = createReleaseCSRow(child, relation, "", user, "");
+                        rrow.put("releaseOrigin", getReleasePath(tpaths, child));
                         clearingStatusList.add(rrow);
                         if (child != null) {
                             queue.offer(child);
@@ -1787,6 +1815,36 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             }
         }
         return clearingStatusList;
+    }
+
+    private String getProjectPath(Map<String, String> tpaths, Project child) {
+        StringBuilder pathBuilder = new StringBuilder();
+        String path = tpaths.get(SW360Utils.printName(child));//immediate 
+        pathBuilder.append(SW360Utils.printName(child)).append("->").append(path);        
+//        pathBuilder.append(path);
+        while (path != null) {
+            path = tpaths.get(path);
+            if(path != null) {
+                pathBuilder.append("->").append(path);
+            }
+//            path += "->"+tpaths.get(path);
+        }
+        return pathBuilder.toString();
+    }
+
+    private String getReleasePath(Map<String, String> tpaths, Release child) {
+        StringBuilder pathBuilder = new StringBuilder();
+        String path = tpaths.get(SW360Utils.printName(child));//immediate 
+        pathBuilder.append(SW360Utils.printName(child)).append("->").append(path);        
+//        pathBuilder.append(path);
+        while (path != null) {
+            path = tpaths.get(path);
+            if(path != null) {
+                pathBuilder.append("->").append(path);
+            }
+//            path += "->"+tpaths.get(path);
+        }
+        return pathBuilder.toString();
     }
 
     public void sendExportSpreadsheetSuccessMail(String url, String recepient) throws TException {
