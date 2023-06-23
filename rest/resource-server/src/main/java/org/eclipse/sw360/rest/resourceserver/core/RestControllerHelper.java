@@ -384,6 +384,10 @@ public class RestControllerHelper<T> {
         return null;
     }
 
+    public void addEmbeddedRelease(HalResource halResource, List<EntityModel<Release>> releases) {
+    	halResource.addEmbeddedResource("sw360:releases", releases);
+    }
+    
     public void addEmbeddedRelease(HalResource halResource, Release release) {
         Release embeddedRelease = convertToEmbeddedRelease(release);
         HalResource<Release> halRelease = new HalResource<>(embeddedRelease);
@@ -512,6 +516,20 @@ public class RestControllerHelper<T> {
         return embeddedProject;
     }
 
+    public Project convertToEmbeddedLinkedProject(Project project) {
+        Project embeddedProject = new EmbeddedProject();
+        embeddedProject.setName(project.getName());
+        embeddedProject.setId(project.getId());
+        embeddedProject.setProjectType(project.getProjectType());
+        embeddedProject.setState(project.getState());
+        embeddedProject.setClearingState(project.getClearingState());
+        embeddedProject.setVersion(project.getVersion());
+        embeddedProject.setReleaseIdToUsage(project.getReleaseIdToUsage());
+        embeddedProject.setLinkedProjects(project.getLinkedProjects());
+        embeddedProject.setType(null);
+        return embeddedProject;
+    }
+
     public void addEmbeddedComponent(HalResource halResource, Component component) {
         Component embeddedComponent = convertToEmbeddedComponent(component);
         HalResource<Component> halComponent = new HalResource<>(embeddedComponent);
@@ -555,6 +573,20 @@ public class RestControllerHelper<T> {
         Release embeddedRelease = new Release();
         embeddedRelease.setId(release.getId());
         embeddedRelease.setName(release.getName());
+        embeddedRelease.setVersion(release.getVersion());
+        embeddedRelease.setType(null);
+        return embeddedRelease;
+    }
+    
+    public Release convertToEmbeddedLinkedRelease(Release release) {
+        Release embeddedRelease = new Release();
+        embeddedRelease.setId(release.getId());
+        embeddedRelease.setMainlineState(release.getMainlineState());
+        embeddedRelease.setClearingState(release.getClearingState());
+        embeddedRelease.setMainLicenseIds(release.getMainLicenseIds());
+        embeddedRelease.setOtherLicenseIds(release.getOtherLicenseIds());
+        embeddedRelease.setName(release.getName());
+        embeddedRelease.setComponentType(release.getComponentType());
         embeddedRelease.setVersion(release.getVersion());
         embeddedRelease.setType(null);
         return embeddedRelease;

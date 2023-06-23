@@ -287,7 +287,65 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project2.setClearingRequestId("CR-2");
 
         projectList.add(project2);
-
+        
+        Map<String, ProjectReleaseRelationship> linkedReleases2 = new HashMap<>();
+    	//ProjectReleaseRelationship projectReleaseRelationship = new ProjectReleaseRelationship(CONTAINED, MAINLINE)
+        //        .setComment("Test Comment").setCreatedOn("2020-08-05").setCreatedBy("admin@sw360.org");
+        Map<String, ProjectProjectRelationship> linkedProjects2 = new HashMap<>();
+        Map<String, ProjectProjectRelationship> linkedProjects3 = new HashMap<>();
+    	Project project4 = new Project();
+        project4.setId("12345");
+        project4.setName("dummy");
+        project4.setVersion("2.0.1");
+        project4.setProjectType(ProjectType.PRODUCT);
+        //project4.setVisibility(Visibility.PRIVATE);
+        project4.setState(ProjectState.ACTIVE);
+        project4.setClearingState(ProjectClearingState.OPEN);
+        //linkedReleases2.put("3765276512", projectReleaseRelationship);
+        //project4.setReleaseIdToUsage(linkedReleases2);
+        linkedProjects2.put("123456", new ProjectProjectRelationship(ProjectRelationship.CONTAINED).setEnableSvm(true));
+        project4.setLinkedProjects(linkedProjects2);
+        project4.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
+        
+        Project project5 = new Project();
+        project5.setId("123456");
+        project5.setName("dummy2");
+        project5.setVersion("2.0.1");
+        project5.setProjectType(ProjectType.PRODUCT);
+        //project5.setVisibility(Visibility.PRIVATE);
+        project5.setState(ProjectState.ACTIVE);
+        project5.setClearingState(ProjectClearingState.OPEN);
+        linkedReleases2.put("37652765121", projectReleaseRelationship);
+        project5.setReleaseIdToUsage(linkedReleases2);
+        linkedProjects3.put("1234567", new ProjectProjectRelationship(ProjectRelationship.CONTAINED).setEnableSvm(true));
+        project5.setLinkedProjects(linkedProjects3);
+        project5.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
+        
+        Project project6 = new Project();
+        project6.setId("1234567");
+        project6.setName("dummy23");
+        project6.setVersion("2.0.1");
+        project6.setProjectType(ProjectType.PRODUCT);
+        //project5.setVisibility(Visibility.PRIVATE);
+        project6.setState(ProjectState.ACTIVE);
+        project6.setClearingState(ProjectClearingState.OPEN);
+        //linkedReleases2.put("37652765121", projectReleaseRelationship);
+        //project6.setReleaseIdToUsage(linkedReleases2);
+        //linkedProjects3.put("123456", new ProjectProjectRelationship(ProjectRelationship.CONTAINED).setEnableSvm(true));
+        //project6.setLinkedProjects(linkedProjects6);
+        project6.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
+        
+        Release release5 = new Release();
+        release5.setId("37652765121");
+        release5.setName("Angular 2.3.0");
+        release5.setCpeid("cpe:/a:Google:Angular:2.3.0:");
+        release5.setReleaseDate("2016-12-07");
+        release5.setVersion("2.3.0");
+        release5.setCreatedOn("2016-12-18");
+        Component compo1 = new Component();
+        compo1.setComponentType(ComponentType.OSS);
+        release5.setComponentType(compo1.getComponentType());
+        
         Set<String> releaseIds = new HashSet<>(Collections.singletonList("3765276512"));
         Set<String> releaseIdsTransitive = new HashSet<>(Arrays.asList("3765276512", "5578999"));
 
@@ -315,6 +373,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.projectServiceMock.importSBOM(any(),any())).willReturn(requestSummary);
         given(this.projectServiceMock.getProjectsForUser(any(), any())).willReturn(projectList);
         given(this.projectServiceMock.getProjectForUserById(eq(project.getId()), any())).willReturn(project);
+        given(this.projectServiceMock.getProjectForUserById(eq(project4.getId()), any())).willReturn(project4);
+        given(this.projectServiceMock.getProjectForUserById(eq(project5.getId()), any())).willReturn(project5);
+        given(this.projectServiceMock.getProjectForUserById(eq(project6.getId()), any())).willReturn(project6);
         given(this.projectServiceMock.getProjectForUserById(eq(project2.getId()), any())).willReturn(project2);
         given(this.projectServiceMock.getProjectForUserById(eq(projectForAtt.getId()), any())).willReturn(projectForAtt);
         given(this.projectServiceMock.getProjectForUserById(eq(sBOMProject.getId()), any())).willReturn(sBOMProject);
@@ -325,6 +386,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.projectServiceMock.searchProjectByGroup(any(), any())).willReturn(new ArrayList<Project>(projectList));
         given(this.projectServiceMock.refineSearch(any(), any())).willReturn(projectListByName);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), any(), eq("false"))).willReturn(releaseIds);
+        //given(this.projectServiceMock.addEmbeddedlinkedProject(eq(project4.getId()), any(), eq("true"))).willReturn(project4);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), any(), eq("true"))).willReturn(releaseIdsTransitive);
         given(this.projectServiceMock.deleteProject(eq(project.getId()), any())).willReturn(RequestStatus.SUCCESS);
         given(this.projectServiceMock.updateProjectReleaseRelationship(any(), any(), any())).willReturn(projectReleaseRelationshipResponseBody);
@@ -978,6 +1040,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/linkedProjects")
                 .header("Authorization", "Bearer " + accessToken)
+                .param("transitive", "false")
                 .param("page", "0")
                 .param("page_entries", "5")
                 .param("sort", "name,desc")
@@ -987,7 +1050,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         requestParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects page"),
-                                parameterWithName("sort").description("Defines order of the projects")
+                                parameterWithName("sort").description("Defines order of the projects"),
+                                parameterWithName("transitive").description("Get the transitive projects")
                         ),
                         links(
                                 linkWithRel("curies").description("Curies are used for online documentation"),
@@ -996,6 +1060,40 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:projects").description("An array of <<resources-projects, Projects resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
+    }
+
+    @Test
+    public void should_document_get_linked_projects_transitive() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/projects/" + "12345" + "/linkedProjects?transitive=true")
+                .header("Authorization", "Bearer " + accessToken)
+                .param("page", "0")
+                .param("page_entries", "5")
+                .param("sort", "name,desc")
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        requestParameters(
+                                parameterWithName("page").description("Page of projects"),
+                                parameterWithName("page_entries").description("Amount of projects page"),
+                                parameterWithName("sort").description("Defines order of the projects"),
+                                parameterWithName("transitive").description("Get the transitive projects")
+                        ),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:projects").description("An array of <<resources-projects, Projects resources>>"),
+                                //subsectionWithPath("_embedded.sw360:projects.[]_embedded.sw360:projects").description("An array of linked projects of sub-project"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
                                 fieldWithPath("page").description("Additional paging information"),
                                 fieldWithPath("page.size").description("Number of projects per page"),
