@@ -54,6 +54,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -254,8 +255,31 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
     }
 
     @GetMapping(value = RELEASES_URL + "/searchByExternalIds")
-    public ResponseEntity searchByExternalIds(@RequestParam MultiValueMap<String, String> externalIdsMultiMap) throws TException {
+    public ResponseEntity searchByExternalIds(HttpServletRequest request) throws TException {
+        String queryString = request.getQueryString();
+        MultiValueMap<String, String> externalIdsMultiMap = parseQueryString(queryString);
         return restControllerHelper.searchByExternalIds(externalIdsMultiMap, releaseService, null);
+    }
+    
+    private MultiValueMap<String, String> parseQueryString(String queryString) {
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+
+        if (queryString != null && !queryString.isEmpty()) {
+            String[] keyValuePairs = queryString.split("&");
+            for (String keyValuePair : keyValuePairs) {
+                String[] parts = keyValuePair.split("=");
+                if (parts.length == 2) {
+                    String paramName = parts[0];
+                    String[] elements = parts[1].split(",");
+                    List<String> paramValue = new ArrayList<>();
+                    for (String element : elements) {
+                        paramValue.add(element);
+                    }
+                    parameters.put(paramName, paramValue);
+                }
+            }
+        }
+        return parameters;
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
