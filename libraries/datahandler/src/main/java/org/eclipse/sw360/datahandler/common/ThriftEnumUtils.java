@@ -341,6 +341,12 @@ public class ThriftEnumUtils {
             .put(ClearingRequestState.AWAITING_RESPONSE, "Awaiting Response")
             .build();
 
+    private static final ImmutableMap<ClearingReportStatus, String> MAP_CLEARING_REPORT_STATUS_STRING = ImmutableMap.<ClearingReportStatus, String>builder()
+            .put(ClearingReportStatus.NO_STATUS, "No status")
+            .put(ClearingReportStatus.NO_REPORT, "No report")
+            .put(ClearingReportStatus.DOWNLOAD, "Download")
+            .build();
+
     private static final ImmutableMap<ClearingRequestPriority, String> MAP_CLEARING_REQUEST_PRIORITY_STRING = ImmutableMap.of(
             ClearingRequestPriority.LOW, "Low",
             ClearingRequestPriority.MEDIUM, "Medium",
@@ -351,6 +357,17 @@ public class ThriftEnumUtils {
     private static final ImmutableMap<UserAccess, String> MAP_USER_ACCESS_STRING = ImmutableMap.<UserAccess, String>builder()
             .put(UserAccess.READ, "Read")
             .put(UserAccess.READ_WRITE, "Read and Write")
+            .build();
+
+    private static final ImmutableMap<CycloneDxComponentType, String> MAP_CYCLONE_DX_COMPONENT_TYPE_STRING = ImmutableMap.<CycloneDxComponentType, String>builder()
+            .put(CycloneDxComponentType.APPLICATION, "Application")
+            .put(CycloneDxComponentType.CONTAINER, "Container")
+            .put(CycloneDxComponentType.DEVICE, "Device")
+            .put(CycloneDxComponentType.FILE, "File")
+            .put(CycloneDxComponentType.FIRMWARE, "Firmware")
+            .put(CycloneDxComponentType.FRAMEWORK, "Framework")
+            .put(CycloneDxComponentType.LIBRARY, "Library")
+            .put(CycloneDxComponentType.OPERATING_SYSTEM, "Operating System")
             .build();
 
     public static final ImmutableMap<Class<? extends TEnum>, Map<? extends TEnum, String>>
@@ -384,10 +401,12 @@ public class ThriftEnumUtils {
             .put(DocumentType.class, MAP_DOCUMENT_TYPE_STRING)
             .put(ObligationStatus.class, MAP_OBLIGATION_STATUS_STRING)
             .put(ClearingRequestState.class, MAP_CLEARING_REQUEST_STATE_STRING)
+            .put(ClearingReportStatus.class, MAP_CLEARING_REPORT_STATUS_STRING)
             .put(ObligationLevel.class, MAP_OBLIGATION_LEVEL_STRING)
             .put(ObligationType.class, MAP_OBLIGATION_TYPE_STRING)
             .put(ClearingRequestPriority.class, MAP_CLEARING_REQUEST_PRIORITY_STRING)
             .put(UserAccess.class, MAP_USER_ACCESS_STRING)
+            .put(CycloneDxComponentType.class, MAP_CYCLONE_DX_COMPONENT_TYPE_STRING)
             .build();
 
     public static String enumToString(TEnum value) {
@@ -406,7 +425,8 @@ public class ThriftEnumUtils {
 
          return null;
      }
-    public static  <T extends Enum<T>> T  enumByString(String in, Class<T> clazz){
+
+     public static  <T extends Enum<T>> T  enumByString(String in, Class<T> clazz){
         Map<? extends TEnum, String> map = MAP_ENUMTYPE_MAP.get(clazz);
         for (T t : clazz.getEnumConstants()) {
             if(map.get(t).equals(in)) return t;

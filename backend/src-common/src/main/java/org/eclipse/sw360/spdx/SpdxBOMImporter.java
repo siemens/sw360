@@ -146,6 +146,10 @@ public class SpdxBOMImporter {
         final RequestSummary requestSummary = new RequestSummary();
         List<SpdxElement> describedPackages = new ArrayList<>();
         String fileType = getFileType(attachmentContent.getFilename());
+        if (!"rdf".equals(fileType) && !"spdx".equals(fileType)) {
+            requestSummary.setRequestStatus(RequestStatus.FAILURE);
+            return requestSummary;
+        }
         final String ext = "." + fileType;
 
         final File sourceFile = DatabaseHandlerUtil.saveAsTempFile( inputStream, attachmentContent.getId(), ext);
@@ -698,7 +702,7 @@ public class SpdxBOMImporter {
     private Attachment makeAttachmentFromContent(AttachmentContent attachmentContent) {
         Attachment attachment = new Attachment();
         attachment.setAttachmentContentId(attachmentContent.getId());
-        attachment.setAttachmentType(AttachmentType.SBOM);
+        attachment.setAttachmentType(AttachmentType.COMPONENT_LICENSE_INFO_COMBINED);
         attachment.setCreatedComment("Used for SPDX Bom import");
         attachment.setFilename(attachmentContent.getFilename());
         attachment.setCheckStatus(CheckStatus.NOTCHECKED);

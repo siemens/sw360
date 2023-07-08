@@ -19,12 +19,16 @@ import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TTransportException;
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
-import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
-import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
-import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
+import org.eclipse.sw360.datahandler.thrift.components.ClearingReport;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -41,10 +45,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.getSortedMap;
 
@@ -83,7 +85,7 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     public Component getComponentForUserById(String componentId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         Component component = sw360ComponentClient.getComponentById(componentId, sw360User);
-        Map<String, String> sortedAdditionalData = getSortedMap(component.getAdditionalData(), true);
+        Map<String, String> sortedAdditionalData = CommonUtils.getSortedMap(component.getAdditionalData(), true);
         component.setAdditionalData(sortedAdditionalData);
         return component;
     }
@@ -174,6 +176,66 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         return sw360ComponentClient.searchComponentForExport(name.toLowerCase(), false);
     }
 
+    public List<Release> getReleasesByComponentId(String id,User user) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.getReleasesFullDocsFromComponentId(id, user);
+    }
+
+    public List<ReleaseLink> convertReleaseToReleaseLink(String id,User user) throws TException {
+        List<Release> releases = getReleasesByComponentId(id,user);
+        List<ReleaseLink> releaseLinks = new ArrayList<>();
+        releases.forEach(release -> {
+            ReleaseLink releaseLink =new ReleaseLink();
+            releaseLink.setId(release.getId());
+            releaseLink.setName(release.getName());
+            releaseLink.setVersion(release.getVersion());
+            releaseLink.setClearingState(release.getClearingState());
+
+            ClearingReport clearingReport = new ClearingReport();
+            Set<Attachment> attachments = getAttachmentForClearingReport(release);
+            if (!attachments.equals(Collections.emptySet())) {
+                Set<Attachment> attachmentsAccepted = getAttachmentsStatusAccept(attachments);
+                if(attachmentsAccepted.size() != 0) {
+                    clearingReport.setClearingReportStatus(ClearingReportStatus.DOWNLOAD);
+                    clearingReport.setAttachments(attachmentsAccepted);
+                    releaseLink.setClearingReport(clearingReport);
+                } else {
+                    clearingReport.setClearingReportStatus(ClearingReportStatus.NO_STATUS);
+                    releaseLink.setClearingReport(clearingReport);
+                }
+            } else {
+                clearingReport.setClearingReportStatus(ClearingReportStatus.NO_REPORT);
+                releaseLink.setClearingReport(clearingReport);
+            }
+
+            releaseLink.setMainlineState(release.getMainlineState());
+            releaseLinks.add(releaseLink);
+        });
+
+        return releaseLinks;
+    }
+
+    private Set<Attachment> getAttachmentForClearingReport(Release release){
+        final Set<Attachment> attachments = release.getAttachments();
+        if (CommonUtils.isNullOrEmptyCollection(attachments))
+            return Collections.emptySet();
+        return attachments.stream().filter(attachment -> AttachmentType.COMPONENT_LICENSE_INFO_XML.equals(attachment.getAttachmentType()) ||
+                                                         AttachmentType.CLEARING_REPORT.equals(attachment.getAttachmentType()))
+                                   .collect(Collectors.toSet());
+    }
+
+    private Set<Attachment> getAttachmentsStatusAccept(Set<Attachment> attachments){
+        return attachments.stream().filter(attachment -> CheckStatus.ACCEPTED.equals(attachment.getCheckStatus()))
+                                   .collect(Collectors.toSet());
+    }
+
+    private Boolean checkStatusAttachment(Release release){
+        final Set<Attachment> attachments = release.getAttachments();
+        boolean checkStatusAttachment = attachments.stream().anyMatch(attachment ->
+                CheckStatus.ACCEPTED.equals(attachment.getCheckStatus()));
+        return checkStatusAttachment;
+    }
+
     private ComponentService.Iface getThriftComponentClient() throws TTransportException {
         THttpClient thriftClient = new THttpClient(thriftServerUrl + "/components/thrift");
         TProtocol protocol = new TCompactProtocol(thriftClient);
@@ -200,4 +262,36 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         }
         return vulnerabilityDTOByComponent;
     }
+
+    public List<String> getReleaseIdsFromComponentId(String componentId, User user) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.getReleaseIdsFromComponentId(componentId, user);
+    }
+
+    public RequestSummary importSBOM(User user, String attachmentContentId) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.importBomFromAttachmentContent(user, attachmentContentId);
+    }
+
+    public ImportBomRequestPreparation prepareImportSBOM(User user, String attachmentContentId) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.prepareImportBom(user, attachmentContentId);
+    }
+
+  public RequestStatus mergeComponents(String componentTargetId, String componentSourceId, Component componentSelection, User user) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        RequestStatus requestStatus;
+        requestStatus =  sw360ComponentClient.mergeComponents(componentTargetId, componentSourceId, componentSelection, user);
+
+        if (requestStatus == RequestStatus.IN_USE) {
+            throw new HttpMessageNotReadableException("Component already in use.");
+        } else if (requestStatus == RequestStatus.FAILURE) {
+            throw new HttpMessageNotReadableException("Cannot merge these components");
+        } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return requestStatus;
+  }
+
 }
