@@ -138,7 +138,7 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
             throw new HttpMessageNotReadableException("No Component found with Id - " + componentId);
         }
         releaseById.setComponentType(componentById.getComponentType());
-
+        return releaseById;
     }
 
     public List<Release> getReleaseSubscriptions(User sw360User) throws TException {
