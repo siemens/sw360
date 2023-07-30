@@ -17,6 +17,7 @@ include "licenses.thrift"
 namespace java org.eclipse.sw360.datahandler.thrift.components
 namespace php sw360.thrift.components
 
+typedef sw360.CycloneDxComponentType CycloneDxComponentType
 typedef sw360.RequestStatus RequestStatus
 typedef sw360.RequestSummary RequestSummary
 typedef sw360.AddDocumentRequestSummary AddDocumentRequestSummary
@@ -27,6 +28,7 @@ typedef sw360.MainlineState MainlineState
 typedef sw360.ProjectReleaseRelationship ProjectReleaseRelationship
 typedef sw360.SW360Exception SW360Exception
 typedef sw360.PaginationData PaginationData
+typedef sw360.ClearingReportStatus ClearingReportStatus
 typedef sw360.ImportBomRequestPreparation ImportBomRequestPreparation
 typedef attachments.Attachment Attachment
 typedef attachments.FilledAttachment FilledAttachment
@@ -319,6 +321,7 @@ struct Component {
     30: optional map<string,set<string>> roles, //customized roles with set of mail addresses
     80: optional Visibility visbility = sw360.Visibility.EVERYONE,
     81: optional string businessUnit,
+    82: optional CycloneDxComponentType cdxComponentType, // required field in CycloneDX specifications
 
     // information from external data sources
     31: optional  map<string, string> externalIds,
@@ -370,7 +373,7 @@ struct ReleaseLink{
     22: required bool hasSubreleases,
     25: optional string nodeId,
     26: optional string parentNodeId,
-
+    27: optional ClearingReport clearingReport,
     31: optional ClearingState clearingState,
     32: optional list<Attachment> attachments,
     33: optional ComponentType componentType,
@@ -387,6 +390,13 @@ struct ReleaseClearingStatusData {
     3: optional string projectNames, // comma separated list of project names for display; possibly abbreviated
     4: optional string mainlineStates, // comma separated list of mainline states for display; possibly abbreviated
     5: optional bool accessible = true
+}
+
+struct ClearingReport{
+    1: optional string id,
+    2: optional string revision,
+    3: required ClearingReportStatus clearingReportStatus,
+    4: required set<Attachment> attachments
 }
 
 service ComponentService {
@@ -464,6 +474,11 @@ service ComponentService {
      * global search function to list accessible releases which match the text argument
      */
     list<Release> searchAccessibleReleases(1: string text, 2: User user);
+
+    /**
+     *  list accessible releases with pagination for ECC page
+     */
+    map<PaginationData, list<Release>> getAccessibleReleasesWithPagination(1: User user, 2: PaginationData pageData);
 
     /**
      * get short summary of release by release name prefix
@@ -716,6 +731,8 @@ service ComponentService {
      * get summaries of releases of component specified by id, filled with permissions for user
      **/
     list<Release> getReleasesByComponentId(1: string id, 2: User user);
+
+    list<Release> getReleasesFullDocsFromComponentId(1: string id, 2: User user);
 
     /**
      * get components belonging to linked releases of the release specified by releaseId

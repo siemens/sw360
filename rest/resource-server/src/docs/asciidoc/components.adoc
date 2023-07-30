@@ -313,6 +313,24 @@ include::{snippets}/should_document_update_component/http-response.adoc[]
 include::{snippets}/should_document_update_component/links.adoc[]
 
 
+[[resources-components-update]]
+==== Merge a component
+
+A `PATCH` request is used to merge two components
+
+===== Response structure
+include::{snippets}/should_document_merge_components/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_merge_components/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_merge_components/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_merge_components/links.adoc[]
+
+
 [[resources-components-delete]]
 ==== Delete a component
 
@@ -391,3 +409,103 @@ include::{snippets}/should_document_get_component_vulnerabilities/http-response.
 
 ===== Links
 include::{snippets}/should_document_get_component_vulnerabilities/links.adoc[]
+
+[[resources-component-get-component-releases]]
+==== Listing component releases
+
+A `GET` request will get releases of a single component.
+
+===== Response structure
+include::{snippets}/should_document_get_releases_by_component/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_releases_by_component/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_releases_by_component/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_get_releases_by_component/links.adoc[]
+
+[[resources-project-update-component-vulnerabilities]]
+==== Update component vulnerabilities
+
+A `PATCH` request will patch vulnerabilities of a component.
+
+===== Response structure
+include::{snippets}/should_document_update_component_vulnerabilities/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_update_component_vulnerabilities/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_update_component_vulnerabilities/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_update_component_vulnerabilities/links.adoc[]
+
+[[resources-prepare-import-sbom-components]]
+==== Prepare Import SBOM Component
+
+A `POST` request is used to import SBOM in SPDX format.
+
+[red]#Request parameters#
+|===
+|Parameter |Description
+
+|type
+|File type of SBOM
+|===
+
+[red]#Request structure#
+|===
+Type |Description
+
+|file
+|Path of the SBOM file
+|===
+
+
+[red]#Response structure#
+|===
+|Complete Component will be returned
+|===
+
+===== Example request
+include::{snippets}/should_document_prepare_import_sbom_for_component/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_prepare_import_sbom_for_component/http-response.adoc[]
+
+[[resources-import-sbom-components]]
+==== Import SBOM Component
+
+A `POST` request is used to import SBOM in SPDX format.
+
+[red]#Request parameters#
+|===
+|Parameter |Description
+
+|type
+|File type of SBOM
+|===
+
+[red]#Request structure#
+|===
+Type |Description
+
+|file
+|Path of the SBOM file
+|===
+
+
+[red]#Response structure#
+|===
+|Complete Component will be returned
+|===
+
+===== Example request
+include::{snippets}/should_document_import_sbom_for_component/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_import_sbom_for_component/http-response.adoc[]
