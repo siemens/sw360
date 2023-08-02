@@ -4,34 +4,37 @@ about: Request a new token/credentilas for sw360 production server
 labels: Operation
 ---
 
-<!-- you will find more details about the token and its usage here (https://wiki.siemens.com/pages/viewpage.action?spaceKey=en&title=SW360+RESTful+API)
-and please do not create another token request if similar request already exists in the issues (https://github.com/eclipse/sw360/issues). -->
+#### Process
 
-### Description
+- Request Token credentials for the Staging System.
+- Make yourself familiar with the requirements of license clearing: (https://wiki.siemens.com/pages/viewpage.action?spaceKey=en&title=SW360+RESTful+API)
+- Result of the automation in in the Staging Server must be reviewed by responsible Third Party License Manager within your organization.
+Please check this page to find your Third Party SW Manager: https://wiki.siemens.com/display/en/OSS+Taskforce
+- Request Token credentials for the Production System.
 
-Please describe your need for the sw360 production server token
+Please comment in the template.
 
-#### Information from Requester
+#### 1. Information from Requester
 
-- [ ] Organization:
-- [ ] Automation is tested in stage : yes/no (if yes please provide a link here)
-- [ ] Automation reviewed by:
-- [ ] Token creation to be approved by: 
+- Your organization and/or the organization you prepare the clearing for:
+- Why do you need token credentials?:
+- Automation Script you are using:
+- Third Party SW Manager of your Organization: 
 
-` Note : Automation tested on stage need to be verified and approved by 3rd party Software Manager. `
+#### 2. Creating and providing Token Credentials
 
-#### Information require from Approver (Please provide the below information in comment)
+- Credentials created and provided by:
+Please follow the below description format while creating rest credential.
+{Dept}-{user's email id}-{creator's email id}-{date(mm/dd/yyyy)}
 
-- [ ] Organization: 
-- [ ] Checked automation solution: {yes/no} 
-- [ ] Approved token creation: {yes/no} 
+#### 3. Review of automation results
 
-#### Information require from rest credentials creator (Please provide the below information in comment)
+- Automation is tested in staging instance: yes/no
+- Link to the generated results (project, components, releases, etc.):
+- Automation reviewed by: Please comment the results in the comment section.
+- Automation approved by: Note : Automation tested on stage need to be verified and approved by 3rd party Software Manager.
 
-- [ ] Credentials created by:
-- [ ] Credentials shared via encrypted email
+#### 4 Prodiving Production Token Credentials
 
-`Please follow the below description format while creating rest credential.`
-
- `{Dept}-{user's email id}-{crator's email id}-{date(mm/dd/yyyy)}`
+- Token credentials provided for SW360 Production System by:
 
