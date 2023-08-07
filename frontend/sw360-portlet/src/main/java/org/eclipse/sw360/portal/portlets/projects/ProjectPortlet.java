@@ -2996,6 +2996,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         final Predicate<Attachment> isISR = attachment -> AttachmentType.INITIAL_SCAN_REPORT.equals(attachment.getAttachmentType());
 
         Set<LicenseNameWithText> licenseNameWithTexts = new HashSet<LicenseNameWithText>();
+        Map<String, HashSet<String>> result2= new HashMap<>();
         String attachmentContentId = "";
         String attachmentName = "";
         Set<String> concludedLicenseIds = new TreeSet<String>();
@@ -3026,6 +3027,9 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 if (attachmentName.endsWith(PortalConstants.RDF_FILE_EXTENSION)) {
                     totalFileCount = licenseInfoResult.stream().map(LicenseInfoParsingResult::getLicenseInfo).map(LicenseInfo::getLicenseNamesWithTexts).flatMap(Set::stream)
                             .map(LicenseNameWithText::getSourceFiles).filter(Objects::nonNull).flatMap(Set::stream).distinct().count();
+                    for(LicenseNameWithText item: licenseWithTexts) {
+                        result2.put(item.getLicenseName(),(HashSet<String>) item.getSourceFiles());
+                    }
                     concludedLicenseIds = licenseInfoResult.stream()
                             .filter(filterConcludedLicense)
                             .flatMap(singleResult -> singleResult.getLicenseInfo().getConcludedLicenseIds().stream())
@@ -3033,6 +3037,13 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                     otherLicenseNames = licenseWithTexts.stream().map(LicenseNameWithText::getLicenseName)
                             .collect(Collectors.toCollection(() -> new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)));
                     otherLicenseNames.removeAll(concludedLicenseIds);
+                    Iterator<Map.Entry<String, HashSet<String>>> iterator = result2.entrySet().iterator();
+                    while(iterator.hasNext()) {
+                        Map.Entry<String, HashSet<String>> entry= iterator.next();
+                        if(concludedLicenseIds.contains(entry.getKey())) {
+                            iterator.remove();
+                        }
+                    }
                 }
                 try {
                     jsonGenerator.writeStartObject();
@@ -3050,6 +3061,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                         jsonGenerator.writeStringField(LICENSE_PREFIX, LanguageUtil.get(resourceBundle, "possible.main.license.ids"));
                         jsonGenerator.writeStringField("totalFileCount", Long.toString(totalFileCount));
                         jsonGenerator.writeStringField("fileName", attachmentName);
+                        jsonGenerator.setCodec(new ObjectMapper());
+                        jsonGenerator.writeObjectField("resultt", result2);
                     }
                     jsonGenerator.writeStringField(SW360Constants.STATUS, SW360Constants.SUCCESS);
                     jsonGenerator.writeEndObject();

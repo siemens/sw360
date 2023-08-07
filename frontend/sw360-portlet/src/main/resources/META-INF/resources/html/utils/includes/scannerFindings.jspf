@@ -51,6 +51,7 @@ AUI().use('liferay-portlet-url', function () {
 
         function displayScannerFindingsForRelease(releaseId, relName, data) {
             let list = $('<ul/>'),
+                resultMap = $('<ul/>'),
                 fileCount = data.totalFileCount,
                 complexity = '<liferay-ui:message key="very.large" />';
 
@@ -76,11 +77,26 @@ AUI().use('liferay-portlet-url', function () {
                 	list.append($('<li>', { text: id }));
                 });
             }
+
+            if (data.resultt) {
+                let mapData = data.resultt;
+                for (var key in mapData) {
+                    let valueArray = mapData[key];
+                    resultMap.append($('<li>').append($('<strong>', { text: key })));
+                    let valueList = $('<ul/>');
+                    valueArray.forEach(function(id) {
+                        valueList.append($('<li>', { text: id }));
+                    });
+                    resultMap.append(valueList);
+                }
+            }
+
             dialog.info(relName,'<span class="alert alert-warning"> <liferay-ui:message key="this.is.only.an.initial.scanner.isr.finding.of.the.contained.licenses.in.the.uploaded.source.file" /><br>' +
                 '<liferay-ui:message key="the.final.license.list.may.differ.based.on.the.conclusions.made.by.the.clearing.expert.and.is.made.available.as.component.license.information.cli" /><br>' +
                 '<liferay-ui:message key="to.view.the.files.corresponding.to.each.licenses.go.to.clearing.details.tab.of.respective.release" /></span><br>' +
                 '<liferay-ui:message key="file.name"/>: <b>' + data.fileName + '</b><br><liferay-ui:message key="total.number.of.files"/>: <b>' + data.totalFileCount +
-                '</b><br><liferay-ui:message key="complexity"/>: <b>' + complexity + '</b> (<liferay-ui:message key="based.on.license.file.count" />)' + $(list)[0].outerHTML);
+                '</b><br><liferay-ui:message key="complexity"/>: <b>' + complexity + '</b> (<liferay-ui:message key="based.on.license.file.count" />)' + $(list)[0].outerHTML +
+                '<liferay-ui:message key="compatibility.agent.report"/>: ' + $(resultMap)[0].outerHTML );
         }
 
     });

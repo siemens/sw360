@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -140,7 +141,7 @@ public class FossologyRestClient {
      * @return the uploadId provided by FOSSology in case of an successful upload,
      *         -1 otherwise
      */
-    public int uploadFile(String filename, InputStream fileStream, String uploadDescription) {
+    public int uploadFile(String filename, InputStream fileStream, String uploadDescription, String mainLicense) {
         String baseUrl = restConfig.getBaseUrlWithSlash();
         String token = restConfig.getAccessToken();
         String folderId = restConfig.getFolderId();
@@ -167,6 +168,7 @@ public class FossologyRestClient {
         }
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("fileInput", new FossologyInputStreamResource(filename, fileStream));
+        body.add("mainLicense", mainLicense);
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
@@ -204,6 +206,7 @@ public class FossologyRestClient {
         String baseUrl = restConfig.getBaseUrlWithSlash();
         String token = restConfig.getAccessToken();
         String folderId = restConfig.getFolderId();
+        final ObjectMapper mapper = new ObjectMapper();
 
         if (StringUtils.isEmpty(baseUrl) || StringUtils.isEmpty(token) || StringUtils.isEmpty(folderId)) {
             log.error("Configuration is missing values! Url: <{}>, Token: <{}>, Folder: <{}>", baseUrl, token,
@@ -232,11 +235,13 @@ public class FossologyRestClient {
         analysis.put("nomos", true);
         analysis.put("ojo", true);
         analysis.put("package", true);
+        analysis.put("compatibility", true);
 
         ObjectNode decider = objectMapper.createObjectNode();
         decider.put("nomos_monk", true);
         decider.put("bulk_reused", true);
         decider.put("new_scanner", true);
+        decider.put("conclude_license_type", "Permissive");
 
         ObjectNode reuse = objectMapper.createObjectNode();
         reuse.put("reuse_upload", 0);

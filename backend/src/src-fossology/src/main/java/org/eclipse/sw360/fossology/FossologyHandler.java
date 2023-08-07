@@ -35,10 +35,18 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 /**
  * Implementation of the Thrift service. Offers a very simple interface where
@@ -331,8 +339,13 @@ public class FossologyHandler implements FossologyService.Iface {
             String attachmentContentId = sourceAttachment.getAttachmentContentId();
             AttachmentContent attachmentContent = attachmentConnector.getAttachmentContent(attachmentContentId);
 
+            Set<String> mainLicenseIds = new HashSet<>();
+            mainLicenseIds = release.getMainLicenseIds();
+            List<String> mainLicenses = new ArrayList<>(mainLicenseIds);
+            String mainLicense = mainLicenses.get(0);
+
             InputStream attachmentStream = attachmentConnector.getAttachmentStream(attachmentContent, user, release);
-            int uploadId = fossologyRestClient.uploadFile(attachmentFilename, attachmentStream, uploadDescription);
+            int uploadId = fossologyRestClient.uploadFile(attachmentFilename, attachmentStream, uploadDescription, mainLicense);
             if (uploadId > -1) {
                 furthestStep.setFinishedOn(Instant.now().toString());
                 furthestStep.setStepStatus(ExternalToolProcessStatus.DONE);
@@ -459,11 +472,35 @@ public class FossologyHandler implements FossologyService.Iface {
         // then upload the real attachment content as _attachment to the metadata object
         attachmentConnector.uploadAttachment(attachmentContent, reportStream);
 
+        String result = new BufferedReader(new InputStreamReader(reportStream)).lines()
+                .collect(Collectors.joining("\n"));
+        String[] lines = result.split("\r?\n");
+        boolean spdx = false, assertion = false;
+        Pattern regexSpdx = Pattern.compile("spdx:licenseConcluded", Pattern.CASE_INSENSITIVE);
+        Pattern regexAssertion = Pattern.compile("noassertion", Pattern.CASE_INSENSITIVE);
+        Matcher regexSpdxMatcher = regexSpdx.matcher("");
+        for (int i = 0; i < lines.length; i++) {
+            regexSpdxMatcher.reset(lines[i]);
+            if (regexSpdxMatcher.find()) {
+            	spdx = true;
+                Matcher regexAssertionMatcher = regexAssertion.matcher(lines[i]);
+                if (regexAssertionMatcher.find()) {
+                	assertion = true;
+                	break;
+                }
+            }
+        }
+
         // finally reference the attachment metadata object in a new attachment object
         // that is added to the release
         Attachment attachment = CommonUtils.getNewAttachment(user, attachmentContent.getId(),
                 attachmentContent.getFilename());
-        attachment.setAttachmentType(AttachmentType.INITIAL_SCAN_REPORT);
+        if (spdx && !assertion) {
+            attachment.setAttachmentType(AttachmentType.COMPONENT_LICENSE_INFO_XML);
+        }
+        else {
+            attachment.setAttachmentType(AttachmentType.INITIAL_SCAN_REPORT);
+        }
         attachment.setSha1(attachmentConnector.getSha1FromAttachmentContentId(attachmentContent.getId()));
 
         // get release again because it has been updated in the meantime so version
