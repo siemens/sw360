@@ -19,7 +19,7 @@ Please comment in the template.
 - Your organization and/or the organization you prepare the clearing for:
 - Why do you need token credentials?:
 - Automation Script you are using:
-- Third Party SW Manager of your Organization: 
+- Third Party SW Manager of the organization you prepare the clearing for: 
 
 #### 2. Creating and providing Token Credentials
 
