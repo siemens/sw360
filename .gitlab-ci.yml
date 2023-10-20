@@ -58,20 +58,23 @@ build_sw360:
     DEBIAN_FRONTEND=noninteractive apt-get -qq -y install \
       build-essential rsync
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      zip awscli python3 python3-pip \
+      zip python3 python3-pip \
       cmake pkg-config flex bison
-    python3 -m pip install setuptools wheel
-    python3 -m pip install mkdocs mkdocs-material
+    python3 -m pip install --upgrade setuptools wheel pip
+    python3 -m pip install --upgrade mkdocs mkdocs-material awscli
   - ./scripts/install-thrift.sh
 
   # Check if CouchDB is running
-  - curl -s couchdb:5984/_utils
+  - curl -s couchdb:5984/_up | grep -q '"status":"ok"'
 
   # Checkout branch for proper footer
   - git checkout ${CI_COMMIT_REF_NAME}
 
   # Build code and create artifacts
-  - mvn clean package -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
+  - mvn clean package -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. \
+    -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy \
+    -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps \
+    -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
   - cp ./scripts/aws_codedeploy/application* ${GITLAB_PACKAGE_PATH}/artifacts/scripts
   - cp ./scripts/aws_codedeploy/appspec.yml ${GITLAB_PACKAGE_PATH}/artifacts/
   - cd ${GITLAB_PACKAGE_PATH}/artifacts
