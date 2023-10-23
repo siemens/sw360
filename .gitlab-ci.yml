@@ -71,10 +71,11 @@ build_sw360:
   - git checkout ${CI_COMMIT_REF_NAME}
 
   # Build code and create artifacts
-  - mvn clean package -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. \
-    -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy \
-    -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps \
-    -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
+  - |
+    mvn clean package -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. \
+     -Dliferay.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy \
+     -Dbackend.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps \
+     -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
   - cp ./scripts/aws_codedeploy/application* ${GITLAB_PACKAGE_PATH}/artifacts/scripts
   - cp ./scripts/aws_codedeploy/appspec.yml ${GITLAB_PACKAGE_PATH}/artifacts/
   - cd ${GITLAB_PACKAGE_PATH}/artifacts
