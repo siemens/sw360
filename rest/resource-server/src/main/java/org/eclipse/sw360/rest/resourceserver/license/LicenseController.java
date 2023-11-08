@@ -15,7 +15,10 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
+import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
@@ -27,6 +30,8 @@ import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatus.Series;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,13 +40,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
@@ -157,5 +168,62 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             restControllerHelper.addEmbeddedObligations(halLicense, obligations);
         }
         return halLicense;
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = LICENSES_URL + "/deleteAll", method = RequestMethod.DELETE)
+    public ResponseEntity deleteAllLicense() throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        licenseService.deleteAllLicenseInfo(sw360User);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = LICENSES_URL + "/import/SPDX", method = RequestMethod.POST)
+    public ResponseEntity importSPDX() throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        licenseService.importSpdxInformation(sw360User);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }   
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = LICENSES_URL + "/downloadLicenses", method = RequestMethod.GET, produces = "application/zip")
+    public void downloadLicenseArchive(HttpServletRequest request,HttpServletResponse response) throws TException,IOException  {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        licenseService.getDownloadLicenseArchive(sw360User,request,response);
+
+    }
+
+    @RequestMapping(value = LICENSES_URL + "/upload", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_MIXED_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
+    public ResponseEntity<?> uploadLicenses(@RequestParam("licenseFile") MultipartFile file,
+            @RequestParam(value = "overwriteIfExternalIdMatches", required = false) boolean overwriteIfExternalIdMatches,
+            @RequestParam(value = "overwriteIfIdMatchesEvenWithoutExternalIdMatch", required = false) boolean overwriteIfIdMatchesEvenWithoutExternalIdMatch) throws IOException, TException {
+
+        try {
+            User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+            licenseService.uploadLicense(sw360User, file, overwriteIfExternalIdMatches, overwriteIfIdMatchesEvenWithoutExternalIdMatch);
+        } catch (Exception e) {
+            throw new TException(e.getMessage());
+	    }
+       return ResponseEntity.ok(Series.SUCCESSFUL);
+     }
+
+    @RequestMapping(value = LICENSES_URL + "/import/OSADL", method = RequestMethod.POST)
+    public ResponseEntity<RequestSummary> importOsadlInfo() throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        RequestSummary requestSummary=licenseService.importOsadlInformation(sw360User);
+        requestSummary.setMessage("OSADL license has imported successfully");
+        requestSummary.unsetTotalAffectedElements();
+        requestSummary.unsetTotalElements();
+        HttpStatus status = HttpStatus.OK;
+        return new ResponseEntity<>(requestSummary,status);
+    }
+
+    @RequestMapping(value = LICENSES_URL + "/addLicenseType", method = RequestMethod.POST)
+    public ResponseEntity<RequestStatus> createLicenseType(@RequestParam(value = "licenseType", required = true) String licenseType, HttpServletRequest request) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        RequestStatus requestStatus=licenseService.addLicenseType(sw360User, licenseType, request);
+        HttpStatus status = HttpStatus.OK;
+        return new ResponseEntity<>(requestStatus,status);
     }
 }

@@ -72,6 +72,7 @@ enum ClearingRequestState {
     IN_PROGRESS = 4,
     CLOSED = 5,
     AWAITING_RESPONSE = 6
+    ON_HOLD = 7
 }
 
 enum ClearingRequestPriority {
@@ -79,6 +80,11 @@ enum ClearingRequestPriority {
     MEDIUM = 1,
     HIGH = 2,
     CRITICAL = 3,
+}
+
+enum ClearingRequestType {
+    DEEP = 0,
+    HIGH = 1
 }
 
 enum Visibility {
@@ -249,4 +255,8 @@ union Source {
   1: string projectId
   2: string componentId
   3: string releaseId
+}
+
+struct RestrictedResource {
+    1: optional i32 projects,
 }

@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.anyUrl;
 import static com.github.tomakehurst.wiremock.client.WireMock.delete;
@@ -51,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.sw360.http.utils.HttpUtils.waitFor;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+
 
 public class SW360ReleaseClientIT extends AbstractMockServerTest {
     /**
@@ -152,14 +152,14 @@ public class SW360ReleaseClientIT extends AbstractMockServerTest {
     public void testGetReleasesByExternalIds() throws IOException {
         if(!RUN_REST_INTEGRATION_TEST) {
             Map<String, Object> idMap = new LinkedHashMap<>();
-            idMap.put("id 1", "testRelease");
+            idMap.put("id1", "testRelease");
             idMap.put("id2", "otherFilter");
             wireMockRule.stubFor(get(urlPathEqualTo("/releases/searchByExternalIds"))
-                    .withQueryParam("id+1", equalTo("testRelease"))
+                    .withQueryParam("id1", equalTo("testRelease"))
                     .withQueryParam("id2", equalTo("otherFilter"))
                     .willReturn(aJsonResponse(HttpConstants.STATUS_OK)
                             .withBodyFile("all_releases.json")));
-
+            
             List<SW360SparseRelease> releases = waitFor(releaseClient.getReleasesByExternalIds(idMap));
             checkReleaseData(releases);
         } else {

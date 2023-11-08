@@ -18,6 +18,8 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationOptions;
@@ -26,15 +28,19 @@ import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceComparatorGenerator;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceListController;
-import org.eclipse.sw360.datahandler.thrift.ModerationState;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.Quadratic;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentDTO;
+import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.UsageAttachment;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentDTO;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
+import org.eclipse.sw360.datahandler.thrift.components.COTSDetails;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
@@ -43,6 +49,7 @@ import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectDTO;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.CVEReference;
@@ -56,7 +63,20 @@ import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.EmbeddedModerationRequest;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.ModerationRequestController;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService;
+import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProject;
+import org.eclipse.sw360.rest.resourceserver.vulnerability.VulnerabilityController;
+import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProjectDTO;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.eclipse.sw360.rest.resourceserver.project.ProjectController;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.Quadratic;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.rest.resourceserver.obligation.ObligationController;
+import org.eclipse.sw360.rest.resourceserver.packages.PackageController;
+import org.eclipse.sw360.rest.resourceserver.packages.SW360PackageService;
 import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProject;
 import org.eclipse.sw360.rest.resourceserver.project.ProjectController;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
@@ -300,6 +320,7 @@ public class RestControllerHelper<T> {
         addEmbeddedCreatedByToHalResourceRelease(halResource, sw360Release.getCreatedBy());
         addEmbeddedModifiedByToHalResourceRelease(halResource, sw360Release.getModifiedBy());
         addEmbeddedSubcribeToHalResourceRelease(halResource, sw360Release);
+        addEmbeddedCotsDetails(halResource, sw360Release);
     }
 
     public void addEmbeddedContributorsToHalResourceRelease(HalResource halResource, Release sw360Release) {
@@ -375,6 +396,16 @@ public class RestControllerHelper<T> {
         List<ReleaseLink> releaseLinkInogreAttachments = releaseLinks.stream().map(releaseLink -> releaseLink.setAttachments(null)).collect(Collectors.toList());
         for (ReleaseLink releaseLink : releaseLinkInogreAttachments) {
             addEmbeddedReleaseLink(halResource, releaseLink);
+        }
+    }
+
+    public void addEmbeddedPackages(
+            HalResource<Package> halResource,
+            Set<String> packages,
+            SW360PackageService sw360PackageService) throws TException {
+        for (String packageId : packages) {
+            final Package pkg = sw360PackageService.getPackageForUserById(packageId);
+            addEmbeddedPackage(halResource, pkg);
         }
     }
 
@@ -478,6 +509,34 @@ public class RestControllerHelper<T> {
         halResource.addEmbeddedResource("sw360:releaseLinks", halRelease);
     }
 
+    public void addEmbeddedSingleRelease(HalResource halResource, Release release) {
+        Release embeddedRelease = convertToEmbeddedRelease(release);
+        HalResource<Release> halRelease = new HalResource<>(embeddedRelease);
+        Link releaseLink = linkTo(ReleaseController.class).
+                slash("api/releases/" + release.getId()).withSelfRel();
+        halRelease.add(releaseLink);
+        halResource.addEmbeddedResource("sw360:release", halRelease);
+    }
+
+    public void addEmbeddedPackage(HalResource<Package> halResource, Package pkg) {
+        Package embeddedPackage = convertToEmbeddedPackage(pkg);
+        HalResource<Package> halPackage = new HalResource<>(embeddedPackage);
+        Link packageLink = linkTo(PackageController.class).
+                slash("api/packages/" + pkg.getId()).withSelfRel();
+        halPackage.add(packageLink);
+        halResource.addEmbeddedResource("sw360:packages", halPackage);
+    }
+
+    public HalResource<Release> addEmbeddedReleaseLinks(Release release) {
+        final Release embeddedRelease = convertToEmbeddedLinkedRelease(release);
+	    final HalResource<Release> releaseResource = new HalResource<>(embeddedRelease);
+	    Link releaseLink = linkTo(ReleaseController.class)
+                .slash("api/releases/" + embeddedRelease.getId()).withSelfRel();
+	    releaseResource.add(releaseLink);
+
+        return releaseResource;
+    }
+
     public void addEmbeddedAttachments(
             HalResource halResource,
             Set<Attachment> attachments) {
@@ -525,14 +584,53 @@ public class RestControllerHelper<T> {
         return projectToUpdate;
     }
 
-    public Component updateComponent(Component componentToUpdate, Component requestBodyComponent) {
+    public Component updateComponent(Component componentToUpdate, ComponentDTO requestBodyComponent) {
+        Component component = convertToComponent(requestBodyComponent);
         for(Component._Fields field:Component._Fields.values()) {
-            Object fieldValue = requestBodyComponent.getFieldValue(field);
+            Object fieldValue = component.getFieldValue(field);
             if(fieldValue != null) {
                 componentToUpdate.setFieldValue(field, fieldValue);
             }
         }
         return componentToUpdate;
+    }
+
+    public Package updatePackage(Package packageToUpdate, Package requestBodyPackage) {
+        for (Package._Fields field:Package._Fields.values()) {
+            Object fieldValue = requestBodyPackage.getFieldValue(field);
+            if (fieldValue != null) {
+                packageToUpdate.setFieldValue(field, fieldValue);
+            }
+        }
+        return packageToUpdate;
+    }
+
+    public Component convertToComponent(ComponentDTO componentDTO) {
+        Component component = new Component();
+
+        component.setId(componentDTO.getId());
+        component.setName(componentDTO.getName());
+        component.setDescription(componentDTO.getDescription());
+        component.setCreatedOn(componentDTO.getCreatedOn());
+        component.setComponentType(componentDTO.getComponentType());
+        component.setCreatedBy(componentDTO.getCreatedBy());
+        component.setSubscribers(componentDTO.getSubscribers());
+        component.setModerators(componentDTO.getModerators());
+        component.setComponentOwner(componentDTO.getComponentOwner());
+        component.setOwnerAccountingUnit(componentDTO.getOwnerAccountingUnit());
+        component.setOwnerGroup(componentDTO.getOwnerGroup());
+        component.setOwnerCountry(componentDTO.getOwnerCountry());
+        component.setRoles(componentDTO.getRoles());
+        component.setExternalIds(componentDTO.getExternalIds());
+        component.setAdditionalData(componentDTO.getAdditionalData());
+        component.setDefaultVendorId(componentDTO.getDefaultVendorId());
+        component.setCategories(componentDTO.getCategories());
+        component.setHomepage(componentDTO.getHomepage());
+        component.setMailinglist(componentDTO.getMailinglist());
+        component.setWiki(componentDTO.getWiki());
+        component.setBlog(componentDTO.getBlog());
+
+        return component;
     }
 
     public Release updateRelease(Release releaseToUpdate, Release requestBodyRelease) {
@@ -593,6 +691,22 @@ public class RestControllerHelper<T> {
         embeddedProject.setClearingState(project.getClearingState());
         embeddedProject.setVersion(project.getVersion());
         embeddedProject.setVisbility(project.getVisbility());
+        embeddedProject.setBusinessUnit(project.getBusinessUnit());
+        embeddedProject.setEnableSvm(project.isEnableSvm());
+        embeddedProject.setType(null);
+        return embeddedProject;
+    }
+
+    public Project convertToEmbeddedLinkedProject(Project project) {
+        Project embeddedProject = new EmbeddedProject();
+        embeddedProject.setName(project.getName());
+        embeddedProject.setId(project.getId());
+        embeddedProject.setProjectType(project.getProjectType());
+        embeddedProject.setState(project.getState());
+        embeddedProject.setClearingState(project.getClearingState());
+        embeddedProject.setVersion(project.getVersion());
+        embeddedProject.setReleaseIdToUsage(project.getReleaseIdToUsage());
+        embeddedProject.setLinkedProjects(project.getLinkedProjects());
         embeddedProject.setType(null);
         return embeddedProject;
     }
@@ -614,6 +728,7 @@ public class RestControllerHelper<T> {
         embeddedComponent.setComponentType(component.getComponentType());
         embeddedComponent.setVisbility(component.getVisbility());
         embeddedComponent.setMainLicenseIds(component.getMainLicenseIds());
+        embeddedComponent.setVcs(component.getVcs());
         if (CommonUtils.isNotNullEmptyOrWhitespace(component.getDefaultVendorId())) {
             Vendor defaultVendor = vendorService.getVendorById(component.getDefaultVendorId());
             embeddedComponent.setDefaultVendor(defaultVendor);
@@ -645,11 +760,20 @@ public class RestControllerHelper<T> {
         return embeddedRelease;
     }
 
+    public Package convertToEmbeddedPackage(Package pkg) {
+        Package embeddedPackage = new Package();
+        embeddedPackage.setId(pkg.getId());
+        embeddedPackage.setName(pkg.getName());
+        embeddedPackage.setVersion(pkg.getVersion());
+        embeddedPackage.setPurl(pkg.getPurl());
+        return embeddedPackage;
+    }
+
     public Release convertToEmbeddedReleaseWithDet(Release release) {
         List<String> fields = List.of("id", "name", "version", "cpeid", "createdBy", "createdOn", "componentId","componentType",
                 "additionalData", "clearingState", "mainLicenseIds", "binaryDownloadurl", "sourceCodeDownloadurl",
                 "releaseDate", "externalIds", "languages", "operatingSystems", "softwarePlatforms", "vendor",
-                "mainlineState");
+                "mainlineState", "packageIds");
         return convertToEmbeddedRelease(release, fields);
     }
 
@@ -682,6 +806,24 @@ public class RestControllerHelper<T> {
         embeddedLicense.setId(licenseId);
         embeddedLicense.setType(null);
         return embeddedLicense;
+    }
+
+    public Release convertToEmbeddedLinkedRelease(Release release) {
+        Release embeddedRelease = new Release();
+        embeddedRelease.setId(release.getId());
+        embeddedRelease.setMainlineState(release.getMainlineState());
+        embeddedRelease.setClearingState(release.getClearingState());
+        embeddedRelease.setMainLicenseIds(release.getMainLicenseIds());
+        embeddedRelease.setOtherLicenseIds(release.getOtherLicenseIds());
+        embeddedRelease.setName(release.getName());
+        embeddedRelease.setComponentType(release.getComponentType());
+        embeddedRelease.setVersion(release.getVersion());
+        embeddedRelease.setType(null);
+        return embeddedRelease;
+    }
+
+    public void addEmbeddedProjectReleases(HalResource halResource, List<EntityModel<Release>> releases) {
+        halResource.addEmbeddedResource("sw360:release", releases);
     }
 
     public User convertToEmbeddedUser(User user) {
@@ -783,6 +925,28 @@ public class RestControllerHelper<T> {
         attachmentDTO.setUsageAttachment(usage);
 
         return attachmentDTO;
+    }
+
+    public Attachment convertToAttachment(AttachmentDTO attachmentDTO, User user) {
+        Attachment attachment = new Attachment();
+        attachment.setAttachmentContentId(attachmentDTO.getAttachmentContentId());
+        attachment.setFilename(attachmentDTO.getFilename());
+        attachment.setSha1(attachmentDTO.getSha1());
+        attachment.setAttachmentType(attachmentDTO.getAttachmentType());
+        attachment.setCreatedBy(attachmentDTO.getCreatedBy());
+        attachment.setCreatedTeam(attachmentDTO.getCreatedTeam());
+        attachment.setCreatedComment(attachmentDTO.getCreatedComment());
+        attachment.setCreatedOn(attachmentDTO.getCreatedOn());
+        if (CheckStatus.NOTCHECKED != attachmentDTO.getCheckStatus()) {
+            attachment.setCheckedComment(attachmentDTO.getCheckedComment());
+            attachment.setCheckedBy(user.getEmail());
+            attachment.setCheckedTeam(user.getDepartment());
+            attachment.setCheckedOn(SW360Utils.getCreatedOn());
+        }
+        attachment.setCheckStatus(attachmentDTO.getCheckStatus());
+        attachment.setSuperAttachmentId(attachmentDTO.getSuperAttachmentId());
+        attachment.setSuperAttachmentFilename(attachmentDTO.getSuperAttachmentFilename());
+        return attachment;
     }
 
     public Vulnerability convertToEmbeddedVulnerability(Vulnerability vulnerability) {
@@ -1106,4 +1270,46 @@ public class RestControllerHelper<T> {
         }
     }
 
+    public void addEmbeddedProjectDTO(HalResource<ProjectDTO> halProject, Set<String> projectIds, Sw360ProjectService sw360ProjectService, User user) throws TException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        for (String projectId : projectIds) {
+            final Project project = sw360ProjectService.getProjectForUserById(projectId, user);
+            addEmbeddedProjectDTO(halProject, project);
+        }
+    }
+
+    public void addEmbeddedProjectDTO(HalResource halResource, Project project) {
+        ProjectDTO embeddedProject = convertToEmbeddedProjectDTO(project);
+        HalResource<ProjectDTO> halProject = new HalResource<>(embeddedProject);
+        Link projectLink = linkTo(ProjectController.class)
+                .slash("api" + ProjectController.PROJECTS_URL + "/" + project.getId()).withSelfRel();
+        halProject.add(projectLink);
+        halResource.addEmbeddedResource("sw360:projectDTOs", halProject);
+    }
+
+    public ProjectDTO convertToEmbeddedProjectDTO(Project project) {
+        ProjectDTO embeddedProject = new EmbeddedProjectDTO();
+        embeddedProject.setName(project.getName());
+        embeddedProject.setId(project.getId());
+        embeddedProject.setProjectType(project.getProjectType());
+        embeddedProject.setVersion(project.getVersion());
+        embeddedProject.setVisbility(project.getVisbility());
+        embeddedProject.setType(null);
+        return embeddedProject;
+    }
+
+    public void addEmbeddedCotsDetails(HalResource halResource, Release release) {
+        if (null != release.getCotsDetails() && release.getComponentType().equals(ComponentType.COTS)) {
+            HalResource<COTSDetails> cotsDetailsHalResource = new HalResource<>(release.getCotsDetails());
+            if (CommonUtils.isNotNullEmptyOrWhitespace(release.getCotsDetails().getCotsResponsible())) {
+                User sw360User = userService.getUserByEmail(release.getCotsDetails().getCotsResponsible());
+                if (null != sw360User) {
+                    addEmbeddedUser(cotsDetailsHalResource, sw360User, "sw360:cotsResponsible");
+                }
+            }
+            addEmbeddedFields("sw360:cotsDetail", cotsDetailsHalResource, halResource);
+        }
+    }
 }

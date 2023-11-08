@@ -11,12 +11,15 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
+import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.Quadratic;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,11 +28,16 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import java.io.IOException;
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.linkWithRel;
@@ -60,9 +68,11 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
 
     private License license;
     private Obligation obligation1, obligation2;
+    private RequestSummary requestSummary = new RequestSummary();
 
     @Before
-    public void before() throws TException {
+    @SuppressWarnings("unchecked")
+    public void before() throws TException, IOException {
         license = new License();
         license.setId("Apache-2.0");
         license.setFullname("Apache License 2.0");
@@ -85,10 +95,23 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         List<License> licenseList = new ArrayList<>();
         licenseList.add(license);
         licenseList.add(license2);
+        
+        requestSummary.setRequestStatus(RequestStatus.SUCCESS);
+        LicenseType licensetype = new LicenseType();
+        licensetype.setId("1234");
+        licensetype.setLicenseType("wer");
+        licensetype.setLicenseTypeId(123);
+        licensetype.setType("xyz");
 
         given(this.licenseServiceMock.getLicenses()).willReturn(licenseList);
         given(this.licenseServiceMock.getLicenseById(eq(license.getId()))).willReturn(license);
         Mockito.doNothing().when(licenseServiceMock).deleteLicenseById(any(), any());
+        Mockito.doNothing().when(licenseServiceMock).deleteAllLicenseInfo(any());
+        Mockito.doNothing().when(licenseServiceMock).importSpdxInformation(any());
+        Mockito.doNothing().when(licenseServiceMock).getDownloadLicenseArchive(any(), any(), any());
+        Mockito.doNothing().when(licenseServiceMock).uploadLicense(any(), any(), anyBoolean(), anyBoolean());
+        given(this.licenseServiceMock.importOsadlInformation(any())).willReturn(requestSummary);
+        given(this.licenseServiceMock.addLicenseType(any(),any() , any())).willReturn(RequestStatus.SUCCESS);
         obligation1 = new Obligation();
         obligation1.setId("0001");
         obligation1.setTitle("Obligation 1");
@@ -201,5 +224,62 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
                 .content(this.objectMapper.writeValueAsString(obligationIds))
                 .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    public void should_document_delete_all_license_info() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(delete("/api/licenses/" + "/delete")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk());
+    }
+    @Test
+    public void should_document_get_download_license_archive() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/licenses" + "/downloadLicenses")
+         .header("Authorization", "Bearer " + accessToken)
+         .accept("application/zip"))
+         .andExpect(status().isOk())
+         .andDo(this.documentationHandler.document());
+    }
+
+    @Test
+    public void should_document_import_spdx_info() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(post("/api/licenses/" + "/import/SPDX")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void should_document_upload_license() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("licenseFile","file=@/bom.spdx.rdf".getBytes());
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.multipart("/api/licenses/upload")
+                .file(file)
+                .header("Authorization", "Bearer " + accessToken)
+                .queryParam("licenseFile", "Must need to attach file.");
+        this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
+    }
+
+    @Test   		
+    public void should_document_import_osadl_info() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(post("/api/licenses/import/OSADL")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void should_document_get_create_license_type() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(post("/api/licenses/" + "/addLicenseType")
+                .header("Authorization", "Bearer " + accessToken)
+                .param("licenseType", "wer")
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk()).andDo(this.documentationHandler.document());
     }
 }

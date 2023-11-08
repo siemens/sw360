@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Copyright BMW CarIT GmbH 2021
-# Copyright Helio Chissini de Castro 2022
+# Copyright Helio Chissini de Castro 2022-2023
 #
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
@@ -14,7 +14,34 @@
 # (execution of docker run cmd) starts couchdb and tomcat.
 # -----------------------------------------------------------------------------
 
-set -e -o  pipefail
+# Parse command-line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --cvesearch-host)
+            shift
+            cvesearch_host="$1"
+            ;;
+        *)
+            other_args+=("$1")  # store other arguments
+            ;;
+    esac
+    shift
+done
+
+# Validate the --cvesearch-host value is a URL
+if [ ! -z "$cvesearch_host" ]; then
+    if [[ $cvesearch_host =~ ^https?:// ]]; then
+        sed -i "s@cvesearch.host=.*@cvesearch.host=$cvesearch_host@g"\
+            ./backend/src/src-cvesearch/src/main/resources/cvesearch.properties
+    else
+        echo "Warning: CVE Search host is not a URL: $cvesearch_host"
+    fi
+fi
+
+set -- "${other_args[@]}"  # restore other arguments
+
+
+set -e -o pipefail
 
 # Source the version
 # shellcheck disable=SC1091
@@ -34,9 +61,12 @@ image_build() {
     local target
     local name
     local version
-    target="$1"; shift
-    name="$1"; shift
-    version="$1"; shift
+    target="$1"
+    shift
+    name="$1"
+    shift
+    version="$1"
+    shift
 
     docker buildx build \
         --target "$target" \

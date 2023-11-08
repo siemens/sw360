@@ -20,12 +20,16 @@ import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.components.BulkOperationNode;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseNode;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.ektorp.http.HttpClient;
 
 import com.cloudant.client.api.CloudantClient;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -545,6 +549,11 @@ public class ComponentHandler implements ComponentService.Iface {
         assertId(componentId);
         return handler.updateReleaseDependentFieldsForComponentId(componentId, user);
     }
+    
+    @Override
+    public BulkOperationNode deleteBulkRelease(String releaseId, User user, boolean isPreview) throws SW360Exception {
+        return handler.deleteBulkRelease(releaseId, user, isPreview);
+    }
 
     //////////////////////////////////
     // SUBSCRIBE INDIVIDUAL OBJECTS //
@@ -716,5 +725,37 @@ public class ComponentHandler implements ComponentService.Iface {
     @Override
     public void sendExportSpreadsheetSuccessMail(String url, String recepient) throws TException {
         handler.sendExportSpreadsheetSuccessMail(url, recepient);
+    }
+
+    @Override
+    public ByteBuffer downloadExcel(User user, boolean extendedByReleases, String token) throws TException {
+        return handler.downloadExcel(user,extendedByReleases,token);
+    }
+
+	@Override
+	public ByteBuffer getComponentReportDataStream(User user, boolean extendedByReleases) throws TException {
+		return handler.getComponentReportDataStream(user,extendedByReleases);
+	}
+
+	@Override
+	public String getComponentReportInEmail(User user, boolean extendedByReleases) throws TException {
+		return handler.getComponentReportInEmail(user,extendedByReleases);
+	}
+
+    @Override
+    public boolean isReleaseActionAllowed(Release release, User user, RequestedAction action) {
+        return handler.isReleaseActionAllowed(release, user, action);
+    }
+
+    @Override
+    public List<Release> getReleasesByListIds(List<String> ids, User user) throws TException {
+        assertUser(user);
+        assertNotNull(ids);
+        return handler.getReleaseByIds(ids);
+    }
+
+    @Override
+    public List<ReleaseNode> getReleaseRelationNetworkOfRelease(Release release, User user) {
+        return handler.getReleaseRelationNetworkOfRelease(release, user);
     }
 }

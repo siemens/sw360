@@ -87,3 +87,96 @@ include::{snippets}/should_document_delete_license/curl-request.adoc[]
 
 ===== Example response
 include::{snippets}/should_document_delete_license/http-response.adoc[]
+
+[[delete-all-license-info]]
+==== Delete all licenses info
+
+A `DELETE` request will delete all licenses info.
+
+===== Example request
+include::{snippets}/should_document_delete_all_license_info/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_delete_all_license_info/http-response.adoc[]
+
+[[import-spdx-info]]
+==== Import SPDX information
+
+A `POST` request will import SPDX info.
+
+===== Example request
+include::{snippets}/should_document_import_spdx_info/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_import_spdx_info/http-response.adoc[]
+
+[[download-license-archive]]
+==== Download license archive
+
+A `GET` request help to download the license archive.
+
+===== Example request
+include::{snippets}/should_document_get_download_license_archive/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_download_license_archive/http-response.adoc[]
+
+[[upload-licenses]]
+==== Upload license
+
+A `POST` request will upload license file.
+
+[red]#Request parameter#
+|===
+|Parameter |Description
+
+|licenseFile
+|Upload the license file.
+|===
+
+===== Example request
+include::{snippets}/should_document_upload_license/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_upload_license/http-response.adoc[]
+
+
+[[import-osadl-info]]
+==== Import osadl information
+
+A `POST` request will import osadl licenses info.
+
+[red]#Request parameter#
+|===
+|Parameter |Description
+
+|licenseFile
+|Import the license file.
+|===
+
+===== Example request
+include::{snippets}/should_document_import_osadl_info/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_import_osadl_info/http-response.adoc[]
+
+[[add-license-type]]
+==== Create license type
+
+A `POST` request help to create license type.
+
+[red]#Request parameter#
+|===
+|Parameter |Description
+
+|licenseType
+|pass the licenseType name.
+|===
+
+===== Example request
+include::{snippets}/should_document_get_create_license_type/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_create_license_type/http-response.adoc[]
+
+

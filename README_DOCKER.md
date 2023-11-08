@@ -4,7 +4,7 @@
 
 [Building](#building)
 
-[Running the Image](#running-the-image)
+[Running the Image](#running-the-image-first-time)
 
 [Extra Configurations](#configurations)
 
@@ -17,8 +17,16 @@
     Build is done by the script:
 
     ```sh
-    docker_build.sh
+    ./docker_build.sh
     ```
+
+    If you want to specify [CVE-Search](https://github.com/cve-search/cve-search) host at build time, run as follows:
+    ```sh
+    ./docker_build.sh --cvesearch-host <HOST_URL>
+    ```
+    The `<HOST_URL>` above should be `http://<YOUR_SERVER_HOST>:<PORT>` style, 
+    or it can be https://cvepremium.circl.lu for testing purposes only.
+
 
     The script will build multiple intermediary images.
     Subsequent builds will only build the differences
@@ -93,7 +101,7 @@ This composed image runs under a single default network, called **sw360net**
 So any external docker image can connect to internal couchdb or postgresql through this network
 
 
-## Running the image
+## Running the image first time
 
 * Run the resulting image:
 
@@ -112,6 +120,11 @@ So any external docker image can connect to internal couchdb or postgresql throu
     ```sh
     docker logs -f sw360
     ```
+
+### Post setup configuration
+
+* Please read this page after you have initial screen:
+[SW360 Initial Setup Configuration](https://eclipse.dev/sw360/docs/deployment/legacy/deploy-liferay7.4/)
 
 ## Fossology
 For docker based approach, is recommended use official [Fossology docker image](https://hub.docker.com/r/fossology/fossology/)

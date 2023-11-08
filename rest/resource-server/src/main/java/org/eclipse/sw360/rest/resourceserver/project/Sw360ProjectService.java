@@ -39,6 +39,7 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectData;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
@@ -59,6 +60,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -245,9 +247,9 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         return getAllRequiredProjects(projectData, sw360User);
     }
 
-    public Set<String> getReleaseIds(String projectId, User sw360User, String transitive) throws TException {
+    public Set<String> getReleaseIds(String projectId, User sw360User, boolean transitive) throws TException {
         ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
-        if (Boolean.parseBoolean(transitive)) {
+        if (transitive) {
             List<ReleaseClearingStatusData> releaseClearingStatusData = sw360ProjectClient.getReleaseClearingStatuses(projectId, sw360User);
             return releaseClearingStatusData.stream().map(r -> r.release.getId()).collect(Collectors.toSet());
         } else {
@@ -257,6 +259,31 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
             }
             return project.getReleaseIdToUsage().keySet();
         }
+    }
+
+    public void addEmbeddedLinkedProject(Project sw360Project, User sw360User, HalResource<Project> projectResource, Set<String> projectIdsInBranch) throws TException {
+        projectIdsInBranch.add(sw360Project.getId());
+        Map<String, ProjectProjectRelationship> linkedProjects = sw360Project.getLinkedProjects();
+		List<String> keys = new ArrayList<>(linkedProjects.keySet());
+		System.out.println("keys " + keys.size());
+        if (keys != null) {
+        	keys.forEach(linkedProjectId -> wrapTException(() -> {
+                if (projectIdsInBranch.contains(linkedProjectId)) {
+                    return;
+                }
+                Project linkedProject = getProjectForUserById(linkedProjectId, sw360User);
+                System.out.println("project " + linkedProject);
+                Project embeddedLinkedProject = rch.convertToEmbeddedLinkedProject(linkedProject);
+                HalResource<Project> halLinkedProject = new HalResource<>(embeddedLinkedProject);
+                Link projectLink = linkTo(ProjectController.class)
+                        .slash("api/projects/" + embeddedLinkedProject.getId()).withSelfRel();
+                halLinkedProject.add(projectLink);
+                addEmbeddedLinkedProject(linkedProject, sw360User, halLinkedProject,
+                        projectIdsInBranch);
+                projectResource.addEmbeddedResource("sw360:linkedProjects", halLinkedProject);
+            }));
+        }
+        projectIdsInBranch.remove(sw360Project.getId());
     }
 
     public void addEmbeddedlinkedRelease(Release sw360Release, User sw360User, HalResource<Release> releaseResource,
@@ -328,7 +355,8 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         return linkedProjects.stream().map(projectLinkMapper).collect(Collectors.toList());
     }
 
-    public Set<Release> getReleasesFromProjectIds(List<String> projectIds, String transitive, final User sw360User, Sw360ReleaseService releaseService) {
+    public Set<Release> getReleasesFromProjectIds(List<String> projectIds, boolean transitive, final User sw360User,
+                                                  Sw360ReleaseService releaseService) {
         final List<Callable<List<Release>>> callableTasksToGetReleases = new ArrayList<Callable<List<Release>>>();
 
         projectIds.stream().forEach(id -> {
@@ -505,5 +533,34 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
     public RequestSummary importCycloneDX(User user, String attachmentContentId, String projectId) throws TException {
         ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
         return sw360ProjectClient.importCycloneDxFromAttachmentContent(user, attachmentContentId, CommonUtils.nullToEmptyString(projectId));
+    }
+
+    /**
+     * Get Projects are using release in dependencies (enable.flexible.project.release.relationship = true)
+     * @param releaseId                Id of release
+     * @return List<Project>
+     */
+    public List<Project> getProjectsUsedReleaseInDependencyNetwork(String releaseId) {
+        return SW360Utils.getUsingProjectByReleaseIds(Collections.singleton(releaseId), null);
+    }
+
+    public void syncReleaseRelationNetworkAndReleaseIdToUsage(Project project, User user) throws TException {
+        SW360Utils.syncReleaseRelationNetworkAndReleaseIdToUsage(project, user);
+    }
+
+    /**
+     * Count the number of projects are using the releases that has releaseIds
+     * @param releaseIds              Ids of Releases
+     * @return int                    Number of projects
+     * @throws TException
+     */
+    public int countProjectsByReleaseIds(Set<String> releaseIds) {
+        try {
+            ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
+            return sw360ProjectClient.getCountByReleaseIds(releaseIds);
+        } catch (TException e) {
+            log.error(e.getMessage());
+            return 0;
+        }
     }
 }

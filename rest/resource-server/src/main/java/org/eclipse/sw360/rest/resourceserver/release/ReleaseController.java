@@ -11,6 +11,29 @@
  */
 package org.eclipse.sw360.rest.resourceserver.release;
 
+import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Objects;
+import java.util.TreeSet;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.google.common.base.Predicate;
 import com.google.common.collect.Sets;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -23,59 +46,69 @@ import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
-import org.eclipse.sw360.datahandler.thrift.*;
+import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.Source;
+import org.eclipse.sw360.datahandler.thrift.VerificationState;
+import org.eclipse.sw360.datahandler.thrift.VerificationStateInfo;
+import org.eclipse.sw360.datahandler.thrift.RestrictedResource;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentDTO;
-import org.eclipse.sw360.datahandler.thrift.attachments.UsageAttachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ExternalToolProcess;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
-import org.eclipse.sw360.datahandler.thrift.vulnerabilities.*;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelationDTO;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityState;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.component.ComponentController;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.eclipse.sw360.rest.resourceserver.packages.PackageController;
+import org.eclipse.sw360.rest.resourceserver.packages.SW360PackageService;
+import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
+import org.eclipse.sw360.rest.resourceserver.licenseinfo.Sw360LicenseInfoService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
-import org.springframework.hateoas.Link;
-import org.springframework.hateoas.EntityModel;
-import org.springframework.hateoas.server.RepresentationModelProcessor;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.CollectionModel;
-import org.springframework.http.*;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.Link;
+import org.springframework.hateoas.server.RepresentationModelProcessor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import java.io.*;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
-
-import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 
 @BasePathAwareController
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
@@ -99,13 +132,22 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
     private Sw360ReleaseService releaseService;
 
     @NonNull
+    private SW360PackageService packageService;
+
+    @NonNull
     private final Sw360VulnerabilityService vulnerabilityService;
+
+    @NonNull
+    private final Sw360VendorService vendorService;
 
     @NonNull
     private Sw360AttachmentService attachmentService;
 
     @NonNull
     private RestControllerHelper restControllerHelper;
+
+    @NonNull
+    private Sw360LicenseInfoService sw360LicenseInfoService;
 
     @NonNull
     private final com.fasterxml.jackson.databind.Module sw360Module;
@@ -130,7 +172,22 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
         sw360Releases = sw360Releases.stream()
                 .filter(release -> name == null || name.isEmpty() || release.getName().equalsIgnoreCase(name))
                 .collect(Collectors.toList());
-
+        if (allDetails) {
+            for (Release release: sw360Releases) {
+                if(!CommonUtils.isNullEmptyOrWhitespace(release.getVendorId())) {
+                    release.setVendor(vendorService.getVendorById(release.getVendorId()));
+                }
+            }
+        }
+        
+        if (CommonUtils.isNotNullEmptyOrWhitespace(sha1) || CommonUtils.isNotNullEmptyOrWhitespace(name)) {
+            for(Release release: sw360Releases) {
+                releaseService.setComponentDependentFieldsInRelease(release, sw360User);
+            }
+        } else {
+            releaseService.setComponentDependentFieldsInRelease(sw360Releases, sw360User);
+        }
+        
         PaginationResult<Release> paginationResult = restControllerHelper.createPaginationResult(request, pageable, sw360Releases, SW360Constants.TYPE_RELEASE);
 
         List<EntityModel> releaseResources = new ArrayList<>();
@@ -239,14 +296,38 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
                     resources.add(EntityModel.of(embeddedComponent));
                 });
 
+        RestrictedResource restrictedResource = new RestrictedResource();
+        restrictedResource.setProjects(releaseService.countProjectsByReleaseId(id) - sw360Projects.size());
+        resources.add(EntityModel.of(restrictedResource));
+
         CollectionModel<EntityModel> finalResources = restControllerHelper.createResources(resources);
         HttpStatus status = finalResources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
         return new ResponseEntity<>(finalResources, status);
     }
 
     @GetMapping(value = RELEASES_URL + "/searchByExternalIds")
-    public ResponseEntity searchByExternalIds(@RequestParam MultiValueMap<String, String> externalIdsMultiMap) throws TException {
-        return restControllerHelper.searchByExternalIds(externalIdsMultiMap, releaseService, null);
+    public ResponseEntity searchByExternalIds(HttpServletRequest request) throws TException {
+        String queryString = request.getQueryString();
+        MultiValueMap<String, String> externalIdsMultiMap = parseQueryString(queryString);
+        return restControllerHelper.searchByExternalIds(new LinkedMultiValueMap<String, String>(externalIdsMultiMap), releaseService, null);
+    }
+
+    private MultiValueMap<String, String> parseQueryString(String queryString) {
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+
+        if (queryString != null && !queryString.isEmpty()) {
+            String[] params = queryString.split("&");
+            for (String param : params) {
+                String[] keyValue = param.split("=");
+                if (keyValue.length == 2) {
+                    String key = keyValue[0];
+                    String value = keyValue[1];
+                    parameters.add(key, value);
+                }
+            }
+        }
+
+        return parameters;
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
@@ -411,11 +492,11 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
     }
 
     @GetMapping(value = RELEASES_URL + "/{id}/attachments")
-    public ResponseEntity<CollectionModel<EntityModel<AttachmentDTO>>> getReleaseAttachment1s(
+    public ResponseEntity<CollectionModel<EntityModel<Attachment>>> getReleaseAttachments(
             @PathVariable("id") String id) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         final Release sw360Release = releaseService.getReleaseForUserById(id, sw360User);
-        final CollectionModel<EntityModel<AttachmentDTO>> resources = attachmentService.getAttachmentDTOResourcesFromList(sw360User, sw360Release.getAttachments(), Source.releaseId(sw360Release.getId()));
+        final CollectionModel<EntityModel<Attachment>> resources = attachmentService.getAttachmentResourcesFromList(sw360Release.getAttachments());
         return new ResponseEntity<>(resources, HttpStatus.OK);
     }
 
@@ -558,6 +639,62 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
         return new ResponseEntity<HalResource>(responseResource, status);
     }
 
+    @RequestMapping(value = RELEASES_URL + "/{id}/reloadFossologyReport", method = RequestMethod.GET)
+    public ResponseEntity<HalResource> triggerReloadFossologyReport(@PathVariable("id") String releaseId) throws TException {
+        releaseService.checkFossologyConnection();
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        Map<String, String> responseMap = new HashMap<>();
+        String errorMsg = "Could not trigger report generation for this release";
+        HttpStatus status = null;
+        try {
+            Release release = releaseService.getReleaseForUserById(releaseId, user);
+            RequestStatus requestResult = releaseService.triggerReportGenerationFossology(releaseId, user);
+
+            if (requestResult == RequestStatus.FAILURE) {
+                responseMap.put("message", errorMsg);
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+            } else {
+                ExternalToolProcess externalToolProcess = releaseService.getExternalToolProcess(release);
+                if (externalToolProcess != null) {
+                    ReentrantLock lock = mapOfLocks.get(releaseId);
+
+                    if (lock == null || !lock.isLocked()) {
+                        if (mapOfLocks.size() > 10) {
+                            responseMap.put("message",
+                                    "Max 10 FOSSology Process can be triggered simultaneously. Please try after sometime.");
+                            status = HttpStatus.TOO_MANY_REQUESTS;
+                        } else {
+                            releaseService.executeFossologyProcess(user, attachmentService, mapOfLocks, releaseId,
+                                    false, "");
+                            responseMap.put("message", "Re-generate FOSSology's report process for Release Id : " + releaseId
+                                    + " has been triggered.");
+                            status = HttpStatus.OK;
+                        }
+                    } else {
+                        responseMap.put("message", "Another FOSSology Process for Release Id : " + releaseId
+                                + " is already running. Please wait till it is completed.");
+                        status = HttpStatus.NOT_ACCEPTABLE;
+                    }
+                } else {
+                    responseMap.put("message", "The source file is either not yet uploaded or scanning is not done.");
+                    status = HttpStatus.INTERNAL_SERVER_ERROR;
+                }
+            }
+        } catch (TException | IOException e) {
+            responseMap.put("message", errorMsg);
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+            log.error("Error pulling report from fossology", e);
+        }
+
+        HalResource responseResource = new HalResource(responseMap);
+        if (status == HttpStatus.OK || status == HttpStatus.NOT_ACCEPTABLE) {
+            Link checkStatusLink = linkTo(ReleaseController.class).slash("api" + RELEASES_URL).slash(releaseId)
+                    .slash("checkFossologyProcessStatus").withSelfRel();
+            responseResource.add(checkStatusLink);
+        }
+        return new ResponseEntity<>(responseResource, status);
+    }
+
     // Link release to release
     @PreAuthorize("hasAuthority('WRITE')")
     @RequestMapping(value = RELEASES_URL + "/{id}/releases", method = RequestMethod.POST)
@@ -578,13 +715,209 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = RELEASES_URL + "/{id}/link/packages", method = RequestMethod.PATCH)
+    public ResponseEntity<?> linkPackages(
+            @PathVariable("id") String id,
+            @RequestBody Set<String> packagesInRequestBody) throws URISyntaxException, TException {
+        RequestStatus linkPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, true);
+        if (linkPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
+            return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        return new ResponseEntity<>(HttpStatus.CREATED);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = RELEASES_URL + "/{id}/unlink/packages", method = RequestMethod.PATCH)
+    public ResponseEntity<?> unlinkPackages(
+            @PathVariable("id") String id,
+            @RequestBody Set<String> packagesInRequestBody) throws URISyntaxException, TException {
+        RequestStatus unlinkPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, false);
+        if (unlinkPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
+            return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        return new ResponseEntity<>(HttpStatus.CREATED);
+    }
+
+    @PostMapping(value = RELEASES_URL + "/{id}/spdxLicenses")
+    public ResponseEntity writeSpdxLicenseInfoIntoRelease(
+            @PathVariable("id") String releaseId,
+            @RequestBody Map<String, Set<String>> licensesInfoInRequestBody
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
+        Set<String> licenseIds = licensesInfoInRequestBody.get("mainLicenseIds");
+        Set<String> otherLicenseIds = licensesInfoInRequestBody.get("otherLicenseIds");
+
+        if (!CommonUtils.isNullOrEmptyCollection(licenseIds)) {
+            for (String licenseId : licenseIds) {
+                sw360Release.addToMainLicenseIds(licenseId);
+            }
+        }
+
+        if (!CommonUtils.isNullOrEmptyCollection(otherLicenseIds)) {
+            for (String licenseId : otherLicenseIds) {
+                sw360Release.addToOtherLicenseIds(licenseId);
+            }
+        }
+
+        RequestStatus updateReleaseStatus = releaseService.updateRelease(sw360Release, sw360User);
+        HalResource<Release> halRelease = createHalReleaseResource(sw360Release, true);
+        if (updateReleaseStatus == RequestStatus.SENT_TO_MODERATOR) {
+            return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        return new ResponseEntity<>(halRelease, HttpStatus.OK);
+    }
+
+    @GetMapping(value = RELEASES_URL + "/{id}/spdxLicensesInfo")
+    public ResponseEntity<?> loadSpdxLicensesInfo(
+            @PathVariable("id") String releaseId,
+            @RequestParam("attachmentId") String attachmentId,
+            @RequestParam(value = "includeConcludedLicense", required = false, defaultValue = "false") boolean includeConcludedLicense) {
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        Map<String, Set<String>> licenseToSrcFilesMap = new LinkedHashMap<>();
+        Set<String> mainLicenseNames = new TreeSet<>();
+        Set<String> otherLicenseNames = new TreeSet<>();
+        final Set<String> concludedLicenseIds = new TreeSet<>();
+
+        AttachmentType attachmentType;
+        String attachmentName;
+        long totalFileCount = 0;
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        Predicate<LicenseInfoParsingResult> filterLicenseResult = result -> (null != result.getLicenseInfo() &&
+                null != result.getLicenseInfo().getLicenseNamesWithTexts());
+
+        try {
+            Release release = releaseService.getReleaseForUserById(releaseId, user);
+            attachmentType = release.getAttachments().stream()
+                    .filter(att -> attachmentId.equals(att.getAttachmentContentId())).map(Attachment::getAttachmentType).findFirst().orElse(null);
+            if (null == attachmentType) {
+                return new ResponseEntity<>("Cannot retrieve license information for attachment id " + attachmentId + " in release "
+                        + releaseId + ".", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            if (!attachmentType.equals(AttachmentType.COMPONENT_LICENSE_INFO_XML) &&
+                    !attachmentType.equals(AttachmentType.COMPONENT_LICENSE_INFO_COMBINED) &&
+                    !attachmentType.equals(AttachmentType.INITIAL_SCAN_REPORT)) {
+                return new ResponseEntity<>("Cannot retrieve license information for attachment type " + attachmentType + ".", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            attachmentName = release.getAttachments().stream()
+                    .filter(att -> attachmentId.equals(att.getAttachmentContentId())).map(Attachment::getFilename).findFirst().orElse("");
+            final boolean isISR = AttachmentType.INITIAL_SCAN_REPORT.equals(attachmentType);
+            if (isISR) {
+                includeConcludedLicense = true;
+            }
+            List<LicenseInfoParsingResult> licenseInfoResult = sw360LicenseInfoService.getLicenseInfoForAttachment(release, user, attachmentId, includeConcludedLicense);
+            List<LicenseNameWithText> licenseWithTexts = licenseInfoResult.stream()
+                    .filter(filterLicenseResult)
+                    .map(LicenseInfoParsingResult::getLicenseInfo).map(LicenseInfo::getLicenseNamesWithTexts).flatMap(Set::stream)
+                    .filter(license -> !license.getLicenseName().equalsIgnoreCase(SW360Constants.LICENSE_NAME_UNKNOWN)
+                            && !license.getLicenseName().equalsIgnoreCase(SW360Constants.NA)
+                            && !license.getLicenseName().equalsIgnoreCase(SW360Constants.NO_ASSERTION)) // exclude unknown, n/a and noassertion
+                    .collect(Collectors.toList());
+
+            if (attachmentName.endsWith(SW360Constants.RDF_FILE_EXTENSION)) {
+                if (isISR) {
+                    totalFileCount = licenseInfoResult.stream().map(LicenseInfoParsingResult::getLicenseInfo).map(LicenseInfo::getLicenseNamesWithTexts).flatMap(Set::stream)
+                            .map(LicenseNameWithText::getSourceFiles).filter(Objects::nonNull).flatMap(Set::stream).distinct().count();
+                    licenseToSrcFilesMap = CommonUtils.nullToEmptyList(licenseWithTexts).stream().collect(Collectors.toMap(LicenseNameWithText::getLicenseName,
+                            LicenseNameWithText::getSourceFiles, (oldValue, newValue) -> oldValue));
+                    licenseWithTexts.forEach(lwt -> {
+                        lwt.getSourceFiles().forEach(sf -> {
+                            if (sf.replaceAll(".*/", "").matches(SW360Constants.MAIN_LICENSE_FILES)) {
+                                concludedLicenseIds.add(lwt.getLicenseName());
+                            }
+                        });
+                    });
+                } else {
+                    concludedLicenseIds.addAll(licenseInfoResult.stream().flatMap(singleResult -> singleResult.getLicenseInfo().getConcludedLicenseIds().stream())
+                            .collect(Collectors.toCollection(() -> new TreeSet<String>(String.CASE_INSENSITIVE_ORDER))));
+                }
+                otherLicenseNames = licenseWithTexts.stream().map(LicenseNameWithText::getLicenseName).collect(Collectors.toCollection(() -> new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)));
+                otherLicenseNames.removeAll(concludedLicenseIds);
+            } else if (attachmentName.endsWith(SW360Constants.XML_FILE_EXTENSION)) {
+                mainLicenseNames = licenseWithTexts.stream()
+                        .filter(license -> license.getType().equalsIgnoreCase(SW360Constants.LICENSE_TYPE_GLOBAL))
+                        .map(LicenseNameWithText::getLicenseName).collect(Collectors.toCollection(() -> new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)));
+                otherLicenseNames = licenseWithTexts.stream()
+                        .filter(license -> !license.getType().equalsIgnoreCase(SW360Constants.LICENSE_TYPE_GLOBAL))
+                        .map(LicenseNameWithText::getLicenseName).collect(Collectors.toCollection(() -> new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)));
+            }
+        } catch (TException e) {
+            log.error(e.getMessage());
+            return new ResponseEntity<>("Cannot retrieve license information for attachment id " + attachmentId + " in release "
+                    + releaseId + ".", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        if (CommonUtils.isNotEmpty(concludedLicenseIds)) {
+            responseBody.put(SW360Constants.LICENSE_PREFIX, SW360Constants.CONCLUDED_LICENSE_IDS);
+            responseBody.put(SW360Constants.LICENSE_IDS, concludedLicenseIds);
+        } else if (CommonUtils.isNotEmpty(mainLicenseNames)) {
+            responseBody.put(SW360Constants.LICENSE_PREFIX, SW360Constants.MAIN_LICENSE_ID);
+            responseBody.put(SW360Constants.LICENSE_IDS, mainLicenseNames);
+        }
+        responseBody.put(SW360Constants.OTHER_LICENSE, SW360Constants.OTHER_LICENSE_IDS);
+        responseBody.put(SW360Constants.OTHER_LICENSE_IDS_KEY, otherLicenseNames);
+        if (AttachmentType.INITIAL_SCAN_REPORT.equals(attachmentType)) {
+            responseBody.put(SW360Constants.LICENSE_PREFIX, SW360Constants.POSSIBLE_MAIN_LICENSE_IDS);
+            responseBody.put(SW360Constants.TOTAL_FILE_COUNT, totalFileCount);
+        }
+        responseBody.putAll(licenseToSrcFilesMap);
+
+        return new ResponseEntity<>(responseBody, HttpStatus.OK);
+    }
+
+    private RequestStatus linkOrUnlinkPackages(String id, Set<String> packagesInRequestBody, boolean link)
+            throws URISyntaxException, TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Release release = releaseService.getReleaseForUserById(id, sw360User);
+        Set<String> packageIds = new HashSet<>();
+        packageIds = release.getPackageIds();
+
+        if (link) {
+            packageIds.addAll(packagesInRequestBody);
+        } else {
+            packageIds.removeAll(packagesInRequestBody);
+        }
+
+        release.setPackageIds(packageIds);
+        return releaseService.updateRelease(release, sw360User);
+    }
+
+    @GetMapping(value = RELEASES_URL + "/{id}/assessmentSummaryInfo")
+    public ResponseEntity loadAssessmentSummaryInfo(
+            @PathVariable("id") String id) throws TException {
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        Release release = releaseService.getReleaseForUserById(id, user);
+        final boolean INCLUDE_CONCLUDED_LICENSE = true;
+
+        Map<String, String> assessmentSummaryMap = new HashMap<>();
+        List<String> cliAttachmentIds = release.getAttachments().stream()
+                .filter(att -> att.getAttachmentType().equals(AttachmentType.COMPONENT_LICENSE_INFO_XML))
+                .map(Attachment::getAttachmentContentId).collect(Collectors.toList());
+        if (cliAttachmentIds.size() != 1) {
+            return new ResponseEntity<>("Number of CLI attachments must be 1", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        List<LicenseInfoParsingResult> licenseInfoResult = sw360LicenseInfoService.getLicenseInfoForAttachment(release,
+                user, cliAttachmentIds.get(0), INCLUDE_CONCLUDED_LICENSE);
+
+        if (CommonUtils.isNotEmpty(licenseInfoResult) && Objects.nonNull(licenseInfoResult.get(0).getLicenseInfo())) {
+            assessmentSummaryMap = licenseInfoResult.get(0).getLicenseInfo().getAssessmentSummary();
+        }
+
+        if (CommonUtils.isNullOrEmptyMap(assessmentSummaryMap)) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        return new ResponseEntity<>(assessmentSummaryMap, HttpStatus.OK);
+    }
+
     @Override
     public RepositoryLinksResource process(RepositoryLinksResource resource) {
         resource.add(linkTo(ReleaseController.class).slash("api" + RELEASES_URL).withRel("releases"));
         return resource;
     }
 
-    private HalResource<Release> createHalReleaseResource(Release release, boolean verbose) {
+    private HalResource<Release> createHalReleaseResource(Release release, boolean verbose) throws TException {
         HalResource<Release> halRelease = new HalResource<>(release);
         Link componentLink = linkTo(ReleaseController.class)
                 .slash("api" + ComponentController.COMPONENTS_URL + "/" + release.getComponentId()).withRel("component");
@@ -611,6 +944,12 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
                 restControllerHelper.addEmbeddedLicenses(halRelease, release.getMainLicenseIds());
                 release.setMainLicenseIds(null);
             }
+            Set<String> packageIds = release.getPackageIds();
+
+            if (packageIds != null) {
+                restControllerHelper.addEmbeddedPackages(halRelease, packageIds, packageService);
+                release.setPackageIds(null);
+            }
         }
         return halRelease;
     }
@@ -621,7 +960,16 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
                 .withRel("component");
         halRelease.add(componentLink);
         release.setComponentId(null);
+        Set<String> packageIds = release.getPackageIds();
 
+        if (packageIds != null) {
+            for (String id : release.getPackageIds()) {
+                Link packageLink = linkTo(ReleaseController.class)
+                        .slash("api" + PackageController.PACKAGES_URL + "/" + id).withRel("packages");
+                halRelease.add(packageLink);
+            }
+        }
+        release.setPackageIds(null);
         for (Entry<Release._Fields, String> field : mapOfFieldsTobeEmbedded.entrySet()) {
             restControllerHelper.addEmbeddedFields(field.getValue(), release.getFieldValue(field.getKey()), halRelease);
         }
@@ -634,7 +982,16 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.registerModule(sw360Module);
+
+        Set<Attachment> attachments = getAttachmentsFromRequest(reqBodyMap.get("attachments"), mapper);
+        if (null != reqBodyMap.get("attachments")) {
+            reqBodyMap.remove("attachments");
+        }
         Release release = mapper.convertValue(reqBodyMap, Release.class);
+        if (null != attachments) {
+            release.setAttachments(attachments);
+        }
+
         mapOfBackwardCompatible_Field_OldFieldNames_NewFieldNames.entrySet().stream().forEach(entry -> {
             Release._Fields field = entry.getKey();
             String oldFieldName = entry.getValue()[0];
@@ -645,6 +1002,24 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
         });
 
         return release;
+    }
+
+    private Set<Attachment> getAttachmentsFromRequest(Object attachmentData, ObjectMapper mapper) {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (null == attachmentData) {
+            return null;
+        }
+        Set<AttachmentDTO> attachmentDTOs = mapper.convertValue(attachmentData,
+                mapper.getTypeFactory().constructCollectionType(Set.class, AttachmentDTO.class));
+        return attachmentDTOs.stream()
+                .map(attachmentDTO -> {
+                    boolean isAttachmentExist = attachmentService.isAttachmentExist(attachmentDTO.getAttachmentContentId());
+                    if (!isAttachmentExist) {
+                        throw new ResourceNotFoundException("Attachment " + attachmentDTO.getAttachmentContentId() + " not found.");
+                    }
+                    return restControllerHelper.convertToAttachment(attachmentDTO, sw360User);
+                })
+                .collect(Collectors.toSet());
     }
 }
 
