@@ -428,6 +428,21 @@ public class RestControllerHelper<T> {
         }
     }
 
+    public Release convertToEmbeddedReleaseAttachments(Release release) {
+        Release embeddedRelease = new Release();
+        embeddedRelease.setId(release.getId());
+        embeddedRelease.setName(release.getName());
+        embeddedRelease.setVersion(release.getVersion());
+        embeddedRelease.setAttachments(release.getAttachments());
+        embeddedRelease.setType(null);
+        return embeddedRelease;
+    }
+
+    public void addEmbeddedProjectAttachmentUsage(HalResource halResource, List<EntityModel<Release>> releases, List<Map<String, Object>> attachmentUsageMap) {
+        halResource.addEmbeddedResource("sw360:release", releases);
+        halResource.addEmbeddedResource("sw360:attachmentUsages", attachmentUsageMap);
+    }
+
     public HalResource<Vendor> addEmbeddedVendor(String vendorFullName) {
         Vendor embeddedVendor = convertToEmbeddedVendor(vendorFullName);
         HalResource<Vendor> halVendor = new HalResource<>(embeddedVendor);
@@ -528,12 +543,10 @@ public class RestControllerHelper<T> {
     }
 
     public HalResource<Release> addEmbeddedReleaseLinks(Release release) {
-        final Release embeddedRelease = convertToEmbeddedLinkedRelease(release);
-	    final HalResource<Release> releaseResource = new HalResource<>(embeddedRelease);
-	    Link releaseLink = linkTo(ReleaseController.class)
-                .slash("api/releases/" + embeddedRelease.getId()).withSelfRel();
-	    releaseResource.add(releaseLink);
-
+        final HalResource<Release> releaseResource = new HalResource<>(release);
+        Link releaseLink = linkTo(ReleaseController.class)
+                .slash("api/releases/" + release.getId()).withSelfRel();
+        releaseResource.add(releaseLink);
         return releaseResource;
     }
 
@@ -707,6 +720,8 @@ public class RestControllerHelper<T> {
         embeddedProject.setVersion(project.getVersion());
         embeddedProject.setReleaseIdToUsage(project.getReleaseIdToUsage());
         embeddedProject.setLinkedProjects(project.getLinkedProjects());
+        embeddedProject.setEnableSvm(project.isEnableSvm());
+        embeddedProject.setEnableVulnerabilitiesDisplay(project.isEnableVulnerabilitiesDisplay());
         embeddedProject.setType(null);
         return embeddedProject;
     }
@@ -871,7 +886,10 @@ public class RestControllerHelper<T> {
     public Obligation convertToEmbeddedObligation(Obligation obligation) {
         Obligation embeddedObligation = new Obligation();
         embeddedObligation.setTitle(obligation.getTitle());
+        embeddedObligation.setObligationType(obligation.getObligationType());
         embeddedObligation.setId(obligation.getId());
+        embeddedObligation.setWhitelist(obligation.getWhitelist());
+        embeddedObligation.setText(obligation.getText());
         embeddedObligation.setType(null);
         return embeddedObligation;
     }
@@ -1311,5 +1329,27 @@ public class RestControllerHelper<T> {
             }
             addEmbeddedFields("sw360:cotsDetail", cotsDetailsHalResource, halResource);
         }
+    }
+
+    public void addEmbeddedProjectResponsible(HalResource<Project> halResource, String projectResponsible) {
+        User sw360User = getUserByEmail(projectResponsible);
+        if(sw360User!=null) {
+            addEmbeddedUser(halResource, sw360User, "projectResponsible");
+        }
+    }
+
+    public void addEmbeddedSecurityResponsibles (HalResource<Project> halResource, Set<String> securityResponsibles) {
+        for (String securityResponsible : securityResponsibles) {
+            User sw360User = getUserByEmail(securityResponsible);
+            if(sw360User!=null) {
+                addEmbeddedUser(halResource, sw360User, "securityResponsibles");
+            }
+        }
+    }
+
+    public void addEmbeddedClearingTeam(HalResource<Project> userHalResource, String clearingTeam, String resource) {
+        User sw360User = getUserByEmail(clearingTeam);
+        if(sw360User!=null)
+            addEmbeddedUser(userHalResource, sw360User, resource);
     }
 }
