@@ -9,6 +9,10 @@
   --%>
 <%@ page import="org.eclipse.sw360.portal.common.page.PortletReleasePage,org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType" %>
 <%@ page import="org.eclipse.sw360.portal.common.FossologyConnectionHelper" %>
+<%@ page import="org.eclipse.sw360.portal.common.PortalConstants" %>
+<%@ page import="javax.portlet.PortletRequest" %>
+<%@ page import="com.liferay.portal.kernel.portlet.PortletURLFactoryUtil" %>
+
 <portlet:resourceURL var="deleteReleaseAjaxURL">
     <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.DELETE_RELEASE%>'/>
 </portlet:resourceURL>
@@ -30,6 +34,9 @@
 <%@include file="/html/utils/includes/fossologyClearing.jspf"%>
 <%@include file="/html/components/includes/releases/linkProject.jspf"%>
 
+<jsp:useBean id="bulkReleaseDeleting" class="java.lang.Boolean" scope="request"/>
+<jsp:useBean id="isUserAdmin" class="java.lang.Boolean" scope="request"/>
+
 <%--for javascript library loading --%>
 <%@ include file="/html/utils/includes/requirejs.jspf" %>
 <script>
@@ -50,8 +57,18 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
         linkProject.openLinkDialog(data.releaseId, data.releaseName);
     });
     $('#releasesTable').delegate('.actions .delete', 'click', function(event) {
-        var data = $(event.currentTarget).data();
-        deleteRelease(data.releaseId, data.releaseName, data.linkedReleases, data.attachments);
+        <core_rt:if test="${!bulkReleaseDeleting or !isUserAdmin}">
+            var data = $(event.currentTarget).data();
+            deleteRelease(data.releaseId, data.releaseName, data.linkedReleases, data.attachments, data.linkedPackages);
+        </core_rt:if>
+        <core_rt:if test="${bulkReleaseDeleting and isUserAdmin}">
+            var releaseId = $(event.currentTarget).data().releaseId;
+            var baseUrl = '<%= PortletURLFactoryUtil.create(request, portletDisplay.getId(), themeDisplay.getPlid(), PortletRequest.RENDER_PHASE) %>',
+            portletURL = Liferay.PortletURL.createURL(baseUrl)
+                                            .setParameter('<%=PortalConstants.PAGENAME%>', '<%=PortalConstants.PAGENAME_DELETE_BULK_RELEASE_PREVIEW%>')
+                                            .setParameter('<%=PortalConstants.RELEASE_ID%>', releaseId);
+            window.location = portletURL.toString();
+        </core_rt:if>
     });
 
     function createClearingTable() {
@@ -69,7 +86,8 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
                 "5": {
                     name: '<sw360:ReleaseName release="${release}" />',
                     linkedReleases: ${release.releaseIdToRelationshipSize},
-                    attachments: ${release.attachmentsSize}
+                    attachments: ${release.attachmentsSize},
+                    linkedPackages: ${release.packageIdsSize}
                 }
             });
         </core_rt:forEach>
@@ -148,7 +166,8 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
                     'data-release-id': row.DT_RowId,
                     'data-release-name': row[5].name,
                     'data-linked-releases': row[5].linkedReleases,
-                    'data-attachments': row[5].attachments
+                    'data-attachments': row[5].attachments,
+                    'data-linked-packages': row[5].linkedPackages,
                 });
 
             $fossologyAction.append($('<use href="<%=request.getContextPath()%>/images/icons.svg#fossology"/>'));
@@ -162,7 +181,7 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
         return table;
     }
 
-    function deleteRelease(id, name, linkedReleasesSize, attachmentsSize) {
+    function deleteRelease(id, name, linkedReleasesSize, attachmentsSize, linkedPackagesSize) {
         var $dialog;
 
         function deleteReleaseInternal(callback) {
@@ -194,12 +213,20 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
                 }
             });
         }
-
-        $dialog = dialog.confirm(
+        if (linkedPackagesSize > 0) {
+            dialog.warn(
+                '<liferay-ui:message key="the.release.x.cannot.be.deleted.since.it.contains.y.packages.please.delete.or.unlink.the.linked.packages.first" />',
+                {
+                    name: name,
+                    packageCount: linkedPackagesSize
+                }
+            );
+        } else {
+            $dialog = dialog.confirm(
             'danger',
             'question-circle',
             '<liferay-ui:message key="delete.release" />?',
-                '<p><liferay-ui:message key="do.you.really.want.to.delete.the.release.x" /></p>?' +
+                '<p><liferay-ui:message key="do.you.really.want.to.delete.the.release.x" />?</p>' +
                 '<div data-hide="hasNoDependencies">' +
                     '<p>' +
                         '<liferay-ui:message key="this.release.x.contains" />' +
@@ -227,7 +254,8 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
             }, function(submit, callback) {
                 deleteReleaseInternal(callback);
             }
-        );
+            );
+        }
     }
 
     // helper functions
