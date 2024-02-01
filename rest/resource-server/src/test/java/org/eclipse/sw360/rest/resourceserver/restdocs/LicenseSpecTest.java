@@ -20,6 +20,7 @@ import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.Quadratic;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.rest.resourceserver.report.SW360ReportService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,6 +35,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -45,6 +47,8 @@ import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.li
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.patch;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,7 +68,10 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
     @MockBean
     private Sw360LicenseService licenseServiceMock;
 
-    private License license, license3;
+    @MockBean
+    private SW360ReportService sw360ReportServiceMock;
+
+    private License license, license2, license3;
     private Obligation obligation1, obligation2;
     private RequestSummary requestSummary = new RequestSummary();
 
@@ -84,7 +91,7 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         license.setNote("License's Note");
         license.setExternalLicenseLink("https://spdx.org/licenses/Apache-2.0.html");
 
-        License license2 = new License();
+        license2 = new License();
         license2.setId("MIT");
         license2.setFullname("The MIT License (MIT)");
         license2.setShortname("MIT");
@@ -111,6 +118,7 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         given(this.licenseServiceMock.getLicenses()).willReturn(licenseList);
         given(this.licenseServiceMock.getLicenseById(eq(license.getId()))).willReturn(license);
         given(this.licenseServiceMock.createLicense(any(), any())).willReturn(license3);
+        given(this.licenseServiceMock.updateLicense(any(),any())).willReturn(RequestStatus.SUCCESS);
         Mockito.doNothing().when(licenseServiceMock).deleteLicenseById(any(), any());
         Mockito.doNothing().when(licenseServiceMock).deleteAllLicenseInfo(any());
         Mockito.doNothing().when(licenseServiceMock).importSpdxInformation(any());
@@ -118,6 +126,7 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         Mockito.doNothing().when(licenseServiceMock).uploadLicense(any(), any(), anyBoolean(), anyBoolean());
         given(this.licenseServiceMock.importOsadlInformation(any())).willReturn(requestSummary);
         given(this.licenseServiceMock.addLicenseType(any(),any() , any())).willReturn(RequestStatus.SUCCESS);
+        given(this.sw360ReportServiceMock.getLicenseBuffer()).willReturn(ByteBuffer.allocate(10000));
         obligation1 = new Obligation();
         obligation1.setId("0001");
         obligation1.setTitle("Obligation 1");
@@ -131,6 +140,12 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         obligation2.setText("This is text of Obligation 2");
         obligation2.setObligationType(ObligationType.OBLIGATION);
         obligation2.setObligationLevel(ObligationLevel.LICENSE_OBLIGATION);
+
+        List<Obligation> obligations = Arrays.asList(obligation1, obligation2);
+        Set<String> obligationIds = new HashSet<>(Arrays.asList(obligation1.getId(), obligation2.getId()));
+        license2.setObligationDatabaseIds(obligationIds);
+        license2.setObligations(obligations);
+        given(this.licenseServiceMock.getObligationsByLicenseId(any())).willReturn(obligations);
     }
 
     @Test
@@ -189,6 +204,25 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_obligations_by_license() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/licenses/"+  license2.getId()+ "/obligations")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:obligations[]title").description("The title of the obligation"),
+                                subsectionWithPath("_embedded.sw360:obligations[]obligationType").description("The type of the obligation"),
+                                subsectionWithPath("_embedded.sw360:obligations").description("An array of <<resources-obligations, Obligations resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
+    }
+
+    @Test
     public void should_document_create_license() throws Exception {
         Map<String, String> licenseRequestBody = new HashMap<>();
         licenseRequestBody.put("fullName", "Apache 3.0");
@@ -211,6 +245,35 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("OSIApproved").description("The OSI aprroved information, possible values are: " + Arrays.asList(Quadratic.values())),
                                 fieldWithPath("FSFLibre").description("The FSF libre information, possible values are: " + Arrays.asList(Quadratic.values())),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
+    }
+
+    @Test
+    public void should_document_update_license() throws Exception {
+        Map<String, String> licenseRequestBody = new HashMap<>();
+        licenseRequestBody.put("fullName", "Apache License 4.0");
+        licenseRequestBody.put("note", "Apache License");
+
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/licenses/" + license.getId())
+                        .contentType(MediaTypes.HAL_JSON)
+                        .content(this.objectMapper.writeValueAsString(licenseRequestBody))
+                        .header("Authorization", "Bearer" + accessToken)
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        responseFields(
+                                fieldWithPath("fullName").description("The full name of the license"),
+                                fieldWithPath("shortName").description("The short name of the license, optional"),
+                                subsectionWithPath("externalIds").description("When releases are imported from other tools, the external ids can be stored here"),
+                                fieldWithPath("externalLicenseLink").description("The external license link of the license"),
+                                subsectionWithPath("additionalData").description("A place to store additional data used by external tools"),
+                                fieldWithPath("text").description("The license's original text"),
+                                fieldWithPath("checked").description("The information, whether the license is already checked, optional and defaults to true"),
+                                subsectionWithPath("OSIApproved").description("The OSI aprroved information, possible values are: " + Arrays.asList(Quadratic.values())),
+                                fieldWithPath("FSFLibre").description("The FSF libre information, possible values are: " + Arrays.asList(Quadratic.values())),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("note").description("The license's note")
                         )));
     }
 
@@ -315,5 +378,19 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
                 .param("licenseType", "wer")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk()).andDo(this.documentationHandler.document());
+    }
+
+    @Test
+    public void should_document_get_license_report() throws Exception{
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/reports")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .param("module", "licenses")
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                    requestParameters(
+                            parameterWithName("module").description("module represent the licenses. Possible values are `<licenses>`")
+                    )));
     }
 }

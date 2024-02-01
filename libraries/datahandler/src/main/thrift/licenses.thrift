@@ -216,6 +216,16 @@ service LicenseService {
     list<License> getLicenseSummaryForExport();
 
     /**
+     * download license for api
+     **/
+    binary downloadExcel(1:string token) throws (1: SW360Exception exp);
+
+    /**
+     * get report data stream
+     **/
+    binary getLicenseReportDataStream() throws (1: SW360Exception exp);
+
+    /**
      * get a list of all full license documents filled with obligations, risks and license types,
      * obligations and risks themselves are not filled
      **/
@@ -271,6 +281,11 @@ service LicenseService {
      * get filled obligations with id in ids
      **/
     list<Obligation> getObligationsByIds( 1: list<string> ids);
+
+    /**
+     * get obligations with license id
+     **/
+    list<Obligation> getObligationsByLicenseId( 1: string id);
 
     LicenseType getLicenseTypeById( 1: string id);
 
