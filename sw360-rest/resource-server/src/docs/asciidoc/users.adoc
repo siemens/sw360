@@ -19,6 +19,9 @@ The Users resource is used to get and list users.
 
 A `GET` request will list all of the service's users.
 
+===== Request parameter
+include::{snippets}/should_document_get_users/request-parameters.adoc[]
+
 ===== Response structure
 include::{snippets}/should_document_get_users/response-fields.adoc[]
 
@@ -66,3 +69,34 @@ include::{snippets}/should_document_create_user/curl-request.adoc[]
 
 ===== Example response
 include::{snippets}/should_document_create_user/http-response.adoc[]
+
+[[resources-user-get-profile]]
+==== Get requesting user's profile
+
+A `GET` request will get requesting user's profile.
+
+===== Response structure
+include::{snippets}/should_document_get_user_profile/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_user_profile/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_user_profile/http-response.adoc[]
+
+[[resources-user-update-profile]]
+==== Update requesting user's profile
+
+A `PATCH` request will update requesting user's profile.
+
+===== Request structure
+include::{snippets}/should_document_update_user_profile/request-fields.adoc[]
+
+===== Response structure
+include::{snippets}/should_document_update_user_profile/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_update_user_profile/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_update_user_profile/http-response.adoc[]

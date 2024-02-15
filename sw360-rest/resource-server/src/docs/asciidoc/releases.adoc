@@ -50,6 +50,23 @@ include::{snippets}/should_document_get_release_all_details/http-response.adoc[]
 ===== Links
 include::{snippets}/should_document_get_release_all_details/links.adoc[]
 
+[[resources-releases-list-lucene-search]]
+==== Listing releases by lucene search
+
+A `GET` request will list all of the service's releases by lucene search.
+
+===== Response structure
+include::{snippets}/should_document_get_releases_by_lucene_search/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_releases_by_lucene_search/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_releases_by_lucene_search/http-response.adoc[]
+
+===== Links
+include::{snippets}/should_document_get_releases_by_lucene_search/links.adoc[]
+
 
 [[resources-recent-releases-list]]
 ==== Listing recent releases
@@ -240,6 +257,20 @@ include::{snippets}/should_document_get_release_attachment_bundle/curl-request.a
 ===== Example response
 include::{snippets}/should_document_get_release_attachment_bundle/http-response.adoc[]
 
+[[resources-release-external-id]]
+==== Get releases by external IDs
+
+A `GET` request will allow you to get releases by external IDs.
+Put the external ID as query parameter and its value as parameter's value.
+
+===== Example request
+
+include::{snippets}/should_document_get_releases_by_externalIds/curl-request.adoc[]
+
+===== Example response
+
+include::{snippets}/should_document_get_releases_by_externalIds/http-response.adoc[]
+
 [[resources-release-attachment-delete]]
 ==== Delete attachments
 
@@ -293,6 +324,20 @@ include::{snippets}/should_document_check_fossology_process_status/curl-request.
 
 ===== Example response
 include::{snippets}/should_document_check_fossology_process_status/http-response.adoc[]
+
+[[resources-trigger_reload_fossology_report-get]]
+==== Re-generate fossology report
+
+A `GET` request will allow you to Re-generate fossology report
+
+===== Response structure
+include::{snippets}/should_document_trigger_reload_fossology_report/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_trigger_reload_fossology_report/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_trigger_reload_fossology_report/http-response.adoc[]
 
 [[resources-release-get]]
 ==== Get a single release
@@ -374,6 +419,34 @@ include::{snippets}/should_document_link_releases_to_release/curl-request.adoc[]
 ===== Example response
 include::{snippets}/should_document_link_releases_to_release/http-response.adoc[]
 
+[[resources-release-link-packages]]
+==== Link packages to the release
+
+A `PATCH` request to add/link packages to the release. Please pass a set of package ids to be linked as request body.
+
+===== Request structure
+Pass a set of package ids to be linked as request body.
+
+===== Example request 1
+include::{snippets}/should_document_link_packages/curl-request.adoc[]
+
+===== Example response 1
+include::{snippets}/should_document_link_packages/http-response.adoc[]
+
+[[resources-release-unlink-packages]]
+==== Unlink packages from the release
+
+A `PATCH` request to remove/unlink packages from a release. Please pass a set of package ids to be unlinked as request body.
+
+===== Request structure
+Pass a set of package ids to be unlinked as request body.
+
+===== Example request
+include::{snippets}/should_document_unlink_packages/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_unlink_packages/http-response.adoc[]
+
 
 [[resources-release-usedby-list]]
 ==== Resources using the release
@@ -443,3 +516,45 @@ include::{snippets}/should_document_update_release_vulnerabilities/http-response
 
 ===== Links
 include::{snippets}/should_document_update_release_vulnerabilities/links.adoc[]
+
+[[resources-write-spdx-license-info-into-release]]
+==== Write SPDX license info into release
+
+A `POST` request will write SPDX license info into release
+
+===== Request structure
+include::{snippets}/should_document_write_spdx_licenses_info_into_release/request-fields.adoc[]
+
+===== Response structure
+include::{snippets}/should_document_write_spdx_licenses_info_into_release/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_write_spdx_licenses_info_into_release/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_write_spdx_licenses_info_into_release/http-response.adoc[]
+
+[[resources-load-SPDX-license-info-from-attachment-of-release]]
+==== Get SPDX License Info from attachment of release
+
+A `GET` request will retrieve SPDX License Information from the attachment of the release.
+
+===== Example request
+include::{snippets}/should_document_load_spdx_licenses_info_from_isr/curl-request.adoc[]
+
+===== Example response for Initial Scan Report (ISR) type
+include::{snippets}/should_document_load_spdx_licenses_info_from_isr/http-response.adoc[]
+
+===== Example response for Component license information (CLX or CLI) type
+include::{snippets}/should_document_load_spdx_licenses_info_from_clx_or_cli/http-response.adoc[]
+
+[[resources-load-assessment-summary-info-of-release]]
+==== Get assessment summary info of release
+
+A `GET` request will get assessment summary info of release (Have one CLI file only)
+
+===== Example request
+include::{snippets}/should_document_load_release_assessment_summary_information/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_load_release_assessment_summary_information/http-response.adoc[]

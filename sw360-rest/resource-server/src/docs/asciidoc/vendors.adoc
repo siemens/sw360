@@ -19,6 +19,9 @@ The Vendors resource is used to create and list vendors.
 
 A `GET` request will list all of the service's vendors.
 
+===== Request parameter
+include::{snippets}/should_document_get_vendors/request-parameters.adoc[]
+
 ===== Response structure
 include::{snippets}/should_document_get_vendors/response-fields.adoc[]
 
@@ -66,3 +69,14 @@ include::{snippets}/should_document_create_vendor/http-response.adoc[]
 
 ===== Links
 include::{snippets}/should_document_create_vendor/links.adoc[]
+
+[[resources-vendor-export]]
+==== Export vendor list
+
+A `GET` request will export the vendor list.
+
+===== Example request
+include::{snippets}/should_document_get_export_vendor/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_export_vendor/http-response.adoc[]

@@ -12,6 +12,13 @@
  */
 package org.eclipse.sw360.rest.resourceserver.moderationrequest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.SchemaProperty;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
@@ -20,6 +27,7 @@ import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
+import org.eclipse.sw360.datahandler.thrift.ModerationState;
 import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
@@ -31,6 +39,7 @@ import org.eclipse.sw360.rest.resourceserver.component.Sw360ComponentService;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
+import org.eclipse.sw360.rest.resourceserver.release.ReleaseController;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,26 +48,25 @@ import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.Link;
+import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
+import java.util.*;
 
+import static org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService.isOpenModerationRequest;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RestController
+@SecurityRequirement(name = "tokenAuth")
 public class ModerationRequestController implements RepresentationModelProcessor<RepositoryLinksResource> {
 
     public static final String MODERATION_REQUEST_URL = "/moderationrequest";
@@ -81,12 +89,17 @@ public class ModerationRequestController implements RepresentationModelProcessor
     @NonNull
     private final com.fasterxml.jackson.databind.Module sw360Module;
 
-
+    @Operation(
+            summary = "List all of the service's moderation requests.",
+            description = "List all of the service's moderation requests.",
+            tags = {"Moderation Requests"}
+    )
     @RequestMapping(value = MODERATION_REQUEST_URL, method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel> getModerationRequests(
+    public ResponseEntity<CollectionModel<ModerationRequest>> getModerationRequests(
             Pageable pageable, HttpServletRequest request,
-            @RequestParam(value = "allDetails", required = false) boolean allDetails)
-            throws TException, ResourceClassNotFoundException, PaginationParameterException, URISyntaxException {
+            @Parameter(description = "Fetch all details of the moderation request")
+            @RequestParam(value = "allDetails", required = false) boolean allDetails
+    ) throws TException, ResourceClassNotFoundException, URISyntaxException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         List<ModerationRequest> moderationRequests = sw360ModerationRequestService.getRequestsByModerator(sw360User, pageable);
         int totalCount = (int) sw360ModerationRequestService.getTotalCountOfRequests(sw360User);
@@ -96,8 +109,8 @@ public class ModerationRequestController implements RepresentationModelProcessor
         List<EntityModel<ModerationRequest>> moderationRequestResources = new ArrayList<>();
         paginationResult.getResources().forEach(m -> addModerationRequest(m, allDetails, moderationRequestResources));
 
-        CollectionModel resources;
-        if (moderationRequestResources.size() == 0) {
+        CollectionModel<ModerationRequest> resources;
+        if (moderationRequestResources.isEmpty()) {
             resources = restControllerHelper.emptyPageResource(ModerationRequest.class, paginationResult);
         } else {
             resources = restControllerHelper.generatePagesResource(paginationResult, moderationRequestResources);
@@ -107,9 +120,16 @@ public class ModerationRequestController implements RepresentationModelProcessor
         return new ResponseEntity<>(resources, status);
     }
 
+    @Operation(
+            summary = "Get a single moderation request.",
+            description = "Get a single moderation request by id.",
+            tags = {"Moderation Requests"}
+    )
     @RequestMapping(value = MODERATION_REQUEST_URL + "/{id}", method = RequestMethod.GET)
-    public ResponseEntity<HalResource<ModerationRequest>> getModerationRequestById(@PathVariable String id)
-            throws TException {
+    public ResponseEntity<HalResource<ModerationRequest>> getModerationRequestById(
+            @Parameter(description = "The id of the moderation request to be retrieved.")
+            @PathVariable String id
+    ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
 
         ModerationRequest moderationRequest = sw360ModerationRequestService.getModerationRequestById(id);
@@ -119,17 +139,27 @@ public class ModerationRequestController implements RepresentationModelProcessor
         return new ResponseEntity<>(halModerationRequest, status);
     }
 
+    @Operation(
+            summary = "Get moderation based on state.",
+            description = "List all the ModerationRequest visible to the user based on the state.",
+            tags = {"Moderation Requests"}
+    )
     @RequestMapping(value = MODERATION_REQUEST_URL + "/byState", method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel> getModerationRequestsByState(
+    public ResponseEntity<CollectionModel<ModerationRequest>> getModerationRequestsByState(
             Pageable pageable, HttpServletRequest request,
+            @Parameter(
+                    description = "The moderation request state of the request.",
+                    schema = @Schema(allowableValues = {"open", "closed"})
+            )
             @RequestParam(value = "state", defaultValue = "open", required = true) String state,
-            @RequestParam(value = "allDetails", required = false) boolean allDetails)
-            throws TException, URISyntaxException, ResourceClassNotFoundException {
+            @Parameter(description = "Fetch all details of the moderation request.")
+            @RequestParam(value = "allDetails", required = false) boolean allDetails
+    ) throws TException, URISyntaxException, ResourceClassNotFoundException {
         List<String> stateOptions = new ArrayList<>();
         stateOptions.add("open");
         stateOptions.add("closed");
         if (!stateOptions.contains(state)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST,
                     String.format("Invalid ModerationRequest state '%s', possible values are: %s", state, stateOptions));
         }
 
@@ -151,8 +181,8 @@ public class ModerationRequestController implements RepresentationModelProcessor
         List<EntityModel<ModerationRequest>> moderationRequestResources = new ArrayList<>();
         paginationResult.getResources().forEach(m -> addModerationRequest(m, allDetails, moderationRequestResources));
 
-        CollectionModel resources;
-        if (moderationRequestResources.size() == 0) {
+        CollectionModel<ModerationRequest> resources;
+        if (moderationRequestResources.isEmpty()) {
             resources = restControllerHelper.emptyPageResource(ModerationRequest.class, paginationResult);
         } else {
             resources = restControllerHelper.generatePagesResource(paginationResult, moderationRequestResources);
@@ -193,6 +223,75 @@ public class ModerationRequestController implements RepresentationModelProcessor
         restControllerHelper.addEmbeddedUser(halModerationRequest, requestingUser, "requestingUser");
 
         return halModerationRequest;
+    }
+
+    @Operation(
+            summary = "Action on moderation request.",
+            description = "Accept or reject the moderation request, save the comment by the reviewer and send email " +
+                    "notifications.",
+            tags = {"Moderation Requests"},
+            responses = {@ApiResponse(
+                    responseCode = "200",
+                    content = {@Content(mediaType = MediaTypes.HAL_JSON_VALUE,
+                            schemaProperties = {@SchemaProperty(
+                                    name = "status",
+                                    schema = @Schema(implementation = ModerationState.class)
+                            )}
+                    )}
+            )}
+    )
+    @RequestMapping(value = MODERATION_REQUEST_URL + "/{id}", method = RequestMethod.PATCH)
+    public ResponseEntity<HalResource<Map<String, String>>> updateModerationRequestById(
+            @Parameter(description = "The id of the moderation request to be updated.")
+            @PathVariable String id,
+            @Parameter(description = "Action to be applied.")
+            @RequestBody ModerationPatch patch
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+
+        ModerationRequest moderationRequest = sw360ModerationRequestService.getModerationRequestById(id);
+
+        if (!isOpenModerationRequest(moderationRequest)) {
+            throw new HttpClientErrorException(HttpStatus.METHOD_NOT_ALLOWED,
+                    "Moderation request is already closed. Cannot perform operation.");
+        }
+
+        if (!moderationRequest.getModerators().contains(sw360User.getEmail())) {
+            throw new HttpClientErrorException(HttpStatus.BAD_REQUEST,
+                    "Unable to perform operation, user not a moderator.");
+        }
+
+        ModerationState moderationStatus;
+        switch (patch.getAction()) {
+            case ACCEPT:
+                moderationStatus = sw360ModerationRequestService.acceptRequest(moderationRequest, patch.getComment(),
+                        sw360User);
+                break;
+            case REJECT:
+                moderationStatus = sw360ModerationRequestService.rejectRequest(moderationRequest, patch.getComment(),
+                        sw360User);
+                break;
+            case UNASSIGN:
+                moderationStatus = sw360ModerationRequestService.removeMeFromModerators(moderationRequest, sw360User);
+                break;
+            case ASSIGN:
+                moderationStatus = sw360ModerationRequestService.assignRequest(moderationRequest, sw360User);
+                break;
+            default:
+                throw new HttpClientErrorException(HttpStatus.BAD_REQUEST,
+                        "Action should be `" +
+                                Arrays.asList(ModerationPatch.ModerationAction.values()) +
+                                "`, '" + patch.getAction() + "' received.");
+        }
+        String requestResponse = moderationStatus.toString();
+        Map<String, String> responseMap = new HashMap<>();
+        responseMap.put("status", requestResponse);
+        HalResource<Map<String, String>> responseResource = new HalResource<>(responseMap);
+        Link requestLink = linkTo(ReleaseController.class).slash("api" + MODERATION_REQUEST_URL).slash(id)
+                .withSelfRel();
+        responseResource.add(requestLink);
+
+        return new ResponseEntity<>(responseResource, HttpStatus.ACCEPTED);
     }
 
     @Override

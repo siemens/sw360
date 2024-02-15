@@ -9,6 +9,7 @@
  */
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
+import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
@@ -20,6 +21,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +40,8 @@ import static org.springframework.restdocs.payload.PayloadDocumentation.response
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.formParameters;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 public class VendorSpecTest extends TestRestDocsSpecBase {
@@ -54,7 +58,7 @@ public class VendorSpecTest extends TestRestDocsSpecBase {
     private Vendor vendor;
 
     @Before
-    public void before() {
+    public void before() throws TException{
         vendor = new Vendor();
         vendor.setId("876876776");
         vendor.setFullname("Google Inc.");
@@ -73,6 +77,7 @@ public class VendorSpecTest extends TestRestDocsSpecBase {
 
         given(this.vendorServiceMock.getVendors()).willReturn(vendorList);
         given(this.vendorServiceMock.getVendorById(eq(vendor.getId()))).willReturn(vendor);
+        given(this.vendorServiceMock.exportExcel()).willReturn(ByteBuffer.allocate(10000));
 
         when(this.vendorServiceMock.createVendor(any())).then(invocation ->
         new Vendor ("Apache", "Apache Software Foundation", "https://www.apache.org/").setId("987567468"));
@@ -83,16 +88,31 @@ public class VendorSpecTest extends TestRestDocsSpecBase {
         String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/vendors")
                 .header("Authorization", "Bearer " + accessToken)
+                .param("page", "0")
+                .param("page_entries", "5")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
+                        formParameters(
+                                parameterWithName("page").description("Page of vendors"),
+                                parameterWithName("page_entries").description("Amount of vendors per page")
+                        ),
                         links(
-                                linkWithRel("curies").description("Curies are used for online documentation")
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:vendors.[]fullName").description("The full name of the vendor"),
+                                subsectionWithPath("_embedded.sw360:vendors.[]shortName").description("The Short Name of the vendor"),
+                                subsectionWithPath("_embedded.sw360:vendors.[]url").description("The Url of the vendor"),
                                 subsectionWithPath("_embedded.sw360:vendors").description("An array of <<resources-vendors, Vendors resources>>"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of vendors per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing vendors"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
                         )));
     }
 
@@ -143,5 +163,15 @@ public class VendorSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("url").description("The vendor's home page URL"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                         )));
+    }
+
+    @Test
+    public void should_document_get_export_vendor() throws Exception{
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        mockMvc.perform(get("/api/vendors/exportVendorDetails")
+                .header("Authorization", "Bearer " + accessToken)
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document());
     }
 }

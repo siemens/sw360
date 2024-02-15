@@ -12,6 +12,9 @@
 server:
   port: 8091
   
+  #servlet:
+  #  context-path: /resource/api
+  
 #eureka:
 #  client:
 #    serviceUrl:
@@ -82,11 +85,20 @@ sw360:
   couchdb-url: ${SW360_COUCHDB_URL:http://localhost:5984}
   cors:
     allowed-origin: ${SW360_CORS_ALLOWED_ORIGIN:#{null}}
-  foss:
-    thrift-server-url: ${SW360_THRIFT_SERVER_URL:http://localhost:8765}
-    
+
 blacklist:
-  sw360:  
+  sw360:
     rest:
       api:
-        endpoints: /resource/api/vulnerabilities/{vulid}/release/{rid}:DELETE
+        endpoints: /resource/api/users:POST
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  show-oauth2-endpoints: true
+  swagger-ui:
+    enabled: true
+    path: /api/swagger-ui
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/hal+json

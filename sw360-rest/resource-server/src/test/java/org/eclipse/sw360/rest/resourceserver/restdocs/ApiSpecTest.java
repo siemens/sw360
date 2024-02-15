@@ -166,9 +166,11 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                 .andDo(this.documentationHandler.document(
                         links(
                                 linkWithRel("sw360:users").description("The <<resources-users,Users resource>>"),
+                                linkWithRel("sw360:reports").description("The <<resources-reports,Reports resource>>"),
                                 linkWithRel("sw360:projects").description("The <<resources-projects,Projects resource>>"),
                                 linkWithRel("sw360:components").description("The <<resources-components,Components resource>>"),
                                 linkWithRel("sw360:releases").description("The <<resources-releases,Releases resource>>"),
+                                linkWithRel("sw360:packages").description("The <<resources-packages,Packages resource>>"),
                                 linkWithRel("sw360:attachments").description("The <<resources-attachments,Attachments resource>>"),
                                 linkWithRel("sw360:vendors").description("The <<resources-vendors,Vendors resource>>"),
                                 linkWithRel("sw360:licenses").description("The <<resources-licenses,Licenses resource>>"),
@@ -180,6 +182,8 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("sw360:clearingRequests").description("The <<resources-clearingRequest,ClearingRequest resource>>"),
                                 linkWithRel("sw360:obligations").description("The <<resources-obligations,Obligation resource>>"),
                                 linkWithRel("sw360:moderationRequests").description("The <<resources-moderationRequest,ModerationRequest resource>>"),
+                                linkWithRel("sw360:fossology").description("The <<resources-fossology,Fossology resource>>"),
+                                linkWithRel("sw360:schedule").description("The <<resources-schedule,Schedule resource>>"),
                                 linkWithRel("curies").description("The Curies for documentation"),
                                 linkWithRel("profile").description("The profiles of the REST resources")
                         ),
