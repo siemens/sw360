@@ -68,6 +68,10 @@ blacklist:
       api:
         endpoints: /resource/api/users:POST
 
+authorization:
+  server:
+    url: http://localhost:8080/authorization/
+
 springdoc:
   api-docs:
     enabled: true

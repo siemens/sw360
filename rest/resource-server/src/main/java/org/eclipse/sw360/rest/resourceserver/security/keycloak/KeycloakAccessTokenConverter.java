@@ -10,25 +10,26 @@
 
 package org.eclipse.sw360.rest.resourceserver.security.keycloak;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.resourceserver.core.OauthClientValidation;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.JwtAccessTokenConverterConfigurer;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.ResourceServerProperties;
 import org.springframework.context.annotation.Profile;
-import org.springframework.security.oauth2.common.exceptions.OAuth2Exception;
+import org.springframework.security.oauth2.common.exceptions.UnauthorizedClientException;
 import org.springframework.security.oauth2.common.exceptions.UnauthorizedUserException;
 import org.springframework.security.oauth2.provider.OAuth2Authentication;
 import org.springframework.security.oauth2.provider.token.DefaultAccessTokenConverter;
 import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenConverter;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Map;
 
 @Profile("!SECURITY_MOCK")
 @Component
@@ -45,6 +46,9 @@ public class KeycloakAccessTokenConverter extends DefaultAccessTokenConverter im
 
     @Autowired
     private Sw360UserService userService;
+
+    @Autowired
+    private OauthClientValidation oauthClientValidation;
 
     @Override
     public void configure(JwtAccessTokenConverter converter) {
@@ -96,6 +100,13 @@ public class KeycloakAccessTokenConverter extends DefaultAccessTokenConverter im
             if (sw360User == null || sw360User.isDeactivated()) {
                 throw new UnauthorizedUserException("User is deactivated");
             }
+        }
+
+        Object clientId = tokenMap.get("client_id");
+        Map<String, String> status = oauthClientValidation.getClientById(clientId.toString());
+
+        if(status != null && status.get("status").equals("inactive")) {
+            throw new UnauthorizedClientException("Client is disabled. Please request for new one, if required");
         }
 
         return super.extractAuthentication(jwtToken);

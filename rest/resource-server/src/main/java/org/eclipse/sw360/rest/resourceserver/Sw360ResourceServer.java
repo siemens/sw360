@@ -39,6 +39,7 @@ import org.springframework.hateoas.UriTemplate;
 import org.springframework.hateoas.mediatype.hal.CurieProvider;
 import org.springframework.hateoas.mediatype.hal.DefaultCurieProvider;
 import org.springframework.web.filter.ForwardedHeaderFilter;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 
 import java.util.*;
@@ -106,6 +107,11 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     @Bean
     public CurieProvider curieProvider() {
         return new DefaultCurieProvider(CURIE_NAMESPACE, UriTemplate.of("/docs/{rel}.html"));
+    }
+
+    @Bean
+    public WebClient getWebClientBuilder() {
+        return WebClient.builder().build();
     }
 
     @Bean

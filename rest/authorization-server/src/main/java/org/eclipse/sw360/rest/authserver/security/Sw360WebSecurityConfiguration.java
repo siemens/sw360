@@ -43,6 +43,7 @@ public class Sw360WebSecurityConfiguration extends WebSecurityConfigurerAdapter 
                 .authorizeRequests()
                 .antMatchers(HttpMethod.OPTIONS)
                     .permitAll() // some JS frameworks make HTTP OPTIONS requests
+                    .antMatchers("/client-management/{clientId}").permitAll()
                 .anyRequest()
                     .authenticated()
                 .and()
