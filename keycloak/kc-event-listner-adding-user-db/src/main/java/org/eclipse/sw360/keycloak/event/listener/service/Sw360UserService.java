@@ -24,62 +24,62 @@ import org.eclipse.sw360.datahandler.thrift.users.UserService;
 import org.jboss.logging.Logger;
 
 public class Sw360UserService {
-	private String thriftServerUrl = "http://localhost:8080";
-	private static final Logger logger = Logger.getLogger(Sw360UserService.class);
+    private String thriftServerUrl = "http://localhost:8080";
+    private static final Logger logger = Logger.getLogger(Sw360UserService.class);
 
-	public List<User> getAllUsers() {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getAllUsers();
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public List<User> getAllUsers() {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getAllUsers();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-	public User getUserByEmail(String email) {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getByEmail(email);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public User getUserByEmail(String email) {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getByEmail(email);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-	public User getUserByEmailOrExternalId(String userIdentifier) {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getByEmailOrExternalId(userIdentifier, userIdentifier);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public User getUserByEmailOrExternalId(String userIdentifier) {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getByEmailOrExternalId(userIdentifier, userIdentifier);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-	public User getUser(String id) {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getUser(id);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public User getUser(String id) {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getUser(id);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-	public User getUserByApiToken(String token) {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getByApiToken(token);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public User getUserByApiToken(String token) {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getByApiToken(token);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-	public User getUserFromClientId(String clientId) {
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			return sw360UserClient.getByOidcClientId(clientId);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
+    public User getUserFromClientId(String clientId) {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getByOidcClientId(clientId);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 //    public User getUserFromClientCredentialClientId(String clientId) {
 //        try {
@@ -90,33 +90,33 @@ public class Sw360UserService {
 //        }
 //    }
 
-	public User addUser(User user) {
-		logger.info("Sw360UserService::addUser()::-->" + user);
-		try {
-			UserService.Iface sw360UserClient = getThriftUserClient();
-			user.setUserGroup(UserGroup.USER);
-			AddDocumentRequestSummary documentRequestSummary = sw360UserClient.addUser(user);
-			logger.info("Sw360UserService::addUser()::documentSummarry-->" + documentRequestSummary);
-			if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.SUCCESS) {
-				user.setId(documentRequestSummary.getId());
-				return user;
-			} else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.DUPLICATE) {
-			} else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.INVALID_INPUT) {
-			}
-		} catch (Exception e) {
-		}
-		return null;
-	}
+    public User addUser(User user) {
+        logger.info("Sw360UserService::addUser()::-->" + user);
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            user.setUserGroup(UserGroup.USER);
+            AddDocumentRequestSummary documentRequestSummary = sw360UserClient.addUser(user);
+            logger.info("Sw360UserService::addUser()::documentSummarry-->" + documentRequestSummary);
+            if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.SUCCESS) {
+                user.setId(documentRequestSummary.getId());
+                return user;
+            } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.DUPLICATE) {
+            } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.INVALID_INPUT) {
+            }
+        } catch (Exception e) {
+        }
+        return null;
+    }
 
-	public RequestStatus updateUser(User user) throws Exception {
-		UserService.Iface sw360UserClient = getThriftUserClient();
-		RequestStatus requestStatus = sw360UserClient.updateUser(user);
-		return requestStatus;
-	}
+    public RequestStatus updateUser(User user) throws Exception {
+        UserService.Iface sw360UserClient = getThriftUserClient();
+        RequestStatus requestStatus = sw360UserClient.updateUser(user);
+        return requestStatus;
+    }
 
-	private UserService.Iface getThriftUserClient() throws Exception {
-		THttpClient thriftClient = new THttpClient(thriftServerUrl + "/users/thrift");
-		TProtocol protocol = new TCompactProtocol(thriftClient);
-		return new UserService.Client(protocol);
-	}
+    private UserService.Iface getThriftUserClient() throws Exception {
+        THttpClient thriftClient = new THttpClient(thriftServerUrl + "/users/thrift");
+        TProtocol protocol = new TCompactProtocol(thriftClient);
+        return new UserService.Client(protocol);
+    }
 }

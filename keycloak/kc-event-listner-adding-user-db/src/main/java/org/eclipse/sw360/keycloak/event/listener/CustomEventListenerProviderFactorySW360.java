@@ -8,23 +8,23 @@ import org.keycloak.models.KeycloakSessionFactory;
 
 public class CustomEventListenerProviderFactorySW360 implements EventListenerProviderFactory {
 
-	public EventListenerProvider create(KeycloakSession session) {
-		return new CustomEventListenerSW360(session);
-	}
+    public EventListenerProvider create(KeycloakSession session) {
+        return new CustomEventListenerSW360(session);
+    }
 
-	public void init(Scope config) {
+    public void init(Scope config) {
 
-	}
+    }
 
-	public void postInit(KeycloakSessionFactory factory) {
+    public void postInit(KeycloakSessionFactory factory) {
 
-	}
+    }
 
-	public void close() {
+    public void close() {
 
-	}
+    }
 
-	public String getId() {
-		return "sw360-add-user-to-couchdb";
-	}
+    public String getId() {
+        return "sw360-add-user-to-couchdb";
+    }
 }
