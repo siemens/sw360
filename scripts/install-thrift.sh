@@ -34,7 +34,8 @@ processThrift() {
   if [ -f "/var/cache/deps/thrift-$VERSION.tar.gz" ]; then
       tar -xzf "/var/cache/deps/thrift-$VERSION.tar.gz" -C "$BASEDIR/thrift" --strip-components=1
   else
-      curl "http://archive.apache.org/dist/thrift/$VERSION/thrift-$VERSION.tar.gz" | tar -xz -C "$BASEDIR/thrift" --strip-components=1
+      wget "http://archive.apache.org/dist/thrift/$VERSION/thrift-$VERSION.tar.gz"
+      tar -xzf thrift-$VERSION.tar.gz -C "$BASEDIR/thrift" --strip-components=1
   fi
 
   mkdir -p "${BASEDIR}/build"
