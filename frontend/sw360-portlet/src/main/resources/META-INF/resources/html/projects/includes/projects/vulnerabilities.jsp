@@ -143,7 +143,7 @@
             <core_rt:if test="${project.enableVulnerabilitiesDisplay and not empty vulnerabilityList}">
                 <core_rt:forEach items="${vulnerabilityList}" var="vulnerability">
                     result.push({
-                        releaseName: "<sw360:out value='${vulnerability.intReleaseName}'/>",
+                        releaseName: "<sw360:out value='${vulnerability.intReleaseName}' jsQuoting='true'/>",
                         externalId: "${vulnerability.externalId}",
                         <core_rt:if test="${not isSubProject}">
                             externalIdLink: "<sw360:DisplayVulnerabilityLink vulnerabilityId="${vulnerability.externalId}"/>",
@@ -153,16 +153,16 @@
                         </core_rt:if>
                         intReleaseId: "<sw360:out value="${vulnerability.intReleaseId}"/>",
                         priority: {
-                            text: "<sw360:out value='${vulnerability.priority}'/>",
-                            tooltip: "<sw360:out value='${vulnerability.priorityToolTip}'/>"
+                            text: "<sw360:out value='${vulnerability.priority}' jsQuoting='true'/>",
+                            tooltip: "<sw360:out value='${vulnerability.priorityToolTip}' jsQuoting='true'/>"
                         },
                         title: {
                             text: "<sw360:out value='${vulnerability.title}' jsQuoting='true'/>",
                             tooltip: "<sw360:out value='${vulnerability.description}' jsQuoting='true'/>"
                         },
                         matchedBy: {
-                            text: "<sw360:out value='${vulnerability.matchedBy}'/>",
-                            tooltip: "Found with needle: <sw360:out value='${vulnerability.usedNeedle}'/>"
+                            text: "<sw360:out value='${vulnerability.matchedBy}' jsQuoting='true'/>",
+                            tooltip: "Found with needle: <sw360:out value='${vulnerability.usedNeedle}' jsQuoting='true'/>"
                         },
                         relevance: {
                             text: "<sw360:DisplayEnum value="${vulnerabilityRatings.get(vulnerability.externalId).get(vulnerability.intReleaseId)}"/>",
