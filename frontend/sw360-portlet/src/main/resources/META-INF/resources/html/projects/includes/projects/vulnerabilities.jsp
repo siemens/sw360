@@ -166,9 +166,9 @@
                         },
                         relevance: {
                             text: "<sw360:DisplayEnum value="${vulnerabilityRatings.get(vulnerability.externalId).get(vulnerability.intReleaseId)}"/>",
-                            tooltip: "<sw360:out value="${vulnerabilityCheckstatusTooltips.get(vulnerability.externalId).get(vulnerability.intReleaseId)}"/>"
+                            tooltip: "<sw360:out value="${vulnerabilityCheckstatusTooltips.get(vulnerability.externalId).get(vulnerability.intReleaseId)}" jsQuoting='true'/>"
                         },
-                        action: "<sw360:out value="${vulnerabilityActions.get(vulnerability.externalId).get(vulnerability.intReleaseId)}"/>"
+                        action: "<sw360:out value="${vulnerabilityActions.get(vulnerability.externalId).get(vulnerability.intReleaseId)}" jsQuoting='true'/>"
                     });
                 </core_rt:forEach>
             </core_rt:if>
