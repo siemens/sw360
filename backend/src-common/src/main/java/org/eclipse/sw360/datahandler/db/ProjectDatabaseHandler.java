@@ -1973,6 +1973,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             String projectMailLineState = ThriftEnumUtils.enumToString(rl.getValue().getMainlineState());
             String comment = rl.getValue().getComment();
             String releaseId = rl.getKey();
+            String createdOn = rl.getValue().getCreatedOn();
             if (releaseOrigin.containsKey(releaseId))
                 return;
             Release rel = componentDatabaseHandler.getRelease(releaseId, user);
@@ -1980,7 +1981,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
                 Map<String, ReleaseRelationship> releaseIdToRelationship = rel.getReleaseIdToRelationship();
                 releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment);
+                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment, createdOn);
                 if (releaseIdToRelationship != null && !releaseIdToRelationship.isEmpty()) {
                     flattenlinkedReleaseOfRelease(releaseIdToRelationship, projectOrigin, releaseOrigin, clearingStatusList,
                                 user, isInaccessibleLinkMasked);
@@ -2010,7 +2011,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
                 Map<String, ReleaseRelationship> subReleaseIdToRelationship = rel.getReleaseIdToRelationship();
                 releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, "");
+                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, "", "");
                 if (subReleaseIdToRelationship != null && !subReleaseIdToRelationship.isEmpty()) {
                     flattenlinkedReleaseOfRelease(subReleaseIdToRelationship, projectOrigin, releaseOrigin,
                                 clearingStatusList, user, isInaccessibleLinkMasked);
@@ -2049,7 +2050,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     private Map<String, String> createReleaseCSRow(String relation, String projectMailLineState, Release rl,
-            List<Map<String, String>> clearingStatusList, User user, String comment) throws SW360Exception {
+            List<Map<String, String>> clearingStatusList, User user, String comment, String createdOn) throws SW360Exception {
         Map<String, String> row = new HashMap<>();
         Component component = componentDatabaseHandler.getComponent(rl.getComponentId(), user);
         String releaseId = rl.getId();
@@ -2064,6 +2065,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         row.put("clearingState", ThriftEnumUtils.enumToString(rl.getClearingState()));
         row.put("projectMainlineState", projectMailLineState);
         row.put("comment", CommonUtils.nullToEmptyString(comment));
+        row.put("createdOn", createdOn);
         row.put("isAccessible", "true");
         clearingStatusList.add(row);
         return row;
@@ -2246,7 +2248,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             List<ReleaseNode>  listLinkedRelease = rl.getReleaseLink();
             if (!isInaccessibleLinkMasked || componentDatabaseHandler.isReleaseActionAllowed(rel, user, RequestedAction.READ)) {
                 releaseOrigin.put(releaseId, SW360Utils.printName(rel));
-                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment);
+                Map<String, String> row = createReleaseCSRow(relation, projectMailLineState, rel, clearingStatusList, user, comment, "");
                 if (CommonUtils.isNotEmpty(listLinkedRelease)) {
                     flattenLinkedReleaseOfRelease(listLinkedRelease, projectOrigin, releaseOrigin,
                             clearingStatusList, user, isInaccessibleLinkMasked);

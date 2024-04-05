@@ -92,7 +92,7 @@
                 <tr>
                     <th style="width:36%; cursor: pointer" class="sort">
                         <div id="expandAllWarning" class="alert alert-warning alert-dismissible mb-0 p-2" style="display:none">
-                            <button type="button" class="close pb-3" data-dismiss="alert">×</button>
+                            <button type="button" class="close pb-3" data-dismiss="alert">ï¿½</button>
                              <liferay-ui:message key="all.the.levels.are.expanded" />
                         </div>
                         <div class="row px-2">
@@ -249,6 +249,7 @@
                     </th>
                     <th style="width:5%; cursor: pointer" class="sort"><liferay-ui:message key="release.mainline.state" /><clay:icon symbol="caret-double-l" /></th>
                     <th style="width:5%; cursor: pointer" class="sort"><liferay-ui:message key="project.mainline.state" /><clay:icon symbol="caret-double-l" /></th>
+                    <th style="width:9%"><liferay-ui:message key="release.link.date" /></th>
                     <th style="width:9%"><liferay-ui:message key="comment" /></th>
                     <th style="width:3%"><liferay-ui:message key="actions" /></th>
                </tr>
@@ -510,12 +511,13 @@ AUI().use('liferay-portlet-url', function () {
                     }, render: {display: renderState}, "defaultContent": ""},
                     {title: "<liferay-ui:message key="release.mainline.state" />", data : "releaseMainlineState", "defaultContent": ""},
                     {title: "<liferay-ui:message key="project.mainline.state" />", data : "projectMainlineState", "defaultContent": ""},
+                    {title: "<liferay-ui:message key="release.link.date" />", data : "createdOn", "defaultContent": ""},
                     {title: "<liferay-ui:message key="comment" />",  data: "comment", "defaultContent": "", render: $.fn.dataTable.render.ellipsis},
                     {title: "<liferay-ui:message key="actions" />",  data: "id", "orderable": false, "defaultContent": "", render: {display: renderActions}, className: "two actions" }
                 ],
                 "columnDefs": [
                     {
-                        "targets": 9,
+                        "targets": 10,
                         "createdCell": function (td) {
                             $(td).css('max-width', '10rem');
                         }
@@ -579,7 +581,7 @@ AUI().use('liferay-portlet-url', function () {
                         });
                     });
                 }
-            }, [0, 1, 2, 3, 4, 5, 6, 7, 8], undefined, true);
+            }, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], undefined, true);
             return clearingStatusTable;
         }
 
