@@ -1417,6 +1417,9 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
                 restControllerHelper.addEmbeddedLicenses(halRelease, release.getMainLicenseIds());
                 release.setMainLicenseIds(null);
             }
+            if (release.getOtherLicenseIds() != null) {
+                restControllerHelper.addEmbeddedOtherLicenses(halRelease, release.getOtherLicenseIds());
+            }
             Set<String> packageIds = release.getPackageIds();
 
             if (packageIds != null) {
