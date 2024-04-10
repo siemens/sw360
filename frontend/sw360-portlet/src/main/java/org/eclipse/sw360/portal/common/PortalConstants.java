@@ -51,6 +51,7 @@ public class PortalConstants {
     public static final String LOAD_CLOSED_MODERATION_REQUEST = "loadClosedModerationRequest";
     public static final String LICENSE_INFO_HEADER_TEXT_FILE_NAME_BY_PROJECT_GROUP;
     public static final String DEFAULT_COUNTRY_NAME;
+    public static final Boolean SEND_PROJECT_LICENSE_INFO_SPREADSHEET_EXPORT_TO_MAIL_ENABLED;
 
     // DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING !!!
     // - friendly url mapping files must be changed
@@ -151,6 +152,8 @@ public class PortalConstants {
     public static final String DELETE_MODERATION_REQUEST = "deleteModerationRequest";
     public static final String MODERATION_ACTIONS_ALLOWED = "moderationAllowed";
     public static final String MODERATION_REQUESTING_USER_DEPARTMENTS = "requestingUserDepartments";
+    public static final String IS_EMAIL_ENABLED_TO_LICENSE_INFO = "isEmailEnabledForLicInfoDownload";
+    public static final String EMAIL_EXPORTED_GENERIC_LICENSEINFO_EXCEL = "download_generic_licenseinfo_excel";
 
     //! Specialized keys for clearing
     public static final String CLEARING_REQUEST = "clearingRequest";
@@ -888,6 +891,7 @@ public class PortalConstants {
         DISABLE_CLEARING_REQUEST_FOR_PROJECT_WITH_GROUPS = props.getProperty("org.eclipse.sw360.disable.clearing.request.for.project.group", "");
         SEND_PROJECT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.spreadsheet.export.to.mail.enabled", "false"));
         SEND_COMPONENT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.component.spreadsheet.export.to.mail.enabled", "false"));
+        SEND_PROJECT_LICENSE_INFO_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.license.info.spreadsheet.export.to.mail.enabled", "true"));
         IS_BULK_RELEASE_DELETING_ENABLED = Boolean.parseBoolean(System.getProperty("RunBulkReleaseDeletingTest", props.getProperty("bulk.release.deleting.enabled", "false")));
         IS_SVM_ENABLED = Boolean.parseBoolean(props.getProperty("enable.security.vulnerability.monitoring", "false"));
     }

@@ -34,6 +34,12 @@
     <portlet:param name="<%=PortalConstants.LICENSE_INFO_EMPTY_FILE%>" value="No"/>
 </portlet:resourceURL>
 
+<portlet:resourceURL var="emailDownloadedLicenseInfoURL">
+    <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.DOWNLOAD_LICENSE_INFO%>'/>
+    <portlet:param name="<%=PortalConstants.PROJECT_ID%>" value="${requestScope.project.id}"/>
+    <portlet:param name="<%=PortalConstants.LICENSE_INFO_EMPTY_FILE%>" value="No"/>
+</portlet:resourceURL>
+
 <portlet:resourceURL var="checkIfAttachmentExists">
     <portlet:param name="<%=PortalConstants.ACTION%>" value='<%=PortalConstants.PROJECT_CHECK_FOR_ATTACHMENTS%>'/>
     <portlet:param name="<%=PortalConstants.PROJECT_ID%>" value="${requestScope.project.id}"/>
@@ -237,7 +243,9 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
     });
 
     function downloadFile(isEmptyFile){
+    	var isEMailEnabledForLicInfo = true;
         let licenseInfoSelectedOutputFormat = $('input[name="outputFormat"]:checked').val();
+        var stayBackURL = window.location;
         if(isEmptyFile === "undefined" || !isEmptyFile){
             var externalIds = [];
             var releaseRelations = [];
@@ -263,6 +271,7 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
             $('#downloadLicenseInfoForm').append('<input id="selectedProjectRelations" type="hidden" name="<portlet:namespace/><%=PortalConstants.SELECTED_PROJECT_RELATIONS%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="isSubProjPresent" type="hidden" name="<portlet:namespace/><%=PortalConstants.IS_LINKED_PROJECT_PRESENT%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="isOnlyApprovedSelected" type="hidden" name="<portlet:namespace/><%=PortalConstants.ONLY_APPROVED%>"/>');
+            $('#downloadLicenseInfoForm').append('<input id="isEMailEnabledForLicInf" type="hidden" name="<portlet:namespace/><%=PortalConstants.IS_EMAIL_ENABLED_TO_LICENSE_INFO%>"/>');
 
             if ($('#pills-onlyapproved-tab').hasClass('active')) {
                 $("#isOnlyApprovedSelected").val("true");
@@ -274,11 +283,30 @@ require(['jquery', 'modules/dialog'], function($, dialog) {
             $("#releaseRelationship").val(releaseRelationsHidden);
             $("#selectedProjectRelations").val(selectedProjectRelationsHidden);
             $("#isSubProjPresent").val(${not empty linkedProjectRelation});
+            $("#isEMailEnabledForLicInf").val(isEMailEnabledForLicInfo);
             let actionUrl = $('#downloadLicenseInfoForm').attr('action');
             cleanedActionUrl = removeUnusedParam(actionUrl);
             $('#downloadLicenseInfoForm').attr('action', cleanedActionUrl);
             let actionUrlaft = $('#downloadLicenseInfoForm').attr('action');
-            $('#downloadLicenseInfoForm').submit();
+            var selectedAttachmentWithPathArray = [];
+            if(isEMailEnabledForLicInfo==true){
+            	 dialog.info('Info','<div>Downloading is in progress. It will be sent you over an email once its completed.</div>');
+            	 var formData = new FormData(document.getElementById('downloadLicenseInfoForm'));
+            	  fetch('<%=emailDownloadedLicenseInfoURL%>', {
+            	     method: 'POST',
+            	        body: formData
+            	    })
+            	    .then(response => response.text())
+            	    .then(data => {
+            	        console.log('Sucess');
+            	    })
+            	    .catch(error => {
+            	        console.error('Error:', error);
+            	        dialog.warn('<div>There is some internal error occured while generating an excel. Please try after sometime.</div>');
+            	    });
+            }else{
+            	$('#downloadLicenseInfoForm').submit();
+            }
         } else {
             $('#downloadLicenseInfoForm').append('<input id="licensInfoFileFormat" type="hidden" name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT%>"/>');
             $('#downloadLicenseInfoForm').append('<input id="isEmptyFile" type="hidden" value="Yes" name="<portlet:namespace/><%=PortalConstants.LICENSE_INFO_EMPTY_FILE%>" />');
