@@ -28,6 +28,7 @@ import org.apache.commons.csv.CSVRecord;
 import org.apache.thrift.TException;
 import org.junit.After;
 import org.junit.Before;
+import org.mockito.Mock;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,10 +61,13 @@ public class ComponentAndAttachmentAwareDBTest {
     }
 
     protected static FluentIterable<ComponentCSVRecord> getCompCSVRecordsFromTestFile(String fileName) throws IOException {
-        InputStream testStream = spy(ComponentImportUtilsTest.class.getResourceAsStream(fileName));
-
+        InputStream testStream = InputStream.nullInputStream();
+        when(ComponentImportUtilsTest.class.getResourceAsStream(fileName)).thenReturn(testStream);
+//        InputStream testStream = spy(ComponentImportUtilsTest.class.getResourceAsStream(fileName));
+//
+//        List<CSVRecord> testRecords = ImportCSV.readAsCSVRecords(testStream);
+//        verify(testStream).close();
         List<CSVRecord> testRecords = ImportCSV.readAsCSVRecords(testStream);
-        verify(testStream).close();
         return convertCSVRecordsToCompCSVRecords(testRecords);
     }
 

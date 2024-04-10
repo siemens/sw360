@@ -118,7 +118,7 @@ import static org.springframework.restdocs.payload.PayloadDocumentation.requestF
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
 import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
-import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.formParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -805,7 +805,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
                                 parameterWithName("sort").description("Defines order of the projects")
@@ -857,7 +857,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page")
                         ),
@@ -911,7 +911,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("allDetails").description("Flag to get projects with all details. Possible values are `<true|false>`"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1050,7 +1050,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("type").description("Project types = `{CUSTOMER, INTERNAL, PRODUCT, SERVICE, INNER_SOURCE}`"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1110,7 +1110,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("group").description("The project group"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1148,7 +1148,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("tag").description("The project tag"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1186,7 +1186,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("name").description("The name of the project"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1228,7 +1228,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("name").description("The name of the project"),
                                 parameterWithName("type").description("The type of the project"),
                                 parameterWithName("group").description("The group of the project"),
@@ -1293,7 +1293,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases page"),
@@ -1322,7 +1322,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects page"),
                                 parameterWithName("sort").description("Defines order of the projects"),
@@ -1355,7 +1355,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects page"),
                                 parameterWithName("sort").description("Defines order of the projects"),
@@ -1389,7 +1389,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases page"),
@@ -1425,7 +1425,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("priority").description("The priority of vulnerability. For example: `1 - critical`, `2 - major`"),
                                 parameterWithName("projectRelevance").description("The relevance of project of the vulnerability, possible values are: " + Arrays.asList(VulnerabilityRatingForProject.values())),
                                 parameterWithName("page").description("Page of vulnerabilities"),
@@ -1465,7 +1465,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("releaseId").description("The release Id of vulnerability."),
                                 parameterWithName("externalId").description("The external Id of vulnerability.")
                         ),
@@ -1543,7 +1543,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases per page"),
@@ -1929,7 +1929,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 .accept("application/xhtml+xml"))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler
-                        .document(requestParameters(
+                        .document(formParameters(
                                 parameterWithName("generatorClassName")
                                         .description("All possible values for output generator class names are "
                                                 + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
@@ -1959,7 +1959,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                      linkWithRel("first").description("Link to first page"),
                                      linkWithRel("last").description("Link to last page")
                                      ),
-                             requestParameters(
+                             formParameters(
                                      parameterWithName("transitive").description("Get the transitive releases"),
                                      parameterWithName("clearingState").description("The clearing state of the release. Possible values are: "+Arrays.asList(ClearingState.values())),
                                      parameterWithName("page").description("Page of releases"),
@@ -2065,7 +2065,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("createdBy").description("Projects with current user as creator. Possible values are `<true|false>`"),
                                 parameterWithName("moderator").description("Projects with current user as moderator. Possible values are `<true|false>`"),
                                 parameterWithName("contributor").description("Projects with current user as contributor. Possible values are `<true|false>`"),
@@ -2197,7 +2197,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
                                 parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
@@ -2220,7 +2220,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .accept("application/xhtml+xml"))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
                                 parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
@@ -2241,7 +2241,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
                                 parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
@@ -2266,7 +2266,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         .accept("application/xhtml+xml"))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
                                 parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
