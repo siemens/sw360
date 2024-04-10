@@ -22,7 +22,7 @@ import static org.springframework.restdocs.payload.PayloadDocumentation.requestF
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
 import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
-import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.formParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -167,7 +167,7 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("page").description("Page of packages"),
                                 parameterWithName("page_entries").description("Amount of packages per page"),
                                 parameterWithName("sort").description("Defines order of the packages")
@@ -203,7 +203,7 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("allDetails").description("Flag to get packages with all details. Possible values are `<true|false>`"),
                                 parameterWithName("page").description("Page of packages"),
                                 parameterWithName("page_entries").description("Amount of packages per page"),
@@ -282,7 +282,7 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("name").description("The name of the package"),
                                 parameterWithName("exactMatch").description("If the exactMatch parameter is set to true, "
                                         + "packages will be fetched by name exactly matching the search input"),
@@ -321,7 +321,7 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        formParameters(
                                 parameterWithName("packageManager").description("Type of the package manager"),
                                 parameterWithName("page").description("Page of packages"),
                                 parameterWithName("page_entries").description("Amount of packages per page"),
