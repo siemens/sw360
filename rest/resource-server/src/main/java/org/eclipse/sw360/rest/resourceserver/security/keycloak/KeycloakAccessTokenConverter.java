@@ -85,6 +85,9 @@ public class KeycloakAccessTokenConverter implements Converter<Jwt, AbstractAuth
 
         List<GrantedAuthority> grantedAuthList = Sw360GrantedAuthoritiesCalculator.generateFromUser(sw360User);
         String clientScopes = jwt.getClaim("scope");
+        if (null == clientScopes) {
+            return grantedAuthList;
+        }
         String[] scopes = clientScopes.split("\\s+");
         Set<String> scopeSet = new HashSet<>(Arrays.asList(scopes));
 
