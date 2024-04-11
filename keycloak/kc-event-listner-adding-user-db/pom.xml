@@ -1,0 +1,82 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <name>Keycloak Sw360: Event Listener For Adding User to Couchdb</name>
+    <description/>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.eclipse.sw360</groupId>
+    <version>23.0.4</version>
+    <artifactId>event-listener-adduser</artifactId>
+    <packaging>jar</packaging>
+
+    <properties>
+        <version.compiler.maven.plugin>3.5.1</version.compiler.maven.plugin>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-core</artifactId>
+            <version>23.0.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-server-spi</artifactId>
+            <version>23.0.4</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-server-spi-private</artifactId>
+            <version>23.0.4</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.sw360</groupId>
+	    <artifactId>commonIO</artifactId>
+	    <version>18.0.0-SNAPSHOT</version>
+	    <!--<scope>system</scope>
+	    <systemPath>${project.basedir}/libs/commonIO-18.0.0-SNAPSHOT.jar</systemPath>-->
+	</dependency>
+	<dependency>
+	    <groupId>org.eclipse.sw360</groupId>
+	    <artifactId>datahandler</artifactId>
+	    <version>18.0.0-SNAPSHOT</version>
+	    <!--<scope>system</scope>
+	    <systemPath>${project.basedir}/libs/datahandler-18.0.0-SNAPSHOT.jar</systemPath>-->
+	</dependency>
+	<!-- https://mvnrepository.com/artifact/org.apache.thrift/libthrift -->
+        <dependency>
+            <groupId>org.apache.thrift</groupId>
+            <artifactId>libthrift</artifactId>
+            <version>0.19.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+	<dependency>
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>jboss-logging</artifactId>
+            <version>3.5.0.Final</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <finalName>sw360-user-rgistration-to-database</finalName>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.0.0-M7</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.0.0-M7</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
