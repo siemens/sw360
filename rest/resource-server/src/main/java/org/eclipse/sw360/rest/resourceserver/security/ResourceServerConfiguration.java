@@ -16,6 +16,7 @@ import org.eclipse.sw360.rest.resourceserver.core.SimpleAuthenticationEntryPoint
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationFilter;
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationProvider;
 import org.eclipse.sw360.rest.resourceserver.security.basic.Sw360CustomUserDetailsService;
+import org.eclipse.sw360.rest.resourceserver.security.keycloak.KeycloakAccessTokenConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -41,6 +42,9 @@ public class ResourceServerConfiguration {
     private final Logger log = LogManager.getLogger(this.getClass());
 
     @Autowired
+    private KeycloakAccessTokenConverter accessTokenConverter;
+
+    @Autowired
     private ApiTokenAuthenticationFilter filter;
 
     @Autowired
@@ -59,7 +63,8 @@ public class ResourceServerConfiguration {
 
     @Bean
     public SecurityFilterChain securityFilterChainRS1(HttpSecurity http) throws Exception {
-        return http.authorizeRequests(auth -> auth.anyRequest().authenticated()).oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwkSetUri(issuerUri))).build();
+        return http.authorizeRequests(auth -> auth.anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(accessTokenConverter).jwkSetUri(issuerUri))).build();
 //        
     }
 

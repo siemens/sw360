@@ -1,4 +1,5 @@
 /*
+ * Copyright Siemens AG, 2024.
  * Copyright Bosch Software Innovations GmbH, 2019. Part of the SW360 Portal Project.
  *
  * This program and the accompanying materials are made
@@ -10,95 +11,83 @@
 
 package org.eclipse.sw360.rest.resourceserver.security.keycloak;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.resourceserver.security.basic.Sw360GrantedAuthoritiesCalculator;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.oauth2.resource.JwtAccessTokenConverterConfigurer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.common.exceptions.UnauthorizedUserException;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
-import org.springframework.security.oauth2.provider.token.DefaultAccessTokenConverter;
-import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenConverter;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Map;
 
 @Profile("!SECURITY_MOCK")
 @Component
-public class KeycloakAccessTokenConverter extends DefaultAccessTokenConverter implements JwtAccessTokenConverterConfigurer {
+public class KeycloakAccessTokenConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     private static final Logger log = LogManager.getLogger(KeycloakAccessTokenConverter.class);
+    private final JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
 
-    private static final String JWT_RESOURCE_ACCESS = "resource_access";
-    private static final String JWT_ROLES = "roles";
-    private static final String JWT_AUTHORITIES = "authorities";
+    private static final String JWT_EMIAL = "email";
+
+    @Value("${jwt.auth.converter.principle-attribute:email}")
+    private String principleAttribute;
+
+    @Value("${jwt.auth.converter.resource-id:sw360-rest-api}")
+    private String resourceId;
 
     @Autowired
     private Sw360UserService userService;
 
     @Override
-    public void configure(JwtAccessTokenConverter converter) {
-        converter.setAccessTokenConverter(this);
-        log.info("Configured  KeycloakAccessTokenConverter");
+    public AbstractAuthenticationToken convert(@NonNull Jwt jwt) {
+        Collection<GrantedAuthority> authorities = Stream
+                .concat(jwtGrantedAuthoritiesConverter.convert(jwt).stream(), extractResourceRoles(jwt).stream())
+                .collect(Collectors.toSet());
+        return new JwtAuthenticationToken(jwt, authorities, getPrincipleClaimName(jwt));
     }
 
-    /***
-     * Expects a token which has the keycloak format.
-     * The token contains a resource_access claim which is a list of resources and the granted roles on this resources.
-     * The expectation is that the token has resource client roles (WRITE/READ) of the sw360-REST-API client.
-     * INFO: the SecurityContextHolder.getContext().getAuthentication().getPrincipal(); will return user_name of the jwt
-     * @param tokenMap the raw jwt token
-     * @return the processed OAuth2Authentication
-     */
-    @Override
-    @SuppressWarnings("unchecked")
-    public OAuth2Authentication extractAuthentication(Map<String, ?> tokenMap) {
-        log.debug("extract authentication: tokenMap = " + tokenMap.toString());
-        Map<String, Object> jwtToken = (Map<String, Object>) tokenMap;
-
-        // Map the roles of resource_access.sw360-REST-API.roles.* into authorities.*
-        if (tokenMap.containsKey(JWT_RESOURCE_ACCESS)) {
-            Map<String, Object> resourceAccess = (Map<String, Object>) jwtToken.get(JWT_RESOURCE_ACCESS);
-            if (resourceAccess.containsKey("sw360-REST-API")) {
-                Map<String, Object> clientAccess = (Map<String, Object>) resourceAccess.get("sw360-REST-API");
-                if (clientAccess.containsKey(JWT_ROLES)) {
-                    ArrayList<String> clientRoles = (ArrayList<String>) clientAccess.get(JWT_ROLES);
-                    jwtToken.put(JWT_AUTHORITIES, Collections.unmodifiableList(clientRoles));
-                }
-            }
+    private String getPrincipleClaimName(Jwt jwt) {
+        String claimName = JwtClaimNames.SUB;
+        if (principleAttribute != null) {
+            claimName = principleAttribute;
         }
+        return jwt.getClaim(claimName);
+    }
 
-
-        //TODO: Right now only the userId is present in the session. But it may not exists in the database.
-        // implement user creation/mapping here. So new users in keycloak can directly query the restapi without liferay
-        // The idea is to create the users on the fly if they do no exist.
-        // based on the keycloak token which contains, name, surename and deparment already
-        // !!! -> This needs to be done with care.
-        // 1. Consider caching to avoid a lot of calls for the user object
-        // 2. Consider caching only for as long the token is the same to ensure valid user info
-        //User user = new User();
-        //user.setId("test2");
-        //authentication.setDetails(user);
-        Object userEmail = tokenMap.get("user_name");
-        if (userEmail != null && CommonUtils.isNotNullEmptyOrWhitespace(userEmail.toString())) {
-            String userEmailStr = userEmail.toString();
-            User sw360User = userService.getUserByEmail(userEmailStr);
+    private Collection<GrantedAuthority> extractResourceRoles(Jwt jwt) {
+        User sw360User = null;
+        String email = jwt.getClaim(JWT_EMIAL);
+        if (email != null && CommonUtils.isNotNullEmptyOrWhitespace(email)) {
+            sw360User = userService.getUserByEmail(email);
             if (sw360User == null || sw360User.isDeactivated()) {
-                throw new UnauthorizedUserException("User is deactivated");
+                throw new UnauthorizedUserException("User is deactivated or not available.");
             }
         }
 
-        return super.extractAuthentication(jwtToken);
+        List<GrantedAuthority> grantedAuthList = Sw360GrantedAuthoritiesCalculator.generateFromUser(sw360User);
+        String clientScopes = jwt.getClaim("scope");
+        String[] scopes = clientScopes.split("\\s+");
+        Set<String> scopeSet = new HashSet<>(Arrays.asList(scopes));
+
+        return grantedAuthList.stream().filter(ga -> scopeSet.contains(ga.toString())).toList();
     }
-
-
 }
