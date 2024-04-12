@@ -94,7 +94,9 @@ public class Sw360UserService {
         logger.info("Sw360UserService::addUser()::-->" + user);
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
-            user.setUserGroup(UserGroup.USER);
+            if(user.getUserGroup() == null) {
+                user.setUserGroup(UserGroup.USER);
+            }
             AddDocumentRequestSummary documentRequestSummary = sw360UserClient.addUser(user);
             logger.info("Sw360UserService::addUser()::documentSummarry-->" + documentRequestSummary);
             if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.SUCCESS) {

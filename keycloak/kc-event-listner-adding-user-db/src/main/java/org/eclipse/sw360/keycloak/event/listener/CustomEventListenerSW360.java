@@ -126,6 +126,7 @@ public class CustomEventListenerSW360 implements EventListenerProvider {
         User user = new User();
         Map<String, List<String>> userAttributes = userEntity.getAttributes();
         Optional<List<String>> userGroups = Optional.ofNullable(userEntity.getGroups());
+        log.info("User groups: " + userGroups.map(List::toString).orElse("[]"));
         List<String> departments = userAttributes.get("department");
         String department = "DEPARTMENT";
         if (null != departments && !departments.isEmpty()) {
@@ -134,7 +135,8 @@ public class CustomEventListenerSW360 implements EventListenerProvider {
         String email = userEntity.getEmail();
         user.setEmail(email);
         userGroups.ifPresentOrElse((ug) -> {
-            user.setUserGroup(ThriftEnumUtils.stringToEnum(ug.stream().findFirst().get(), UserGroup.class));
+            String groupName = ug.stream().findFirst().get().replaceFirst("/", "");
+            user.setUserGroup(ThriftEnumUtils.stringToEnum(groupName, UserGroup.class));
         }, () -> {
             user.setUserGroup(ThriftEnumUtils.stringToEnum("USER", UserGroup.class));
         });

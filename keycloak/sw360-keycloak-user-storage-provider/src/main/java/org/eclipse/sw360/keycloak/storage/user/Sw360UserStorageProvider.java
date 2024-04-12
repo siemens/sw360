@@ -114,12 +114,7 @@ public class Sw360UserStorageProvider implements UserStorageProvider,
 
     @Override
     public UserModel addUser(RealmModel realm, String username) {
-        User entity = new User();
-        entity.setDepartment("Dummy");
-        entity.setEmail(username);
-        User user = sw360UserService.addUser(entity);
-        logger.info("added user: " + username);
-        return new UserAdapter(session, realm, model, user);
+        return null;
     }
 
     @Override
