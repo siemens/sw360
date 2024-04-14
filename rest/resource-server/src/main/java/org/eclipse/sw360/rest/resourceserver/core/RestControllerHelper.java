@@ -445,7 +445,7 @@ public class RestControllerHelper<T> {
         return embeddedRelease;
     }
 
-    public void addEmbeddedProjectAttachmentUsage(HalResource halResource, List<EntityModel<Release>> releases, List<Map<String, Object>> attachmentUsageMap) {
+    public void addEmbeddedProjectAttachmentUsage(HalResource halResource, List<Map<String, Object>> releases, List<Map<String, Object>> attachmentUsageMap) {
         halResource.addEmbeddedResource("sw360:release", releases);
         halResource.addEmbeddedResource("sw360:attachmentUsages", attachmentUsageMap);
     }
@@ -934,6 +934,8 @@ public class RestControllerHelper<T> {
         embeddedUser.setGivenname(user.getGivenname());
         embeddedUser.setLastname(user.getLastname());
         embeddedUser.setDepartment(user.getDepartment());
+        embeddedUser.setUserGroup(user.getUserGroup());
+        embeddedUser.setSecondaryDepartmentsAndRoles(user.getSecondaryDepartmentsAndRoles());
         embeddedUser.setType(null);
         return embeddedUser;
     }
@@ -1427,5 +1429,12 @@ public class RestControllerHelper<T> {
         User sw360User = getUserByEmail(clearingTeam);
         if(sw360User!=null)
             addEmbeddedUser(userHalResource, sw360User, resource);
+    }
+
+    public void addEmbeddedOtherLicenses(HalResource<Release> halRelease, Set<String> licenseIds) {
+        for (String licenseId : licenseIds) {
+            HalResource<License> licenseHalResource = addEmbeddedLicense(licenseId);
+            halRelease.addEmbeddedResource("sw360:otherLicenses", licenseHalResource);
+        }
     }
 }

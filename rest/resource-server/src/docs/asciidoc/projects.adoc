@@ -421,6 +421,34 @@ include::{snippets}/should_document_get_project_releases_ecc_information/http-re
 ===== Links
 include::{snippets}/should_document_get_project_releases_ecc_information/links.adoc[]
 
+[[resources-project-get-license-obligation-information]]
+==== Listing obligations from licenseDB
+
+A `GET` request will get all license obligations from licenseDB.
+
+===== Response structure
+include::{snippets}/should_document_get_obligations_from_license_db/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_obligations_from_license_db/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_obligations_from_license_db/http-response.adoc[]
+
+[[resources-project-add-license-obligation-information]]
+==== Adding obligations from licenseDB to project
+
+A `POST` request will add the license obligations from licenseDB to project.
+
+===== Request structure
+Pass an array of license obligation ids to be added as request body.
+
+===== Example request
+include::{snippets}/should_document_add_obligations_from_license_db/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_add_obligations_from_license_db/http-response.adoc[]
+
 [[resources-project-get-license-clearing-information-information]]
 ==== Project's license clearing count
 
@@ -431,6 +459,20 @@ include::{snippets}/should_document_get_license_clearing_information/curl-reques
 
 ===== Example response
 include::{snippets}/should_document_get_license_clearing_information/http-response.adoc[]
+
+[[resources-project-get-license-obligations-information]]
+==== List license obligations
+
+A `GET` request will get license obligations of a project.
+
+===== Response structure
+include::{snippets}/should_document_get_license_obligations/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_license_obligations/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_license_obligations/http-response.adoc[]
 
 [[resources-projects-create]]
 ==== Creating a project
@@ -876,3 +918,36 @@ include::{snippets}/should_document_update_project_with_network/curl-request.ado
 
 ===== Example response
 include::{snippets}/should_document_update_project_with_network/http-response.adoc[]
+
+
+[[resources-projects-download-licenseclearing-report]]
+==== Downloading project license clearing report
+
+A `GET` request help to download the projects report with mail request false.
+
+===== Request parameter
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet_without_mail_req/request-parameters.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet_without_mail_req/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet_without_mail_req/http-response.adoc[]
+
+
+[[resources-projects-download-licenseclearing-report-mail-request]]
+==== Downloading project license clearing report with mail request
+
+A `GET` request help to download the projects report with mail request true.
+
+===== Request parameter
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet/request-parameters.adoc[]
+
+===== Response structure
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet/response-fields.adoc[]
+
+===== Example request
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet/curl-request.adoc[]
+
+===== Example response
+include::{snippets}/should_document_get_project_licenseclearing_spreadsheet/http-response.adoc[]
