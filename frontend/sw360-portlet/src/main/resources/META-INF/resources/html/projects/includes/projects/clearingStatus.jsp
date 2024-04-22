@@ -279,6 +279,13 @@ AUI().use('liferay-portlet-url', function () {
         var clearingStatuslisturl= '<%=clearingStatuslisturl%>';
         var emptyMsg = '<liferay-ui:message key="no.linked.releases.or.projects" />';
 
+        var isButtonEnabledForLicInfo = <%=PortalConstants.ENABLE_ADD_LIC_INFO_TO_RELEASE%>;
+        if(isButtonEnabledForLicInfo==false){
+        	$('#addLicenseToRelease').hide();
+        }else{
+        	$('#addLicenseToRelease').show();
+        }
+
         $.ajax({url: clearingStatuslisturl,
                 type: 'GET',
                 dataType: 'json'

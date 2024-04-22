@@ -844,6 +844,8 @@ public class PortalConstants {
     public static final String RELEASE_USAGE = "releaseUsage";
     public static final String CYCLIC_LINKED_RELEASE_PATH = "cyclicLinkedReleasePath";
     public static final String CHILD_RELEASE_ID_ARRAY = "childReleaseId[]";
+    public static final Boolean ENABLE_ADD_LIC_INFO_TO_RELEASE;
+
     static {
         Properties props = CommonUtils.loadProperties(PortalConstants.class, PROPERTIES_FILE_PATH);
 
@@ -894,6 +896,7 @@ public class PortalConstants {
         SEND_PROJECT_LICENSE_INFO_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.license.info.spreadsheet.export.to.mail.enabled", "true"));
         IS_BULK_RELEASE_DELETING_ENABLED = Boolean.parseBoolean(System.getProperty("RunBulkReleaseDeletingTest", props.getProperty("bulk.release.deleting.enabled", "false")));
         IS_SVM_ENABLED = Boolean.parseBoolean(props.getProperty("enable.security.vulnerability.monitoring", "false"));
+        ENABLE_ADD_LIC_INFO_TO_RELEASE = Boolean.parseBoolean(props.getProperty("enable.add.license.info.to.release.button", "false"));
     }
 
     private PortalConstants() {
