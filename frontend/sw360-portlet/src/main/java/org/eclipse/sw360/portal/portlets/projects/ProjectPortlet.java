@@ -108,6 +108,12 @@ import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTExcepti
 import static org.eclipse.sw360.portal.common.PortalConstants.*;
 import static org.eclipse.sw360.portal.portlets.projects.ProjectPortletUtils.isUsageEquivalent;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 @org.osgi.service.component.annotations.Component(
     immediate = true,
     properties = {
@@ -131,6 +137,12 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private static final String NO = "No";
 
     private static final String YES = "Yes";
+
+    private static final String TOKEN = "token";
+    private static final String DOCX_GENERATOR = "DocxGenerator";
+    private static final String XHTML_GENERATOR = "XhtmlGenerator";
+    private static final String TMP_EXPORTEDFILES = "/tmp/";
+    private static final String SLASH = "/";
 
     private static final Logger log = LogManager.getLogger(ProjectPortlet.class);
 
@@ -233,6 +245,8 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             verifyIfAttachmentsExists(request, response);
         } else if (PortalConstants.DOWNLOAD_SOURCE_CODE_BUNDLE.equals(action)) {
             downloadSourceCodeBundle(request, response);
+        }else if(PortalConstants.EMAIL_EXPORTED_GENERIC_LICENSEINFO_EXCEL.equals(action)) {
+            downloadSourceCodeBundleFromEmailReq(request, response);
         } else if (PortalConstants.GET_CLEARING_STATE_SUMMARY.equals(action)) {
             serveGetClearingStateSummaries(request, response);
         } else if (PortalConstants.GET_LICENCES_FROM_ATTACHMENT.equals(action)) {
@@ -318,9 +332,36 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
     }
 
+    private void downloadSourceCodeBundleFromEmailReq(ResourceRequest request, ResourceResponse response) {
+        final String filePath = request.getParameter(TOKEN);
+        final String projectName = request.getParameter("projName");
+        final String projectVersion = request.getParameter("projVersion");
+        String fileName=null;
+        try {
+            Path path = Paths.get(filePath);
+            byte[] fileBytes = Files.readAllBytes(path);
+            String mimeType = Files.probeContentType(path);
+            File file = new File(filePath);
+            String extension = "";
+            int lastIndex = file.getName().lastIndexOf('.');
+            if (lastIndex > 0) {
+                extension = file.getName().substring(lastIndex + 1);
+            }
+            fileName = String.format("%s-%s%s-%s.%s", "LicenseInfo", projectName,
+                    StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion,
+                    SW360Utils.getCreatedOnTime().replaceAll("\\s", "_").replace(":", "_"),
+                    extension);
+            PortletResponseUtil.sendFile(request, response, fileName, fileBytes, mimeType);
+        } catch (IOException e) {
+            log.error("An error occurred while generating the sourcecode bundle Excel export", e);
+            response.setProperty(ResourceResponse.HTTP_STATUS_CODE,
+                    Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
+        }
+    }
+
     private void downloadExcel(ResourceRequest request, ResourceResponse response) {
         final User user = UserCacheHolder.getUserFromRequest(request);
-        final String token = request.getParameter("token");
+        final String token = request.getParameter(TOKEN);
         String filename = null;
 
         try {
@@ -711,6 +752,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
 
     private void downloadLicenseInfo(ResourceRequest request, ResourceResponse response) throws IOException {
         final String projectId = request.getParameter(PROJECT_ID);
+        String emailEnabled = request.getParameter(PortalConstants.IS_EMAIL_ENABLED_TO_LICENSE_INFO);
+        if(emailEnabled==null || emailEnabled.equals("null")) {
+        	emailEnabled="false";
+        }
         String isEmptyFile = request.getParameter(PortalConstants.LICENSE_INFO_EMPTY_FILE);
         String outputGenerator = request.getParameter(PortalConstants.LICENSE_INFO_SELECTED_OUTPUT_FORMAT);
         String selectedTemplate = request.getParameter("tmplate");
@@ -815,11 +860,67 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                     excludedLicensesPerAttachmentIdWithPath, includeConcludedLicenseList,
                     isOnlyApprovedAttachmentSelected);
             saveSelectedReleaseAndProjectRelations(projectId, listOfSelectedRelationships, listOfSelectedProjectRelationships, isLinkedProjectPresent);
-            sendLicenseInfoResponse(request, response, project, licenseInfoFile);
+			processLicenseInfoDownloadReq(request, response, emailEnabled, outputGenerator, user, projClient, project,
+					licenseInfoFile);
         } catch (TException e) {
             log.error("Error getting LicenseInfo file for project with id " + projectId + " and generator " + outputGenerator, e);
             response.setProperty(ResourceResponse.HTTP_STATUS_CODE, Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR));
         }
+    }
+
+	private void processLicenseInfoDownloadReq(ResourceRequest request, ResourceResponse response, String emailEnabled,
+			String outputGenerator, User user, ProjectService.Iface projClient, Project project,
+			LicenseInfoFile licenseInfoFile) throws IOException, TException {
+		if (emailEnabled.equalsIgnoreCase("true")) {
+			String portletId = (String) request.getAttribute(WebKeys.PORTLET_ID);
+			ThemeDisplay tD = (ThemeDisplay) request.getAttribute(WebKeys.THEME_DISPLAY);
+			long plid = tD.getPlid();
+
+			String[] outputGeneratorClassnameAndVariant = outputGenerator.split("::");
+			String outputGeneratorClassName = outputGeneratorClassnameAndVariant[0];
+
+			String token = makeFileForGenerateLicenseInfo(licenseInfoFile, user, outputGeneratorClassName);
+
+			LiferayPortletURL projectUrl = PortletURLFactoryUtil.create(request, portletId, plid,
+					PortletRequest.RESOURCE_PHASE);
+			projectUrl.setParameter("action", PortalConstants.EMAIL_EXPORTED_GENERIC_LICENSEINFO_EXCEL);
+			projectUrl.setParameter(TOKEN, token);
+			projectUrl.setParameter("projName", project.getName());
+			projectUrl.setParameter("projVersion", project.getVersion());
+
+			if (!CommonUtils.isNullEmptyOrWhitespace(TOKEN)) {
+				projClient.sendExportSpreadsheetSuccessMail(projectUrl.toString(), user.getEmail());
+			}
+		}else {
+		    sendLicenseInfoResponse(request, response, project, licenseInfoFile);
+		}
+	}
+
+    private String makeFileForGenerateLicenseInfo(LicenseInfoFile licenseInfoFile, User user,
+            String outputGeneratorClassName) throws IOException, TException {
+        String token = UUID.randomUUID().toString();
+        String filePath = TMP_EXPORTEDFILES + user.getEmail() + SLASH;
+        File dir = new File(filePath);
+        dir.mkdir();
+        File file;
+        switch (outputGeneratorClassName) {
+        case DOCX_GENERATOR:
+            file = new File(dir.getPath() + SLASH + SW360Utils.getCreatedOn() + "_" + token + ".docx");
+            break;
+        case XHTML_GENERATOR:
+            file = new File(dir.getPath() + SLASH + SW360Utils.getCreatedOn() + "_" + token + ".html");
+            break;
+        default:
+            file = new File(dir.getPath() + SLASH + SW360Utils.getCreatedOn() + "_" + token + ".txt");
+            break;
+        }
+        file.createNewFile();
+        try (FileOutputStream fos = new FileOutputStream(file.getPath())) {
+            fos.write(licenseInfoFile.getGeneratedOutput());
+        } catch (Exception e) {
+            throw new TException(e.getMessage());
+        }
+        return file.getPath();
     }
 
     private void downloadEmptyLicenseInfo(ResourceRequest request, ResourceResponse response, Project project, User user, String outputGenerator, String fileName) throws TException, IOException {
@@ -1233,7 +1334,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             LiferayPortletURL projectUrl = PortletURLFactoryUtil.create(request, portletId, plid,
                     PortletRequest.RESOURCE_PHASE);
             projectUrl.setParameter("action", PortalConstants.DOWNLOAD_EXCEL);
-            projectUrl.setParameter("token", token);
+            projectUrl.setParameter(TOKEN, token);
             projectUrl.setParameter(PortalConstants.EXTENDED_EXCEL_EXPORT, String.valueOf(extendedByReleases));
 
             if(!CommonUtils.isNullEmptyOrWhitespace(token)) {
