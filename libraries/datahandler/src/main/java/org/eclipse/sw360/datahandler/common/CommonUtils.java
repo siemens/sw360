@@ -330,17 +330,31 @@ public class CommonUtils {
 
     @NotNull
     public static Attachment getNewAttachment(User user, String attachmentContentId, String fileName) {
+        return initializeAttachmentCommonFields(user, attachmentContentId, fileName);
+    }
+
+    @NotNull
+    public static Attachment getNewAttachment(String attachmentContentId, String fileName) {
+        return initializeAttachmentCommonFields(null, attachmentContentId, fileName);
+    }
+
+    @NotNull
+    private static Attachment initializeAttachmentCommonFields(User user, String attachmentContentId, String fileName) {
         Attachment attachment = new Attachment();
-        attachment.setCreatedBy(user.getEmail());
         attachment.setCreatedOn(SW360Utils.getCreatedOn());
         attachment.setCreatedComment("");
-        attachment.setCreatedTeam(user.getDepartment());
         attachment.setFilename(fileName);
         attachment.setAttachmentContentId(attachmentContentId);
         attachment.setAttachmentType(AttachmentType.DOCUMENT);
         attachment.setCheckStatus(CheckStatus.NOTCHECKED);
         attachment.setCheckedComment("");
         attachment.setSha1("");
+
+        if (user != null) {
+            attachment.setCreatedBy(user.getEmail());
+            attachment.setCreatedTeam(user.getDepartment());
+        }
+
         return attachment;
     }
 
@@ -640,6 +654,12 @@ public class CommonUtils {
                 .stream()
                 .filter(att -> att.getAttachmentType() == AttachmentType.CLEARING_REPORT
                         || att.getAttachmentType() == AttachmentType.COMPONENT_LICENSE_INFO_XML)
+                .max(Comparator.comparing(Attachment::getCheckStatus, CHECK_STATUS_COMPARATOR));
+    }
+
+    public static Optional<Attachment> getBestInternalUseScanReport(Release release) {
+        return nullToEmptyCollection(release.getAttachments()).stream()
+                .filter(att -> att.getAttachmentType() == AttachmentType.INTERNAL_USE_SCAN)
                 .max(Comparator.comparing(Attachment::getCheckStatus, CHECK_STATUS_COMPARATOR));
     }
 

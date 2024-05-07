@@ -9,8 +9,13 @@
  */
 package org.eclipse.sw360.rest.resourceserver.vendor;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
@@ -23,20 +28,31 @@ import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.util.FileCopyUtils;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
+import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
+import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.springframework.data.domain.Pageable;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import javax.servlet.http.HttpServletResponse;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
 
 @BasePathAwareController
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RestController
+@SecurityRequirement(name = "tokenAuth")
 public class VendorController implements RepresentationModelProcessor<RepositoryLinksResource> {
     public static final String VENDORS_URL = "/vendors";
 
@@ -44,34 +60,64 @@ public class VendorController implements RepresentationModelProcessor<Repository
     private final Sw360VendorService vendorService;
 
     @NonNull
-    private final RestControllerHelper<?> restControllerHelper;
+    private final RestControllerHelper restControllerHelper;
 
+    @Operation(
+            summary = "List all of the service's vendors.",
+            description = "List all of the service's vendors.",
+            tags = {"Vendor"}
+    )
     @RequestMapping(value = VENDORS_URL, method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel<EntityModel<Vendor>>> getVendors() {
+    public ResponseEntity<CollectionModel<EntityModel<Vendor>>> getVendors(
+            Pageable pageable,
+            HttpServletRequest request
+            ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
         List<Vendor> vendors = vendorService.getVendors();
 
+        PaginationResult<Vendor> paginationResult = restControllerHelper.createPaginationResult(request, pageable, vendors, SW360Constants.TYPE_VENDOR);
         List<EntityModel<Vendor>> vendorResources = new ArrayList<>();
-        vendors.forEach(v -> {
+        for (Vendor v: paginationResult.getResources()) {
             Vendor embeddedVendor = restControllerHelper.convertToEmbeddedVendor(v);
             vendorResources.add(EntityModel.of(embeddedVendor));
-        });
+        }
 
-        CollectionModel<EntityModel<Vendor>> resources = CollectionModel.of(vendorResources);
-        return new ResponseEntity<>(resources, HttpStatus.OK);
+        CollectionModel<EntityModel<Vendor>> resources;
+        if (vendors.size() == 0) {
+            resources = restControllerHelper.emptyPageResource(Vendor.class, paginationResult);
+        } else {
+            resources = restControllerHelper.generatePagesResource(paginationResult, vendorResources);
+        }
+
+        HttpStatus status = resources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
+        return new ResponseEntity<>(resources, status);
     }
 
+    @Operation(
+            summary = "Get a single vendor.",
+            description = "Get a single vendor by id.",
+            tags = {"Vendor"}
+    )
     @RequestMapping(value = VENDORS_URL + "/{id}", method = RequestMethod.GET)
     public ResponseEntity<EntityModel<Vendor>> getVendor(
-            @PathVariable("id") String id) {
+            @Parameter(description = "The id of the vendor to get.")
+            @PathVariable("id") String id
+    ) {
         Vendor sw360Vendor = vendorService.getVendorById(id);
         HalResource<Vendor> halResource = createHalVendor(sw360Vendor);
         return new ResponseEntity<>(halResource, HttpStatus.OK);
     }
 
+    @Operation(
+            summary = "Create a new vendor.",
+            description = "Create a new vendor.",
+            tags = {"Vendor"}
+    )
     @PreAuthorize("hasAuthority('WRITE')")
     @RequestMapping(value = VENDORS_URL, method = RequestMethod.POST)
     public ResponseEntity<?> createVendor(
-            @RequestBody Vendor vendor) {
+            @Parameter(description = "The vendor to be created.")
+            @RequestBody Vendor vendor
+    ) {
         vendor = vendorService.createVendor(vendor);
         HalResource<Vendor> halResource = createHalVendor(vendor);
 
@@ -90,5 +136,28 @@ public class VendorController implements RepresentationModelProcessor<Repository
 
     private HalResource<Vendor> createHalVendor(Vendor sw360Vendor) {
         return new HalResource<>(sw360Vendor);
+    }
+
+    @Operation(
+            summary = "Export all vendors as Excel file.",
+            description = "Export all vendors as Excel file.",
+            tags = {"Vendor"}
+    )
+    @PreAuthorize("hasAuthority('WRITE')")
+    @GetMapping(value = VENDORS_URL + "/exportVendorDetails")
+    public ResponseEntity<?> exportVendor(HttpServletResponse response) throws TException {
+        try {
+            ByteBuffer buffer = vendorService.exportExcel();
+            String filename = String.format("vendors-%s.xlsx", SW360Utils.getCreatedOn());
+            response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
+            copyDataStreamToResponse(response, buffer);
+        } catch (Exception e) {
+            throw new TException(e.getMessage());
+        }
+        return ResponseEntity.ok(HttpStatus.OK);
+    }
+
+    private void copyDataStreamToResponse(HttpServletResponse response, ByteBuffer buffer) throws IOException {
+        FileCopyUtils.copy(buffer.array(), response.getOutputStream());
     }
 }

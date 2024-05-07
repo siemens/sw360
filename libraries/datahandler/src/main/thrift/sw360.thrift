@@ -71,7 +71,9 @@ enum ClearingRequestState {
     IN_QUEUE = 3,
     IN_PROGRESS = 4,
     CLOSED = 5,
-    AWAITING_RESPONSE = 6
+    AWAITING_RESPONSE = 6,
+    ON_HOLD = 7,
+    SANITY_CHECK = 8
 }
 
 enum ClearingRequestPriority {
@@ -79,6 +81,11 @@ enum ClearingRequestPriority {
     MEDIUM = 1,
     HIGH = 2,
     CRITICAL = 3,
+}
+
+enum ClearingRequestType {
+    DEEP = 0,
+    HIGH = 1
 }
 
 enum Visibility {
@@ -146,6 +153,23 @@ enum DateRange {
     BETWEEN = 3
 }
 
+enum ClearingReportStatus {
+    NO_STATUS = 0,
+    NO_REPORT = 1,
+    DOWNLOAD = 2
+}
+
+enum CycloneDxComponentType {
+    APPLICATION = 0,
+    CONTAINER = 1,
+    DEVICE = 2,
+    FILE = 3,
+    FIRMWARE = 4,
+    FRAMEWORK = 5,
+    LIBRARY = 6,
+    OPERATING_SYSTEM = 7,
+}
+
 struct ConfigContainer {
     1: optional string id,
     2: optional string revision,
@@ -190,9 +214,10 @@ struct ImportBomRequestPreparation {
     1: required RequestStatus requestStatus;
     2: optional bool isComponentDuplicate;
     3: optional bool isReleaseDuplicate;
-    4: optional string name;
-    5: optional string version;
-    6: optional string message;
+    4: optional string componentsName;
+    5: optional string releasesName;
+    6: optional string version;
+    7: optional string message;
 }
 
 struct CustomProperties {
@@ -231,4 +256,8 @@ union Source {
   1: string projectId
   2: string componentId
   3: string releaseId
+}
+
+struct RestrictedResource {
+    1: optional i32 projects,
 }

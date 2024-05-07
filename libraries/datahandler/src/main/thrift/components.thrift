@@ -17,6 +17,7 @@ include "licenses.thrift"
 namespace java org.eclipse.sw360.datahandler.thrift.components
 namespace php sw360.thrift.components
 
+typedef sw360.CycloneDxComponentType CycloneDxComponentType
 typedef sw360.RequestStatus RequestStatus
 typedef sw360.RequestSummary RequestSummary
 typedef sw360.AddDocumentRequestSummary AddDocumentRequestSummary
@@ -27,8 +28,10 @@ typedef sw360.MainlineState MainlineState
 typedef sw360.ProjectReleaseRelationship ProjectReleaseRelationship
 typedef sw360.SW360Exception SW360Exception
 typedef sw360.PaginationData PaginationData
+typedef sw360.ClearingReportStatus ClearingReportStatus
 typedef sw360.ImportBomRequestPreparation ImportBomRequestPreparation
 typedef attachments.Attachment Attachment
+typedef attachments.AttachmentDTO AttachmentDTO
 typedef attachments.FilledAttachment FilledAttachment
 typedef users.User User
 typedef users.RequestedAction RequestedAction
@@ -125,6 +128,7 @@ enum ClearingState {
     REPORT_AVAILABLE = 3,
     APPROVED = 4,
     SCAN_AVAILABLE = 5,
+    INTERNAL_USE_SCAN_AVAILABLE = 6
 }
 
 /**
@@ -138,6 +142,7 @@ struct ReleaseClearingStateSummary {
     4: required i32 reportAvailable,
     5: required i32 approved,
     6: required i32 scanAvailable, 
+    7: required i32 internalUseScanAvailable,
 }
 
 enum ECCStatus {
@@ -229,6 +234,10 @@ struct Release {
     // information from external data sources
     9: optional  map<string, string> externalIds,
     300: optional map<string, string> additionalData,
+    
+    // Urls for the project
+    70: optional string sourceCodeDownloadurl, // URL for download page for this release source code
+    71: optional string binaryDownloadurl, // URL for download page for this release binaries
 
     // Additional informations
     10: optional set<Attachment> attachments,
@@ -265,16 +274,16 @@ struct Release {
     55: optional EccInformation eccInformation,
     56: optional set<string> softwarePlatforms,
 
-    // Urls for the project
-    70: optional string sourceCodeDownloadurl, // URL for download page for this release source code
-    71: optional string binaryDownloadurl, // URL for download page for this release binaries
 
     80: optional map<string, ReleaseRelationship> releaseIdToRelationship,    //id, comment
+    81: optional set<string> packageIds,
 
     // Information for ModerationRequests
     90: optional DocumentState documentState,
 
     200: optional map<RequestedAction, bool> permissions,
+
+    400: optional string spdxId,
     204: optional string modifiedBy, // Last Modified By User Email
     205: optional string modifiedOn, // Last Modified Date YYYY-MM-dd
 }
@@ -315,6 +324,7 @@ struct Component {
     30: optional map<string,set<string>> roles, //customized roles with set of mail addresses
     80: optional Visibility visbility = sw360.Visibility.EVERYONE,
     81: optional string businessUnit,
+    82: optional CycloneDxComponentType cdxComponentType, // required field in CycloneDX specifications
 
     // information from external data sources
     31: optional  map<string, string> externalIds,
@@ -343,6 +353,7 @@ struct Component {
     53: optional string blog,
     54: optional string wikipedia,
     55: optional string openHub,
+    56: optional string vcs, //Repository URL of the component
 
     // Information for ModerationRequests
     70: optional DocumentState documentState,
@@ -350,6 +361,50 @@ struct Component {
     200: optional map<RequestedAction, bool> permissions,
     204: optional string modifiedBy, // Last Modified By User Email
     205: optional string modifiedOn, // Last Modified Date YYYY-MM-dd
+}
+
+struct ComponentDTO {
+
+    // General information
+    1: optional string id,
+    2: optional string revision,
+    3: optional string type = "component",
+
+    5: required string name,
+    6: optional string description,
+
+    // Additional informations
+    10: optional set<AttachmentDTO> attachmentDTOs,
+    11: optional string createdOn, // Creation date YYYY-MM-dd
+    12: optional ComponentType componentType,
+
+    // string details
+    20: optional string createdBy, // person who created the component in sw360
+    24: optional set<string> subscribers, // List of subscriber information
+    25: optional set<string> moderators, // people who can modify the data
+    26: optional string componentOwner,
+    27: optional string ownerAccountingUnit,
+    28: optional string ownerGroup,
+    29: optional string ownerCountry,
+    30: optional map<string,set<string>> roles, //customized roles with set of mail addresses
+    80: optional Visibility visbility = sw360.Visibility.EVERYONE,
+    81: optional string businessUnit,
+
+    // information from external data sources
+    31: optional  map<string, string> externalIds,
+    300: optional map<string, string> additionalData,
+
+    36: optional Vendor defaultVendor,
+    37: optional string defaultVendorId,
+
+    // List of keywords
+    40: optional set<string> categories,
+
+    // Urls for the component, TODO should be map
+    50: optional string homepage,
+    51: optional string mailinglist,
+    52: optional string wiki,
+    53: optional string blog,
 }
 
 struct ReleaseLink{
@@ -366,7 +421,7 @@ struct ReleaseLink{
     22: required bool hasSubreleases,
     25: optional string nodeId,
     26: optional string parentNodeId,
-
+    27: optional ClearingReport clearingReport,
     31: optional ClearingState clearingState,
     32: optional list<Attachment> attachments,
     33: optional ComponentType componentType,
@@ -374,7 +429,15 @@ struct ReleaseLink{
     101: optional set<string> licenseNames,
     102: optional string comment,
     103: optional set<string> otherLicenseIds,
-    104: optional bool accessible = true
+    104: optional bool accessible = true,
+
+    // For configuration enable.flexible.project.release.relationship = true
+    105: optional list<Release> releaseWithSameComponent,
+    106: optional i32 layer,
+    107: optional i32 index,
+    108: optional string defaultValue,
+    109: optional string projectId,
+    110: optional MainlineState releaseMainLineState
 }
 
 struct ReleaseClearingStatusData {
@@ -383,6 +446,47 @@ struct ReleaseClearingStatusData {
     3: optional string projectNames, // comma separated list of project names for display; possibly abbreviated
     4: optional string mainlineStates, // comma separated list of mainline states for display; possibly abbreviated
     5: optional bool accessible = true
+}
+
+enum BulkOperationResultState {
+    SUCCEEDED = 0,
+    FAILED = 1,
+    CONFLICTED = 2,
+    EXCLUDED = 3,
+}
+
+enum BulkOperationNodeType {
+    PROJECT = 0,
+    COMPONENT = 1,
+    RELEASE = 2,
+}
+
+struct BulkOperationNode {
+    1: required string id,
+    2: required string name,
+    3: required string version,
+    4: required BulkOperationNodeType type,
+    5: optional string parentId,
+    6: optional list<BulkOperationNode> childList,
+    7: optional BulkOperationResultState state,
+    8: optional map<string, string> additionalData
+}
+
+struct ClearingReport{
+    1: optional string id,
+    2: optional string revision,
+    3: required ClearingReportStatus clearingReportStatus,
+    4: required set<Attachment> attachments
+}
+
+struct ReleaseNode {
+     1: required string releaseId,
+     2: optional string releaseRelationship,
+     3: optional string mainlineState,
+     4: optional string comment,
+     5: optional string createOn,
+     6: optional string createBy,
+     7: optional list<ReleaseNode> releaseLink,
 }
 
 service ComponentService {
@@ -460,6 +564,11 @@ service ComponentService {
      * global search function to list accessible releases which match the text argument
      */
     list<Release> searchAccessibleReleases(1: string text, 2: User user);
+
+    /**
+     *  list accessible releases with pagination for ECC page
+     */
+    map<PaginationData, list<Release>> getAccessibleReleasesWithPagination(1: User user, 2: PaginationData pageData);
 
     /**
      * get short summary of release by release name prefix
@@ -602,6 +711,11 @@ service ComponentService {
     list<Release> getReleasesByIdsForExport(1: set<string> ids);
 
     /**
+      * get list Release ids from Component ID
+      **/
+    list<string> getReleaseIdsFromComponentId(1: string id, 2: User user);
+
+    /**
       * get short summary with accessibility of all releases specified by ids
       **/
     list<Release> getReleasesWithAccessibilityByIdsForExport(1: set<string> ids, 2: User user);
@@ -708,6 +822,8 @@ service ComponentService {
      **/
     list<Release> getReleasesByComponentId(1: string id, 2: User user);
 
+    list<Release> getReleasesFullDocsFromComponentId(1: string id, 2: User user);
+
     /**
      * get components belonging to linked releases of the release specified by releaseId
      **/
@@ -737,6 +853,11 @@ service ComponentService {
      * Recomputes the fields of a component that are aggregated by its releases.
      */
     Component recomputeReleaseDependentFields(1: string componentId, 2: User user);
+
+    /**
+     * Deletes the specified release and the linked releases in bulk.
+     */
+    BulkOperationNode deleteBulkRelease(1: string releaseId, 2: User user, 3: bool isPreview) throws (1: SW360Exception exp);
 
     /**
      * check if release is used by other releases, components or projects
@@ -827,6 +948,11 @@ service ComponentService {
     RequestStatus updateReleasesWithSvmTrackingFeedback();
 
     /**
+     * uploads source code attachment to releases
+     **/
+    RequestStatus uploadSourceCodeAttachmentToReleases();
+
+    /**
      * Method to ensure uniqueness of identifiers, used by database sanitation portlet,
      * return map of name to ids
      **/
@@ -885,4 +1011,31 @@ service ComponentService {
     * Send email to the user once spreadsheet export completed
     */
     void sendExportSpreadsheetSuccessMail(1: string url, 2: string userEmail);
+    /*
+    * download api
+    */
+    binary downloadExcel(1:User user,2:bool extendedByReleases,3:string token) throws (1: SW360Exception exp);
+    /*
+    * get report data stream
+    */
+    binary getComponentReportDataStream(1: User user, 2: bool extendedByReleases) throws (1: SW360Exception exp);
+    /*
+    * get component report in mail
+    */
+    string getComponentReportInEmail(1: User user, 2: bool extendedByReleases) throws (1: SW360Exception exp); 
+
+    /**
+    * Check accessible of release
+    */
+    bool isReleaseActionAllowed(1: Release release, 2:User user, 3:RequestedAction action)
+
+    /**
+    * Gets list releases with list release id
+    */
+    list<Release> getReleasesByListIds(1: list<string> ids, 2:User user)
+
+    /**
+    * Get releases dependency network of release
+    */
+    list<ReleaseNode> getReleaseRelationNetworkOfRelease(1: Release release, 2:User user)
 }

@@ -43,6 +43,10 @@
         <module>src-wsimport</module>
         <module>src-changelogs</module>
         <module>src-health</module>
+        <module>src-spdxdocument</module>
+        <module>src-spdxdocumentcreationinfo</module>
+        <module>src-spdxpackageinfo</module>
+        <module>src-packages</module>
     </modules>
 
     <dependencies>

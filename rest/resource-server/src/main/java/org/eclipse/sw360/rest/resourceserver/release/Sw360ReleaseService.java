@@ -21,6 +21,7 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
@@ -29,17 +30,12 @@ import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
-import org.eclipse.sw360.datahandler.thrift.components.Component;
-import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
-import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
-import org.eclipse.sw360.datahandler.thrift.components.ExternalTool;
-import org.eclipse.sw360.datahandler.thrift.components.ExternalToolProcess;
-import org.eclipse.sw360.datahandler.thrift.components.ExternalToolProcessStatus;
-import org.eclipse.sw360.datahandler.thrift.components.ExternalToolProcessStep;
-import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
 import org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
@@ -55,18 +51,19 @@ import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+import com.google.common.collect.Sets;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyString;
 import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
+import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -118,6 +115,44 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         return releaseById;
     }
 
+    public Set<Release> getReleasesForUserByIds(Set<String> releaseIds) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        Set<Release> limitedSet = new HashSet<>();
+        try {
+            List<Release> releases = sw360ComponentClient.getReleasesByIdsForExport(releaseIds);
+            for(Release rel: releases) {
+                Release limitedRelease = new Release();
+                limitedRelease.setId(rel.getId());
+                limitedRelease.setName(rel.getName());
+                limitedRelease.setVersion(rel.getVersion());
+                limitedSet.add(limitedRelease);
+            }
+        } catch (SW360Exception sw360Exp) {
+                if (sw360Exp.getErrorCode() == 404) {
+                    throw new ResourceNotFoundException("Release does not exists!");
+                } else {
+                    throw sw360Exp;
+                }
+            }
+        return limitedSet;
+    }
+
+    public List<ReleaseLink> getLinkedReleaseRelations(Release release, User user) throws TException {
+        List<ReleaseLink> linkedReleaseRelations = getLinkedReleaseRelationsWithAccessibility(release, user);
+        linkedReleaseRelations = linkedReleaseRelations.stream().filter(Objects::nonNull).sorted(Comparator.comparing(
+                rl -> rl.isAccessible() ? SW360Utils.getVersionedName(nullToEmptyString(rl.getName()), rl.getVersion()) : "~", String.CASE_INSENSITIVE_ORDER)
+        ).collect(Collectors.toList());
+        return linkedReleaseRelations;
+    }
+
+    public List<ReleaseLink> getLinkedReleaseRelationsWithAccessibility(Release release, User user) throws TException {
+        if (release != null && release.getReleaseIdToRelationship() != null) {
+            ComponentService.Iface componentClient = getThriftComponentClient();
+            return componentClient.getLinkedReleaseRelationsWithAccessibility(release.getReleaseIdToRelationship(), user);
+        }
+        return Collections.emptyList();
+    }
+
     public Release setComponentDependentFieldsInRelease(Release releaseById, User sw360User) {
         String componentId = releaseById.getComponentId();
         if (CommonUtils.isNullEmptyOrWhitespace(componentId)) {
@@ -134,6 +169,31 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         return releaseById;
     }
 
+    public List<Release> setComponentDependentFieldsInRelease(List<Release> releases, User sw360User) {
+        Map<String, Component> componentIdMap;
+
+        try {
+            ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+            List<Component> components = sw360ComponentClient.getComponentSummary(sw360User);
+            componentIdMap = components.stream().collect(Collectors.toMap(Component::getId, c -> c));
+        } catch (TException e) {
+            throw new HttpMessageNotReadableException("No Components found");
+        }
+        
+        for (Release release : releases) {
+            String componentId = release.getComponentId();
+            if (CommonUtils.isNullEmptyOrWhitespace(componentId)) {
+                throw new HttpMessageNotReadableException("ComponentId must be present");
+            }
+            if (!componentIdMap.containsKey(componentId)) {
+            	throw new HttpMessageNotReadableException("No Component found with Id - " + componentId);
+            }
+            Component component = componentIdMap.get(componentId);
+            release.setComponentType(component.getComponentType());
+        }
+        return releases;
+    }
+    
     public List<Release> getReleaseSubscriptions(User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.getSubscribedReleases(sw360User);
@@ -212,6 +272,13 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
     public RequestStatus deleteRelease(String releaseId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         RequestStatus deleteStatus;
+
+        if (SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            if (!projectService.getProjectsUsedReleaseInDependencyNetwork(releaseId).isEmpty()) {
+                return RequestStatus.IN_USE;
+            }
+        }
+
         if (Sw360ResourceServer.IS_FORCE_UPDATE_ENABLED) {
             deleteStatus = sw360ComponentClient.deleteReleaseWithForceFlag(releaseId, sw360User, true);
         } else {
@@ -654,5 +721,35 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         }
 
         return fossologyClient;
+    }
+
+    /**
+     * Re-generate Fossology report for release
+     * @param releaseId                Id of Release need to re-generate report
+     * @param user                     Request User
+     * @return RequestStatus
+     * @throws TException
+     */
+    public RequestStatus triggerReportGenerationFossology(String releaseId, User user) throws TException {
+        FossologyService.Iface fossologyClient = getThriftFossologyClient();
+        return fossologyClient.triggerReportGenerationFossology(releaseId, user);
+    }
+
+    /**
+     * Count the number of projects are using the release that has releaseId
+     * @param releaseId              Id of release
+     * @return int                    Number of project
+     * @throws TException
+     */
+    public int countProjectsByReleaseId(String releaseId) {
+        return projectService.countProjectsByReleaseIds(Collections.singleton(releaseId));
+    }
+
+    /*
+     * Use lucene search for searching releases based on name
+     */
+    public List<Release> refineSearch(String searchText, User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.searchAccessibleReleases(searchText, sw360User);
     }
 }

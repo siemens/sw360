@@ -10,6 +10,8 @@
  */
 package org.eclipse.sw360.licenses.db;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.thrift.TException;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseRepositoryCloudantClient;
@@ -27,7 +29,10 @@ import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
+import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
+import org.eclipse.sw360.datahandler.thrift.changelogs.Operation;
 import org.eclipse.sw360.licenses.tools.SpdxConnector;
+import org.eclipse.sw360.exporter.LicenseExporter;
 import org.eclipse.sw360.licenses.tools.OSADLObligationConnector;
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.LogManager;
@@ -42,6 +47,10 @@ import com.cloudant.client.api.model.Response;
 import com.google.common.collect.Sets;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.function.Function;
 import java.net.MalformedURLException;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -55,7 +64,6 @@ import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePerm
 import static org.eclipse.sw360.datahandler.thrift.ThriftValidate.*;
 
 import org.eclipse.sw360.datahandler.db.DatabaseHandlerUtil;
-import org.eclipse.sw360.datahandler.thrift.changelogs.Operation;
 import com.google.common.collect.Lists;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.spdx.library.InvalidSPDXAnalysisException;
@@ -80,6 +88,7 @@ public class LicenseDatabaseHandler {
     private final ObligationElementRepository obligationElementRepository;
     private final ObligationNodeRepository obligationNodeRepository;
     private final LicenseTypeRepository licenseTypeRepository;
+    private final LicenseObligationListRepository obligationListRepository;
     private final LicenseModerator moderator;
     private final CustomPropertiesRepository customPropertiesRepository;
     private final DatabaseRepositoryCloudantClient[] repositories;
@@ -104,6 +113,7 @@ public class LicenseDatabaseHandler {
         obligationNodeRepository = new ObligationNodeRepository(db);
         licenseTypeRepository = new LicenseTypeRepository(db);
         customPropertiesRepository = new CustomPropertiesRepository(db);
+        obligationListRepository = new LicenseObligationListRepository(db);
 
         repositories = new DatabaseRepositoryCloudantClient[]{
                 licenseRepository,
@@ -111,7 +121,8 @@ public class LicenseDatabaseHandler {
                 obligRepository,
                 customPropertiesRepository,
                 obligationElementRepository,
-                obligationNodeRepository
+                obligationNodeRepository,
+                obligationListRepository
         };
 
         moderator = new LicenseModerator();
@@ -160,6 +171,51 @@ public class LicenseDatabaseHandler {
         fillLicenseForOrganisation(organisation, license);
 
         return license;
+    }
+
+    private LicenseExporter getLicenseExporterObject() {
+        ThriftClients thriftClients = new ThriftClients();
+        Function<Logger,List<LicenseType>> getLicenseTypes = log -> {
+            LicenseService.Iface client = thriftClients.makeLicenseClient();
+            try {
+                return client.getLicenseTypes();
+            } catch (TException e) {
+                log.error("Error getting license type list.", e);
+                return Collections.emptyList();
+            }
+        };
+        return new LicenseExporter(getLicenseTypes);
+    }
+
+    public ByteBuffer downloadExcel(String token) throws SW360Exception {
+        try {
+            ThriftClients thriftClients = new ThriftClients();
+            Function<Logger,List<LicenseType>> getLicenseTypes = log -> {
+                LicenseService.Iface client = thriftClients.makeLicenseClient();
+                try {
+                    return client.getLicenseTypes();
+                } catch (TException e) {
+                    log.error("Error getting license type list.", e);
+                    return Collections.emptyList();
+                }
+            };
+            LicenseExporter exporter = new LicenseExporter(getLicenseTypes);
+            InputStream stream = exporter.downloadExcelSheet(token);
+            return ByteBuffer.wrap(IOUtils.toByteArray(stream));
+        } catch (IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
+    }
+
+    public ByteBuffer getLicenseReportDataStream() throws TException {
+        try {
+            List<License> licenses = getLicenseSummaryForExport();
+            LicenseExporter exporter = getLicenseExporterObject();
+            InputStream stream = exporter.makeExcelExport(licenses);
+            return ByteBuffer.wrap(IOUtils.toByteArray(stream));
+        }catch (IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
     }
 
     public License getLicenseForOrganisationWithOwnModerationRequests(String id, String organisation, User user) throws SW360Exception {
@@ -449,12 +505,20 @@ public class LicenseDatabaseHandler {
 
             Optional<License> oldLicense = Optional.ofNullable(inputLicense.getId())
                     .map(id -> licenseRepository.get(inputLicense.getId()));
-            boolean isNewLicense = ! oldLicense.isPresent();
+            boolean isNewLicense = !oldLicense.isPresent();
+            License oldLicenseForChangelogs = new License();
+            Set<String> oldObligationDatabaseIds = new HashSet<>();
 
             if(isNewLicense){
                 validateNewLicense(inputLicense);
             } else {
                 validateExistingLicense(inputLicense);
+                License license = oldLicense.orElse(new License());
+                if (!CommonUtils.isNullOrEmptyCollection(license.getObligationDatabaseIds())) {
+                    oldObligationDatabaseIds = license.getObligationDatabaseIds();
+                }
+                oldLicenseForChangelogs = setLicenseForChangelogs(oldLicense.orElse(new License()));
+                oldLicenseForChangelogs.setShortname(inputLicense.getShortname());
             }
 
             boolean oldLicenseWasChecked = oldLicense.map(License::isChecked).orElse(false);
@@ -466,10 +530,56 @@ public class LicenseDatabaseHandler {
                 return RequestStatus.FAILURE;
             }
 
+            License resultLicenseForChangelogs = setLicenseForChangelogs(resultLicense);
+            resultLicenseForChangelogs.setShortname(inputLicense.getShortname());
+
+            LicenseObligationList resultObligationList = new LicenseObligationList();
+            Map<String, Obligation> obligations = new HashMap<>();
+            getObligationsByIds(resultLicense.getObligationDatabaseIds()).forEach(oblig -> {
+                obligations.put(oblig.getTitle(), oblig);
+            });
+            resultObligationList.setLinkedObligations(obligations);
+            resultObligationList.setLicenseId(resultLicense.getId());
+
             if(isNewLicense) {
+                if (!resultLicense.getObligationDatabaseIds().isEmpty()) {
+                    obligationListRepository.add(resultObligationList);
+                    resultLicense.setObligationListId(resultObligationList.getId());
+                }
                 licenseRepository.add(resultLicense);
+                dbHandlerUtil.addChangeLogs(resultLicenseForChangelogs, null, user.getEmail(), Operation.CREATE, null,
+                        Lists.newArrayList(), null, null);
+                if(resultLicense.getObligationListId() != null){
+                    dbHandlerUtil.addChangeLogs(resultObligationList, null, user.getEmail(), Operation.CREATE, null,
+                            Lists.newArrayList(), resultLicense.getId(), Operation.LICENSE_CREATE);
+                }
             } else {
                 licenseRepository.update(resultLicense);
+
+                dbHandlerUtil.addChangeLogs(resultLicenseForChangelogs, oldLicenseForChangelogs, user.getEmail(),
+                        Operation.UPDATE, null,
+                        Lists.newArrayList(), null, null);
+                
+                LicenseObligationList oldObligationList = new LicenseObligationList();
+                if (!resultLicense.getObligationDatabaseIds().equals(oldObligationDatabaseIds) && CommonUtils.isNotNullEmptyOrWhitespace(resultLicense.getObligationListId())) {
+                    resultObligationList.setId(resultLicense.getObligationListId());
+                    LicenseObligationList baseObligationList = obligationListRepository
+                            .get(resultLicense.getObligationListId());
+                    resultObligationList.setId(baseObligationList.getId());
+                    resultObligationList.setRevision(baseObligationList.getRevision());
+                    obligationListRepository.update(resultObligationList);
+
+                    Map<String, Obligation> oldObligations = new HashMap<>();
+                    getObligationsByIds(oldObligationDatabaseIds).forEach(oblig -> {
+                        oldObligations.put(oblig.getTitle(), oblig);
+                    });
+                    oldObligationList.setId(baseObligationList.getId());
+                    oldObligationList.setLinkedObligations(oldObligations);
+                    oldObligationList.setLicenseId(oldLicense.orElse(new License()).getId());
+                    dbHandlerUtil.addChangeLogs(resultObligationList, oldObligationList, user.getEmail(),
+                            Operation.UPDATE, null,
+                            Lists.newArrayList(), resultLicense.getId(), Operation.LICENSE_UPDATE);
+                }
             }
             return RequestStatus.SUCCESS;
         }
@@ -514,9 +624,27 @@ public class LicenseDatabaseHandler {
                 .orElse(Quadratic.NA));
         license.setExternalLicenseLink(inputLicense.getExternalLicenseLink());
         license.setChecked(inputLicense.isChecked());
-        license.setObligationDatabaseIds(inputLicense.getObligationDatabaseIds());
+        if (CommonUtils.isNullOrEmptyCollection(inputLicense.getObligationDatabaseIds())) {
+            license.setObligationDatabaseIds(new HashSet<>());
+        } else {
+            license.setObligationDatabaseIds(inputLicense.getObligationDatabaseIds());
+        }
+        license.setNote(inputLicense.getNote());
 
         return license;
+    }
+
+    public License setLicenseForChangelogs(License license) {
+        License licenseForChangelogs = license.deepCopy();
+        if (licenseForChangelogs.isSetLicenseTypeDatabaseId()) {
+            LicenseType licenseTypeForChangelogs = getLicenseTypeById(licenseForChangelogs.getLicenseTypeDatabaseId());
+            licenseForChangelogs.setLicenseType(licenseTypeForChangelogs);
+            licenseForChangelogs.unsetLicenseTypeDatabaseId();
+        }
+        if (licenseForChangelogs.isSetObligationDatabaseIds()) {
+            licenseForChangelogs.unsetObligationDatabaseIds();
+        }
+        return licenseForChangelogs;
     }
 
     public RequestStatus updateLicenseFromAdditionsAndDeletions(License licenseAdditions,
@@ -698,6 +826,11 @@ public class LicenseDatabaseHandler {
         return obligationElements;
     }
 
+    public List<LicenseObligationList> getLicenseObligationLists() {
+        final List<LicenseObligationList> licenseObligationLists = obligationListRepository.getAll();
+        return licenseObligationLists;
+    }
+
     public List<LicenseType> getLicenseTypesByIds(Collection<String> ids) {
         return licenseTypeRepository.get(ids);
     }
@@ -714,6 +847,12 @@ public class LicenseDatabaseHandler {
             obl.setDistributionString(obl.isDistribution() ? "True" : "False");
         });
         return obligations;
+    }
+
+    public List<Obligation> getObligationsByLicenseId(String id) throws SW360Exception {
+        License license = licenseRepository.get(id);
+        Set<String> ids = license.getObligationDatabaseIds();
+        return getObligationsByIds(ids);
     }
 
     public LicenseType getLicenseTypeById(String id) {
@@ -814,6 +953,16 @@ public class LicenseDatabaseHandler {
         if (makePermission(license, user).isActionAllowed(RequestedAction.DELETE)) {
             licenseRepository.remove(license);
             moderator.notifyModeratorOnDelete(license.getId());
+            dbHandlerUtil.addChangeLogs(null, license, user.getEmail(), Operation.DELETE, null,
+                    Lists.newArrayList(), null, null);
+
+            if (license.getObligationListId() != null) {
+                LicenseObligationList obligationList = obligationListRepository.get(license.getObligationListId());
+                obligationListRepository.remove(obligationList);
+                dbHandlerUtil.addChangeLogs(null, obligationList, user.getEmail(), Operation.DELETE, null,
+                        Lists.newArrayList(), license.getId(), Operation.LICENSE_DELETE);
+            }
+
             return RequestStatus.SUCCESS;
         } else {
             log.error(user + " does not have the permission to delete the license.");

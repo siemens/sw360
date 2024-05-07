@@ -19,26 +19,41 @@
   <version>${revision}</version>
   <packaging>pom</packaging>
 
+  <name>Eclipse SW360</name>
+  <description>Eclipse SW360 compliance management application</description>
+  <url>https://eclipse.org/sw360</url>
   <licenses>
     <license>
       <name>Eclipse Public License 2.0</name>
       <url>https://www.eclipse.org/legal/epl-2.0/</url>
     </license>
   </licenses>
+  <organization>
+    <name>Eclipse SW360</name>
+    <url>https://eclipse.org/sw360</url>
+  </organization>
+  <developers>
+    <developer>
+      <name>SW360 Team</name>
+      <organization>SW360</organization>
+      <organizationUrl>https://eclipse.org/sw360</organizationUrl>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/eclipse-sw360/sw360</connection>
+    <url>https://github.com/eclipse-sw360/sw360.git</url>
+  </scm>
 
   <modules>
     <module>build-configuration</module>
+    <module>third-party</module>
+    <module>utils</module>
     <module>libraries</module>
     <module>backend</module>
     <module>frontend</module>
     <module>rest</module>
     <module>clients</module>
-    <module>utils</module>
   </modules>
-
-  <scm>
-    <connection>scm:git:https://github.com/eclipse/sw360</connection>
-  </scm>
 
   <distributionManagement>
     <repository>
@@ -48,8 +63,9 @@
   </distributionManagement>
 
   <properties>
-    <revision>17.0.${patchlevel}</revision>
+    <revision>18.0.${patchlevel}</revision>
     <patchlevel>0-SNAPSHOT</patchlevel>
+    <rest.version>1.0.0</rest.version>
 
     <!-- Build version properties -->
     <java_source.version>11</java_source.version>
@@ -60,7 +76,6 @@
     <!-- Plugin version properties -->
     <asciidoctor-maven-plugin.version>2.2.2</asciidoctor-maven-plugin.version>
     <build-helper-maven-plugin.version>3.3.0</build-helper-maven-plugin.version>
-    <buildnumber-maven-plugin.version>3.0.0</buildnumber-maven-plugin.version>
     <jacoco-maven-plugin.version>0.8.8</jacoco-maven-plugin.version>
     <maven-assembly-plugin.version>3.4.2</maven-assembly-plugin.version>
     <maven-bundle-plugin.version>5.1.8</maven-bundle-plugin.version>
@@ -77,10 +92,10 @@
 
     <!-- JSON Libraries used in the project -->
     <gson.version>2.10.1</gson.version>
-    <json.version>20230227</json.version>
-    <json-path.version>2.8.0</json-path.version>
+    <json.version>20240303</json.version>
+    <json-path.version>2.9.0</json-path.version>
     <json-smart.version>2.4.10</json-smart.version>
-    <json-simple.version>2.3.1</json-simple.version>
+    <json-simple.version>4.0.1</json-simple.version>
     <jackson.version>2.14.2</jackson.version>
 
     <!-- Dependencies version properties -->
@@ -88,7 +103,8 @@
     <cloudant.version>2.19.1</cloudant.version>
     <commons-codec.version>1.15</commons-codec.version>
     <commons-collection4.version>4.4</commons-collection4.version>
-    <commons-compress.version>1.21</commons-compress.version>
+    <commons-compress.version>1.26.0</commons-compress.version>
+    <commons-configuration.version>1.10</commons-configuration.version>
     <commons-csv.version>1.9.0</commons-csv.version>
     <commons-io.version>2.11.0</commons-io.version>
     <commons-lang3.version>3.12.0</commons-lang3.version>
@@ -99,14 +115,16 @@
     <failureaccess.version>1.0.1</failureaccess.version>
     <findbugs-annotations.version>1.3.9-1</findbugs-annotations.version>
     <glassfish-jaxb.version>2.3.2</glassfish-jaxb.version>
-    <guava.version>31.1-jre</guava.version>
+    <guava.version>32.0.0-jre</guava.version>
     <hamcrest.version>1.3</hamcrest.version>
     <httpclient.version>4.5.14</httpclient.version>
     <httpcore.version>4.4.16</httpcore.version>
     <jakarta-xml-bind.version>2.3.2</jakarta-xml-bind.version>
-    <javax-annotation.version>1.3.2</javax-annotation.version>
     <javax-activation.version>1.1.1</javax-activation.version>
+    <javax-annotation.version>1.3.2</javax-annotation.version>
+    <jcip-annotations.version>1.0</jcip-annotations.version>
     <jcraft.version>0.1.54</jcraft.version>
+    <jetty.version>10.0.15</jetty.version>
     <jgiven.version>0.17.0</jgiven.version>
     <jquery.confirm.version>3.3.2</jquery.confirm.version>
     <jquery.datatables.buttons.version>1.5.3</jquery.datatables.buttons.version>
@@ -115,37 +133,47 @@
     <jquery.treetable.version>3.2.0</jquery.treetable.version>
     <jquery.ui.version>1.12.1</jquery.ui.version>
     <jquery.validation.version>1.19.0</jquery.validation.version>
+    <json.version>20230227</json.version>
     <junit-dataprovider.version>1.13.1</junit-dataprovider.version>
     <junit.version>4.13.2</junit.version>
-    <liferay.portal.tools.theme.builder.version>1.1.9</liferay.portal.tools.theme.builder.version>
-    <liferay.css.builder.version>3.1.0</liferay.css.builder.version>
+    <liferay.css.builder.version>3.1.2</liferay.css.builder.version>
     <liferay.frontend.css.common.version>6.0.3</liferay.frontend.css.common.version>
     <liferay.frontend.theme.styled.version>6.0.27</liferay.frontend.theme.styled.version>
     <liferay.frontend.theme.unstyled.version>6.0.29</liferay.frontend.theme.unstyled.version>
     <liferay.petra.function.version>5.1.2</liferay.petra.function.version>
     <liferay.portal.kernel.version>43.0.1</liferay.portal.kernel.version>
+    <liferay.portal.tools.theme.builder.version>1.1.9</liferay.portal.tools.theme.builder.version>
     <liferay.util.bridges.version>9.0.6</liferay.util.bridges.version>
     <liferay.util.java.version>17.1.2</liferay.util.java.version>
     <liferay.util.taglib.version>8.4.8</liferay.util.taglib.version>
+    <maven-javadoc.version>3.6.2</maven-javadoc.version>
     <log4j2.version>2.19.0</log4j2.version>
+    <lucene.version>6.6.6</lucene.version>
     <mockito.version>4.7.0</mockito.version>
     <okhttp.version>4.10.0</okhttp.version>
-    <package-url.version>1.1.1</package-url.version>
+    <org.spdx.java.spdx.library.version>1.1.1</org.spdx.java.spdx.library.version>
+    <org.spdx.tools.java.version>1.1.5</org.spdx.tools.java.version>
+    <package-url.version>1.4.1</package-url.version>
     <poi.version>4.1.2</poi.version>
     <project-lombok.version>1.18.24</project-lombok.version>
     <require.js.version>2.3.6</require.js.version>
     <resumable.js.version>1.1.0</resumable.js.version>
     <slf4j.version>1.7.30</slf4j.version>
     <spotless.version>2.29.0</spotless.version>
-    <spring.version>5.3.19</spring.version>
-    <spring-boot.version>2.7.11</spring-boot.version>
-    <spring-restdocs.version>2.0.6.RELEASE</spring-restdocs.version>
-    <spring-security-oauth2.version>2.5.1.RELEASE</spring-security-oauth2.version>
-    <spring-security-jwt.version>1.1.1.RELEASE</spring-security-jwt.version>
+    <spring-boot.version>2.7.6</spring-boot.version>
     <spring-restdocs-asciidoctor.version>2.0.6.RELEASE</spring-restdocs-asciidoctor.version>
-    <thrift.version>0.16.0</thrift.version>
+    <spring-restdocs.version>2.0.6.RELEASE</spring-restdocs.version>
+    <spring-security-jwt.version>1.1.1.RELEASE</spring-security-jwt.version>
+    <spring-security-oauth2.version>2.5.1.RELEASE</spring-security-oauth2.version>
+    <springdoc-openapi-hateos.version>1.7.0</springdoc-openapi-hateos.version>
+    <springdoc-openapi-ui.version>1.7.0</springdoc-openapi-ui.version>
+    <springdoc-openapi-security.version>1.7.0</springdoc-openapi-security.version>
+    <springdoc-openapi-webmvc.version>1.7.0</springdoc-openapi-webmvc.version>
+    <springframework.version>5.3.27</springframework.version>
+    <thrift.version>0.18.1</thrift.version>
+    <tika.version>1.28.5</tika.version>
     <wiremock.version>2.26.0</wiremock.version>
-    <org.spdx.tools.java.version>1.1.5</org.spdx.tools.java.version>
+    <javax.servlet-api.version>4.0.1</javax.servlet-api.version>
 
     <!--  User must provide below property configuration based on his/her liferay deployment
     environment -->
@@ -176,6 +204,11 @@
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>org.apache.axis</groupId>
+        <artifactId>axis</artifactId>
+        <version>1.4</version>
+      </dependency>
       <dependency>
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>
@@ -301,6 +334,16 @@
         <artifactId>jakarta.xml.bind-api</artifactId>
         <version>${jakarta-xml-bind.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-core-java</artifactId>
+        <version>7.3.2</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-model</artifactId>
+        <version>3.9.2</version>
+      </dependency>
       <!-- Runtime, com.sun.xml.bind module: java 11 compatibility  -->
       <dependency>
         <groupId>org.glassfish.jaxb</groupId>
@@ -383,6 +426,11 @@
         <groupId>org.spdx</groupId>
         <artifactId>tools-java</artifactId>
         <version>${org.spdx.tools.java.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.spdx</groupId>
+        <artifactId>java-spdx-library</artifactId>
+        <version>${org.spdx.java.spdx.library.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.velocity</groupId>
@@ -508,6 +556,38 @@
         <artifactId>commons-compress</artifactId>
         <version>${commons-compress.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+        <version>${springframework.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-beans</artifactId>
+        <version>${springframework.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-context</artifactId>
+        <version>${springframework.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-webmvc</artifactId>
+        <version>${springframework.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-web</artifactId>
+        <version>${springframework.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>javax.servlet</groupId>
+        <artifactId>javax.servlet-api</artifactId>
+        <version>${javax.servlet-api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
 
@@ -546,48 +626,17 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-dependency-plugin</artifactId>
-          <version>${maven-dependency-plugin.version}</version>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.3.0</version>
           <executions>
             <execution>
-              <id>add-build-configuration-resources</id>
+              <id>attach-sources</id>
               <goals>
-                <goal>unpack</goal>
+                <goal>jar-no-fork</goal>
               </goals>
-              <phase>generate-resources</phase>
-              <configuration>
-                <artifactItems combine.children="append">
-                  <artifactItem>
-                    <groupId>org.eclipse.sw360</groupId>
-                    <artifactId>build-configuration</artifactId>
-                    <version>${project.version}</version>
-                    <type>jar</type>
-                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                  </artifactItem>
-                </artifactItems>
-              </configuration>
-            </execution>
-            <execution>
-              <id>add-build-configuration-test-resources</id>
-              <goals>
-                <goal>unpack</goal>
-              </goals>
-              <phase>generate-test-resources</phase>
-              <configuration>
-                <artifactItems combine.children="append">
-                  <artifactItem>
-                    <groupId>org.eclipse.sw360</groupId>
-                    <artifactId>build-configuration</artifactId>
-                    <version>${project.version}</version>
-                    <type>test-jar</type>
-                    <outputDirectory>${project.build.testOutputDirectory}</outputDirectory>
-                  </artifactItem>
-                </artifactItems>
-              </configuration>
             </execution>
           </executions>
         </plugin>
-
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-resources-plugin</artifactId>
@@ -596,11 +645,32 @@
             <overwrite>true</overwrite>
           </configuration>
         </plugin>
-
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>${maven-javadoc.version}</version>
+          <configuration>
+            <nohelp>true</nohelp>
+          </configuration>
+          <executions>
+            <execution>
+              <id>attach-javadocs</id>
+              <goals>
+                <goal>jar</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${maven-surefire-plugin.version}</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>buildnumber-maven-plugin</artifactId>
+          <version>${buildnumber-maven-plugin.version}</version>
         </plugin>
 
         <plugin>
@@ -616,12 +686,6 @@
               <phase>package</phase>
             </execution>
           </executions>
-        </plugin>
-
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId>
-          <artifactId>buildnumber-maven-plugin</artifactId>
-          <version>${buildnumber-maven-plugin.version}</version>
         </plugin>
 
         <plugin>
@@ -845,36 +909,20 @@
       </build>
     </profile>
     <profile>
-      <id>eclipse-ci</id>
+      <id>sonatype</id>
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
-
       <distributionManagement>
-        <repository>
-          <id>repo.eclipse.org</id>
-          <name>Project Repository - Releases</name>
-          <url>https://repo.eclipse.org/content/repositories/sw360-releases/</url>
-        </repository>
         <snapshotRepository>
-          <id>repo.eclipse.org</id>
-          <name>Project Repository - Snapshots</name>
-          <url>https://repo.eclipse.org/content/repositories/sw360-snapshots/</url>
+          <id>ossrh</id>
+          <url>https://oss.sonatype.org/content/repositories/snapshots</url>
         </snapshotRepository>
+        <repository>
+          <id>ossrh</id>
+          <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
       </distributionManagement>
-
-      <pluginRepositories>
-        <pluginRepository>
-          <releases>
-            <enabled>true</enabled>
-          </releases>
-          <snapshots>
-            <enabled>true</enabled>
-          </snapshots>
-          <id>repo.eclipse.org</id>
-          <url>https://repo.eclipse.org/content/repositories/cbi</url>
-        </pluginRepository>
-      </pluginRepositories>
 
       <build>
         <pluginManagement>
@@ -888,21 +936,29 @@
         </pluginManagement>
         <plugins>
           <plugin>
-            <groupId>org.eclipse.cbi.maven.plugins</groupId>
-            <artifactId>eclipse-jarsigner-plugin</artifactId>
-            <configuration>
-              <resigningStrategy>OVERWRITE</resigningStrategy>
-              <excludeInnerJars>true</excludeInnerJars>
-            </configuration>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.1.0</version>
             <executions>
               <execution>
-                <id>sign</id>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
                 <goals>
                   <goal>sign</goal>
                 </goals>
-                <phase>verify</phase>
               </execution>
             </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.6.7</version>
+            <extensions>true</extensions>
+            <configuration>
+              <serverId>ossrh</serverId>
+              <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+              <autoReleaseAfterClose>true</autoReleaseAfterClose>
+            </configuration>
           </plugin>
         </plugins>
       </build>

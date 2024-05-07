@@ -26,8 +26,8 @@ import java.util.Set;
  * @author stefan.jaeger@evosoft.com
  * @author alex.borodin@evosoft.com
  */
-public class PortalConstants {
 
+public class PortalConstants {
     public static final String PROPERTIES_FILE_PATH = "/sw360.properties";
     public static final String PROGRAMMING_LANGUAGES;
     public static final Set<String> DOMAIN;
@@ -92,6 +92,7 @@ public class PortalConstants {
     public static final String SELECTED_TAB = "selectedTab";
     public static final String IS_USER_ALLOWED_TO_MERGE = "isUserAllowedToMerge";
     public static final String DOCUMENT_TYPE = "documentType";
+    public static final String IS_SPDX_DOCUMENT = "isSpdxDocument";
     public static final String VIEW_SIZE = "viewSize";
     public static final String TOTAL_ROWS = "totalRows";
     public static final String RESULT = "result";
@@ -106,6 +107,22 @@ public class PortalConstants {
     public static final String IS_CLEARING_EXPERT = "isClearingExpert";
     public static final String IS_PROJECT_MEMBER = "isProjectMember";
     public static final String IS_ERROR_IN_UPDATE_OR_CREATE = "isErrorInUpdateOrCreate";
+
+    //! Specialized keys for packages
+    public static final String PACKAGE = "Package";
+    public static final String PKG = "pkg";
+    public static final String PACKAGES = "packages";
+    public static final String PACKAGES_PORTLET_NAME = PORTLET_NAME_PREFIX + PACKAGES;
+    public static final String PACKAGE_ID = "packageId";
+    public static final String PACKAGE_IDS = "packageIds";
+    public static final String IMPORT_CYCLONEDX_SBOM = "importCycloneDxSBoM";
+    public static final String PACKAGE_LIST = "packageList";
+    public static final String LOAD_PACKAGE_LIST = "loadPackageList";
+    public static final String DELETE_PACKAGE = "delete_package";
+    public static final String PAGENAME_PACKAGE_DETAIL = "detailPackage";
+    public static final String PAGENAME_EDIT_PACKAGE = "editPackage";
+    public static final String LOAD_RELEASE_INFO = "loadReleaseInfo";
+    public static final String ORPHAN_PACKAGE_CHECKBOX = "orphanPackageCheckBox";
 
     //! Specialized keys for licenses
     public static final String LICENSES_PORTLET_NAME = PORTLET_NAME_PREFIX + "licenses";
@@ -122,7 +139,7 @@ public class PortalConstants {
     public static final String LICENSE_TYPE_GLOBAL = "global";
     public static final String LICENSE_TYPE_OTHERS = "Others";
     public static final String LICENSE_IDS = "licenseIds";
-    public static final String MAIN_LICENSE_FILES = "LICENSE.*|license|license.txt|license.html|COPYING.*|copying|copying.txt|copying.html";
+    public static final String MAIN_LICENSE_FILES = "LICENSE.*|License.*|license|license.txt|license.html|COPYING.*|Copying.*|copying|copying.txt|copying.html";
 
     //! Specialized keys for moderation
     public static final String MODERATION_PORTLET_NAME = PORTLET_NAME_PREFIX + "moderations";
@@ -183,6 +200,8 @@ public class PortalConstants {
     public static final String PAGENAME_RELEASE_DETAIL = "detailRelease";
     public static final String PAGENAME_EDIT_RELEASE = "editRelease";
     public static final String PAGENAME_DUPLICATE_RELEASE = "duplicateRelease";
+    public static final String PAGENAME_DELETE_BULK_RELEASE = "deleteBulkRelease";
+    public static final String PAGENAME_DELETE_BULK_RELEASE_PREVIEW = "deleteBulkReleasePreview";
     public static final String RELEASE_ROLES;
     public static final String RELEASE_EXTERNAL_IDS;
     public static final Set<String> RELEASE_EXTERNAL_ID_KEYS;
@@ -192,6 +211,8 @@ public class PortalConstants {
     public static final String RELEASE_SOURCE_ID = "releaseSourceId";
     public static final String RELEASE_TARGET_ID = "releaseTargetId";
     public static final String EVALUATE_CLI_ATTACHMENTS = "evaluateCLIAttachments";
+    public static final String BULK_OPERATION_RESULT_LIST = "bulkOperationResultList";
+    public static final String BULK_RELEASE_DELETING = "bulkReleaseDeleting";
 
     //! Specialized keys for vendors
     public static final String VENDOR_PORTLET_NAME = PORTLET_NAME_PREFIX + "vendors";
@@ -267,15 +288,19 @@ public class PortalConstants {
     public static final String USING_COMPONENTS = "usingComponents";
     public static final String USING_RELEASES = "usingReleases";
     public static final String ALL_USING_PROJECTS_COUNT = "allUsingProjectsCount";
+    public static final String USING_RELEASE = "usingRelease";
     public static final String PROJECT_LIST = "projectList";
     public static final String ALL_SUB_PROJECT_LINK = "allSubProjectLink";
     public static final String RELEASE_LIST = "releaseList";
     public static final String TOTAL_INACCESSIBLE_ROWS = "totalInaccessibleRows";
     public static final String PROJECT_SEARCH = "projectSearch";
     public static final String RELEASE_SEARCH = "releaseSearch";
+    public static final String PACKAGE_SEARCH = "packageSearch";
     public static final String RELEASE_SEARCH_BY_VENDOR = "releaseSearchByVendor";
     public static final String OBLIGATION_ELEMENT_SEARCH = "obligationElementSearch";
     public static final String OBLIGATION_ELEMENT_ID = "obligationElementId";
+    public static final String LOAD_LINKED_PACKAGES = "loadLinkedPackages";
+    public static final String LOAD_SBOM_IMPORT_INFO = "loadSbomImportInfo";
 
     public static final String RELEASE_LIST_FROM_LINKED_PROJECTS = "releaseListFromLinkedProjects";
     public static final String STATE;
@@ -439,6 +464,33 @@ public class PortalConstants {
     public static final String DELETE_ATTACHMENT_INTERVAL = "deleteAttachmentInterval";
     public static final String DELETE_ATTACHMENT_NEXT_SYNC = "deleteAttachmentNextSync";
 
+    public static final String SRC_UPLOAD_SERVICE_IS_SCHEDULED = "srcUploadIsScheduled";
+    public static final String SRC_UPLOAD_SERVICE_OFFSET = "srcUploadOffset";
+    public static final String SRC_UPLOAD_SERVICE_INTERVAL = "srcUploadInterval";
+    public static final String SRC_UPLOAD_SERVICE_NEXT_SYNC = "srcUploadNextSync";
+
+    public static final String DEPARTMENT_IS_SCHEDULED = "departmentIsScheduled";
+    public static final String DEPARTMENT_OFFSET = "departmentOffset";
+    public static final String DEPARTMENT_INTERVAL = "departmentInterval";
+    public static final String DEPARTMENT_NEXT_SYNC = "departmentNextSync";
+    public static final String DEPARTMENT_LIST = "departmentList";
+
+    public static final String DEPARTMENT_KEY = "departmentKey";
+    public static final String EMAIL_BY_DEPARTMENT_JSON = "emailByDepartment";
+    public static final String EMAIL_OTHER_DEPARTMENT_JSON = "emailOtherDepartment";
+    public static final String DEPARTMENT_ROLE = "departmentRole";
+
+    public static final String DELETE_LIST_EMAIL = "deleteEmail";
+    public static final String ADD_LIST_EMAIL = "listEmail";
+
+    public static final String REMOVE_DEPARTMENT_BY_EMAIL = "remove_department";
+    public static final String DEPARTMENT_URL = "departmentUrl";
+    public static final String LIST_CONTENT_FILE_LOG = "listContentFileLog";
+    public static final String LAST_FILE_NAME = "lastFileName";
+    public static final String LAST_RUNNING_TIME = "lastRunningTime";
+    public static final String PATH_CONFIG_FOLDER_DEPARTMENT = "pathConfigFolderDepartment";
+    public static final String IMPORT_DEPARTMENT_MANUALLY = "importdepartmentmanually";
+
     //! Specialized keys for licenseInfo
     public static final String LICENSE_INFO_OUTPUT_FORMATS = "licenseInfoOutputFormats";
     public static final String LICENSE_INFO_SELECTED_OUTPUT_FORMAT = "licenseInfoSelectedOutputFormat";
@@ -459,6 +511,7 @@ public class PortalConstants {
     public static final String ACTION_POSTPONE = "action_postpone";
     public static final String ACTION_DECLINE = "action_decline";
     public static final String ACTION_REMOVEME = "action_removeme";
+    public static final String LAST_MODERATOR = "last_moderator";
     public static final String ACTION_RENDER_NEXT_AFTER_UNSUBSCRIBE = "action_render_next";
     public static final String MODERATION_REQUEST_COMMENT = "moderation_request_comment";
     public static final String MODERATION_DECISION_COMMENT = "moderation_decision_comment";
@@ -473,6 +526,7 @@ public class PortalConstants {
     //! Keys for Search
     public static final String TYPE_MASK = "typeMask";
     public static final String SEARCH_PORTLET_NAME = PORTLET_NAME_PREFIX + "search";
+    public static final String IS_SEARCH_TRUNCATED = "isSearchTruncated";
 
     //! Keys for Preferences
     public static final String PREFERENCES_PORTLET_NAME = PORTLET_NAME_PREFIX + "preferences";
@@ -489,6 +543,7 @@ public class PortalConstants {
     public static final String TODOS_PORTLET_NAME = PORTLET_NAME_PREFIX + "todos";
     public static final String OAUTH_CLIENT_PORTLET_NAME = PORTLET_NAME_PREFIX + "oauthclient";
     public static final String LICENSE_TYPE_PORTLET_NAME = PORTLET_NAME_PREFIX + "licensetypes";
+    public static final String DEPARTMENT_PORTLET_NAME = PORTLET_NAME_PREFIX + "department";
 
     //! Keys for Home portlets
     public static final String MY_COMPONENTS_PORTLET_NAME = PORTLET_NAME_PREFIX + "mycomponents";
@@ -507,6 +562,7 @@ public class PortalConstants {
     public static final String PROJECT_STATE_ACTIVE__CSS      = "projectStateActive";
     public static final String PROJECT_STATE_INACTIVE__CSS    = "projectStateInactive";
     public static final String CLEARING_STATE_OPEN__CSS       = "clearingStateOpen";
+    public static final String CLEARING_STATE_IUSA__CSS       = "clearingStateISUA";
     public static final String CLEARING_STATE_INPROGRESS__CSS = "clearingStateInProgress";
     public static final String CLEARING_STATE_CLOSED__CSS     = "clearingStateClosed";
     public static final String CLEARING_STATE_UNKNOWN__CSS    = "clearingStateUnknown";
@@ -549,13 +605,19 @@ public class PortalConstants {
     public static final String SAVE_ATTACHMENT_USAGES = "save_attachment_usages";
     public static final String PARENT_BRANCH_ID = "parent_branch_id";
     public static final String PARENT_SCOPE_GROUP_ID = "parentScopeGroupId";
+    public static final String ADD_LINKED_PACKAGES = "addLinkedPackages";
+    public static final String VIEW_LINKED_PACKAGES = "viewLinkedPackages";
 
-    // bom import
+    // bom import / export
     public static final String PREPARE_IMPORT_BOM = "prepareImportBom";
     public static final String IMPORT_BOM = "importBom";
     public static final String IMPORT_BOM_AS_NEW = "importBomAsNew";
     public static final String NEW_RELEASE_VERSION = "newReleaseVersion";
     public static final String RDF_FILE_PATH = "rdfFilePath";
+    public static final String BOM_TYPE = "bomType";
+    public static final String EXPORT_SBOM = "exportSbom";
+    public static final String SBOM_FROMAT = "sbomFormat";
+    public static final String IS_SBOM_IMPORT_EXPORT_ACCESS_USER = "isSbomImportExportAccessUser";
 
     // project actions
     public static final String VIEW_LINKED_PROJECTS = "view_linked_projects";
@@ -575,6 +637,7 @@ public class PortalConstants {
     public static final String PROJECT_CHECK_FOR_ATTACHMENTS = "verifyAttachmentExistance";
     public static final String LICENSE_TO_SOURCE_FILE = "licenseToSourceFile";
     public static final String ADD_LICENSE_TO_RELEASE = "addLicenseToRelease";
+    public static final String UPDATE_RELEASE_BY_LINKED_PACKAGES = "updateReleaseByLinkedPackages";
 
     //component actions
     public static final String ADD_VENDOR = "add_vendor";
@@ -588,6 +651,7 @@ public class PortalConstants {
     public static final String UNSUBSCRIBE = "unsubscribe";
     public static final String UNSUBSCRIBE_RELEASE = "unsubscribe_release";
     public static final String LOAD_COMPONENT_LIST = "load_component_list";
+    public static final String LOAD_ECC_LIST = "load_ecc_list";
 
     // fossology actions
     public static final String FOSSOLOGY_PREFIX = "fossology";
@@ -709,6 +773,12 @@ public class PortalConstants {
     public static final String USER_CLIENT_ID_ACCESS_VALUE = "userClientIdAccessValue";
     public static final String USER_CLIENT_ID_NAME_VALUE = "userClientIdNameValue";
 
+    // Bulk deleting
+    public static final String BULK_DELETING_RESULT_REMAINED = "Remained";
+    public static final String BULK_DELETING_RESULT_DELETED = "Deleted";
+    public static final String BULK_DELETING_RESULT_CONFLICTED = "Conflicted";
+    public static final String BULK_DELETING_RESULT_ERROR = "Error";
+
     // Rest API constants
     public static final UserGroup API_WRITE_ACCESS_USERGROUP;
     public static final Boolean API_TOKEN_ENABLE_GENERATOR;
@@ -725,9 +795,51 @@ public class PortalConstants {
     public static final String PREDEFINED_TAGS;
     public static final boolean SSO_LOGIN_ENABLED;
     public static final boolean IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED;
-    
+    public static final Boolean IS_BULK_RELEASE_DELETING_ENABLED;
     public static final boolean IS_SVM_ENABLED;
 
+    //! Specialized keys for SPDX
+    public static final String SPDX_DOCUMENT = "spdxDocument";
+    public static final String SPDX_DOCUMENT_CREATION_INFO = "spdxDocumentCreationInfo";
+    public static final String SPDX_PACKAGE_INFO = "spdxPackageInfo";
+    public static final String ACTUAL_SPDX_DOCUMENT = "actual_SPDXDocument";
+    public static final String ACTUAL_DOCUMENT_CREATION_INFO = "actual_DocumentCreationInfo";
+    public static final String ACTUAL_PACKAGE_INFO = "actual_PackageInfo";
+    public static final Set<String> SET_RELATIONSHIP_TYPE;
+
+    //! Specialized keys for Flexible project and releases relationship configuration
+    public static final String RELEASE_ID_ARRAY = "releaseIdArray[]";
+    public static final String RELEASES_WITH_SAME_COMPONENT_ID = "releaseWithSameComponentId";
+    public static final String CURRENT_NETWORK = "currentNetwork";
+    public static final String CHECK_DIFF_DEPENDENCY_NETWORK_WITH_RELEASES_RELATIONSHIP = "checkDiffDependencyNetworkWithReleasesRelationship";
+    public static final String RESTRICTED_RELEASE = "Restricted release";
+    public static final String GET_HTML_RELEASE_ROWS = "getHtmlReleaseRows";
+    public static final String DEFAULT_RELEASE_RELATION_NETWORK = "[]";
+    public static final String ATTACHMENT_USAGE_ON_CLICK = "attachmentUsageOnClick";
+    public static final String SUB_PROJECTS_LINK_TRANSITIVE = "subProjectsLinkTransitive";
+    public static final String LOGIN_USER = "loginUser";
+    public static final String IS_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP_ENABLED = "isFlexibleProjectReleaseRelationshipEnabled";
+    public static final String NETWORK_PARENT_BRANCH_ID = "networkParentBranchId";
+    public static final String NETWORK_RELEASE_LIST = "networkReleaseList";
+    public static final String NETWORK_TOTAL_INACCESSIBLE_ROWS = "netWorkTotalInAccessibleRow";
+    public static final String DEPENDENCY_NETWORK_LIST = "dependencyNetworkList";
+    public static final String DEPENDENCY_NETWORK_ON_LOAD = "dependencyNetworkOnLoad";
+    public static final String IS_OBLIGATION_PRESENT = "isObligationPresent";
+    public static final String CREATE_LINKED_RELEASE_ROW = "createLinkedReleaseRow";
+    public static final String PARENT_NODE_ID = "parentNodeIds[]";
+    public static final String LAYER = "layer[]";
+    public static final String RELEASE_RELATION_SHIP = "releaseRelationShip[]";
+    public static final String MAINLINE_STATE = "mainlineState[]";
+    public static final String INDEXES = "indexes[]";
+    public static final String COMMENTS = "comments[]";
+    public static final String FIND_LINKED_RELEASE_OF_NODE = "findLinkedReleaseOfNode";
+    public static final String RELEASES_IN_NETWORK = "releasesInNetwork";
+    public static final String NUMBER_LINKED_RELEASE = "numberLinkedRelease";
+    public static final String TOTAL_RELEASE_COUNT = "totalReleaseCount";
+    public static final String CHECK_RELEASE_EXIST = "checkReleaseExist";
+    public static final String RELEASE_USAGE = "releaseUsage";
+    public static final String CYCLIC_LINKED_RELEASE_PATH = "cyclicLinkedReleasePath";
+    public static final String CHILD_RELEASE_ID_ARRAY = "childReleaseId[]";
     static {
         Properties props = CommonUtils.loadProperties(PortalConstants.class, PROPERTIES_FILE_PATH);
 
@@ -769,11 +881,13 @@ public class PortalConstants {
         CLEARING_REPORT_TEMPLATE_FORMAT = props.getProperty("org.eclipse.sw360.licensinfo.projectclearing.templateformat", "docx");
         PREDEFINED_TAGS = props.getProperty("project.tag", "[]");
         SSO_LOGIN_ENABLED = Boolean.parseBoolean(props.getProperty("sso.login.enabled", "false"));
+        SET_RELATIONSHIP_TYPE = CommonUtils.splitToSet(props.getProperty("relationship.type", "DESCRIBES,DESCRIBED_BY,CONTAINS,CONTAINED_BY,DEPENDS_ON,DEPENDENCY_OF,DEPENDENCY_MANIFEST_OF,BUILD_DEPENDENCY_OF,DEV_DEPENDENCY_OF,OPTIONAL_DEPENDENCY_OF,PROVIDED_DEPENDENCY_OF,TEST_DEPENDENCY_OF,RUNTIME_DEPENDENCY_OF,EXAMPLE_OF,GENERATES,GENERATED_FROM,ANCESTOR_OF,DESCENDANT_OF,VARIANT_OF,DISTRIBUTION_ARTIFACT,PATCH_FOR,PATCH_APPLIED,COPY_OF,FILE_ADDED,FILE_DELETED,FILE_MODIFIED,EXPANDED_FROM_ARCHIVE,DYNAMIC_LINK,STATIC_LINK,DATA_FILE_OF,TEST_CASE_OF,BUILD_TOOL_OF,DEV_TOOL_OF,TEST_OF,TEST_TOOL_OF,DOCUMENTATION_OF,OPTIONAL_COMPONENT_OF,METAFILE_OF,PACKAGE_OF,AMENDS,PREREQUISITE_FOR,HAS_PREREQUISITE,REQUIREMENT_DESCRIPTION_FOR,SPECIFICATION_FOR,OTHER"));
         IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED = Boolean.parseBoolean(
             System.getProperty("RunComponentVisibilityRestrictionTest", props.getProperty("component.visibility.restriction.enabled", "false")));
         DISABLE_CLEARING_REQUEST_FOR_PROJECT_WITH_GROUPS = props.getProperty("org.eclipse.sw360.disable.clearing.request.for.project.group", "");
         SEND_PROJECT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.project.spreadsheet.export.to.mail.enabled", "false"));
         SEND_COMPONENT_SPREADSHEET_EXPORT_TO_MAIL_ENABLED = Boolean.parseBoolean(props.getProperty("send.component.spreadsheet.export.to.mail.enabled", "false"));
+        IS_BULK_RELEASE_DELETING_ENABLED = Boolean.parseBoolean(System.getProperty("RunBulkReleaseDeletingTest", props.getProperty("bulk.release.deleting.enabled", "false")));
         IS_SVM_ENABLED = Boolean.parseBoolean(props.getProperty("enable.security.vulnerability.monitoring", "false"));
     }
 

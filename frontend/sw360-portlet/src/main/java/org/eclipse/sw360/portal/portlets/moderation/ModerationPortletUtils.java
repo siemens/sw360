@@ -14,7 +14,9 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.ClearingRequestState;
+import org.eclipse.sw360.datahandler.thrift.ClearingRequestType;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.ClearingRequestPriority;
@@ -26,6 +28,7 @@ import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.portal.common.CustomFieldHelper;
 import org.eclipse.sw360.portal.common.PortalConstants;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
@@ -104,13 +107,16 @@ public class ModerationPortletUtils {
                 String isClearingExpertEdit = request.getParameter(PortalConstants.IS_CLEARING_EXPERT);
                 ModerationService.Iface client = new ThriftClients().makeModerationClient();
                 ClearingRequest clearingRequest = client.getClearingRequestByIdForEdit(id, user);
+                String requestingUser = clearingRequest.getRequestingUser();
 
-                String requestingUser = request.getParameter(ClearingRequest._Fields.REQUESTING_USER.toString());
-                if (CommonUtils.isNullEmptyOrWhitespace(requestingUser)) {
-                    log.warn("Invalid requesting user email: " + requestingUser + " is entered, by user: "+ user.getEmail());
-                    return requestSummary.setMessage("Invalid requesting user email");
+                if (PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user)) {
+                    String userField = request.getParameter(ClearingRequest._Fields.REQUESTING_USER.toString());
+                    if (CommonUtils.isNullEmptyOrWhitespace(userField)) {
+                        log.warn("Invalid requesting user email: " + userField + " is entered, by user: "+ user.getEmail());
+                        return requestSummary.setMessage("Invalid requesting user email");
+                    }
+                    clearingRequest.setRequestingUser(userField);
                 }
-                clearingRequest.setRequestingUser(requestingUser);
 
                 String clearingTeam = request.getParameter(ClearingRequest._Fields.CLEARING_TEAM.toString());
                 if (CommonUtils.isNullEmptyOrWhitespace(clearingTeam)) {
@@ -123,18 +129,27 @@ public class ModerationPortletUtils {
                         && SW360Utils.isValidDate(preferredClearingDate, DateTimeFormatter.ISO_LOCAL_DATE, null)) {
                     clearingRequest.setRequestedClearingDate(preferredClearingDate);
                 }
+
+                String state = request.getParameter(ClearingRequest._Fields.CLEARING_STATE.toString());
+                ClearingRequestState requestState = ClearingRequestState.findByValue(parseInt(state));
                 if (CommonUtils.isNotNullEmptyOrWhitespace(isClearingExpertEdit) && Boolean.parseBoolean(isClearingExpertEdit)) {
                     String agreedDate = request.getParameter(ClearingRequest._Fields.AGREED_CLEARING_DATE.toString());
-                    String status = request.getParameter(ClearingRequest._Fields.CLEARING_STATE.toString());
                     String priority = request.getParameter(ClearingRequest._Fields.PRIORITY.toString());
+                    String clearingType = request.getParameter(ClearingRequest._Fields.CLEARING_TYPE.toString());
                     if (CommonUtils.isNotNullEmptyOrWhitespace(agreedDate) && !agreedDate.equals(clearingRequest.getAgreedClearingDate())
                             && !SW360Utils.isValidDate(agreedDate, DateTimeFormatter.ISO_LOCAL_DATE, null)) {
                         log.warn("Invalid agreed clearing date: " + agreedDate + " is entered, by user: "+ user.getEmail());
                         return requestSummary.setMessage("Invalid agreed clearing date");
                     }
+                    clearingRequest.setClearingState(requestState);
                     clearingRequest.setAgreedClearingDate(CommonUtils.nullToEmptyString(agreedDate));
-                    clearingRequest.setClearingState(ClearingRequestState.findByValue(parseInt(status)));
                     clearingRequest.setPriority(ClearingRequestPriority.findByValue(parseInt(priority)));
+                    clearingRequest.setClearingType(ClearingRequestType.findByValue(parseInt(clearingType)));
+                }
+                else if (requestingUser.equals(user.getEmail())) {
+                    if (requestState == ClearingRequestState.CLOSED) {
+                        clearingRequest.setClearingState(requestState);
+                    }
                 }
                 LiferayPortletURL projectUrl = getProjectPortletUrl(request, clearingRequest.getProjectId());
                 RequestStatus status = client.updateClearingRequest(clearingRequest, user, CommonUtils.nullToEmptyString(projectUrl));
@@ -159,6 +174,7 @@ public class ModerationPortletUtils {
             String preferredDate = request.getParameter(ClearingRequest._Fields.REQUESTED_CLEARING_DATE.toString());
             String commentText = request.getParameter(ClearingRequest._Fields.REQUESTING_USER_COMMENT.toString());
             String priority = (criticalCount > 1) ? "" : request.getParameter(ClearingRequest._Fields.PRIORITY.toString());
+            String clearingType =  request.getParameter(ClearingRequest._Fields.CLEARING_TYPE.toString());
             Integer dateLimit = ModerationPortletUtils.loadPreferredClearingDateLimit(request, user);
             dateLimit = (CommonUtils.isNotNullEmptyOrWhitespace(priority) && criticalCount < 2) ? 0 : (dateLimit < 1) ? 7 : dateLimit;
             if (!SW360Utils.isValidDate(preferredDate, DateTimeFormatter.ISO_LOCAL_DATE, Long.valueOf(dateLimit))) {
@@ -182,6 +198,7 @@ public class ModerationPortletUtils {
             } else {
                 clearingRequest.setPriority(ClearingRequestPriority.LOW);
             }
+            clearingRequest.setClearingType(ClearingRequestType.findByValue(parseInt(clearingType)));
             clearingRequest.addToReOpenOn(System.currentTimeMillis());
             LiferayPortletURL projectUrl = getProjectPortletUrl(request, clearingRequest.getProjectId());
             RequestStatus status = client.updateClearingRequest(clearingRequest, user, CommonUtils.nullToEmptyString(projectUrl));

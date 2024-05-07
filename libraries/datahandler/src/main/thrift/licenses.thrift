@@ -100,6 +100,14 @@ struct ObligationElement {
     7: optional ObligationElementStatus status
 }
 
+struct LicenseObligationList {
+    1: optional string id,
+    2: optional string revision,
+    3: optional string type = "licenseObligationList",
+    4: required string licenseId,
+    5: optional map<string, Obligation> linkedObligations
+}
+
 struct License {
 	 1: optional string id,
 	 2: optional string revision,
@@ -109,6 +117,7 @@ struct License {
 	 6: optional LicenseType licenseType,
 	 7: optional string licenseTypeDatabaseId,
      8: optional string externalLicenseLink,
+     10: optional string note,
 
     // information from external data sources
      9: optional map<string, string> externalIds,
@@ -122,6 +131,7 @@ struct License {
 
     20: optional list<Obligation> obligations,
     21: optional set<string> obligationDatabaseIds,
+    22: optional string obligationListId,
     25: optional string text,
 
     30: optional bool checked = true;
@@ -206,6 +216,16 @@ service LicenseService {
     list<License> getLicenseSummaryForExport();
 
     /**
+     * download license for api
+     **/
+    binary downloadExcel(1:string token) throws (1: SW360Exception exp);
+
+    /**
+     * get report data stream
+     **/
+    binary getLicenseReportDataStream() throws (1: SW360Exception exp);
+
+    /**
      * get a list of all full license documents filled with obligations, risks and license types,
      * obligations and risks themselves are not filled
      **/
@@ -261,6 +281,11 @@ service LicenseService {
      * get filled obligations with id in ids
      **/
     list<Obligation> getObligationsByIds( 1: list<string> ids);
+
+    /**
+     * get obligations with license id
+     **/
+    list<Obligation> getObligationsByLicenseId( 1: string id);
 
     LicenseType getLicenseTypeById( 1: string id);
 

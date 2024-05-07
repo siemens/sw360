@@ -10,27 +10,34 @@
  */
 package org.eclipse.sw360.projects;
 
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertId;
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertIdUnset;
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotEmpty;
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
+import static org.eclipse.sw360.datahandler.common.SW360Assert.assertUser;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ProjectSearchHandler;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
-import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseClearingStatusData;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectData;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.projects.UsedReleaseRelations;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -39,10 +46,9 @@ import org.ektorp.http.HttpClient;
 import com.cloudant.client.api.CloudantClient;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.function.Supplier;
-
-import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
 
 /**
  * Implementation of the Thrift service
@@ -150,12 +156,38 @@ public class ProjectHandler implements ProjectService.Iface {
 
     @Override
     public Set<Project> searchByReleaseId(String id, User user) throws TException {
+        if (SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            return searchHandler.searchByReleaseId(id, user);
+        }
         return handler.searchByReleaseId(id, user);
     }
 
     @Override
     public Set<Project> searchByReleaseIds(Set<String> ids, User user) throws TException {
+        if (SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            return searchHandler.searchByReleaseIds(ids, user);
+        }
         return handler.searchByReleaseId(ids, user);
+    }
+
+    @Override
+    public Set<Project> searchProjectByPackageId(String id, User user) throws TException {
+        assertId(id);
+        assertUser(user);
+        return handler.searchByPackageId(id, user);
+    }
+
+    @Override
+    public Set<Project> searchProjectByPackageIds(Set<String> ids, User user) throws TException {
+        assertNotEmpty(ids);
+        assertUser(user);
+        return handler.searchByPackageIds(ids, user);
+    }
+
+    @Override
+    public int getProjectCountByPackageId(String id) throws TException {
+        assertNotEmpty(id);
+        return handler.getProjectCountByPackageId(id);
     }
 
     @Override
@@ -234,6 +266,26 @@ public class ProjectHandler implements ProjectService.Iface {
         assertNotNull(attachmentContentId);
         assertUser(user);
         return handler.importBomFromAttachmentContent(user, attachmentContentId);
+    }
+
+    @Override
+    public RequestSummary importCycloneDxFromAttachmentContent(User user, String attachmentContentId, String projectId) throws SW360Exception {
+        assertId(attachmentContentId);
+        assertUser(user);
+        return handler.importCycloneDxFromAttachmentContent(user, attachmentContentId, projectId);
+    }
+
+    @Override
+    public RequestSummary exportCycloneDxSbom(String projectId, String bomType, boolean includeSubProjReleases, User user) throws SW360Exception {
+        assertId(projectId);
+        assertUser(user);
+        return handler.exportCycloneDxSbom(projectId, bomType, includeSubProjReleases, user);
+    }
+
+    @Override
+    public String getSbomImportInfoFromAttachmentAsString(String attachmentContentId) throws SW360Exception {
+        assertId(attachmentContentId);
+        return handler.getSbomImportInfoFromAttachmentAsString(attachmentContentId);
     }
 
     ////////////////////////////
@@ -337,6 +389,12 @@ public class ProjectHandler implements ProjectService.Iface {
     public List<Project> fillClearingStateSummaryIncludingSubprojects(List<Project> projects, User user)
             throws TException {
         return handler.fillClearingStateSummaryIncludingSubprojects(projects, user);
+    }
+    
+    @Override
+    public Project fillClearingStateSummaryIncludingSubprojectsForSingleProject(Project project, User user)
+            throws TException {
+        return handler.fillClearingStateSummaryIncludingSubprojectsForSingleProject(project, user);
     }
 
     @Override
@@ -462,4 +520,59 @@ public class ProjectHandler implements ProjectService.Iface {
     public void sendExportSpreadsheetSuccessMail(String url, String recepient) throws TException {
         handler.sendExportSpreadsheetSuccessMail(url, recepient);
     }
+
+    @Override
+    public ByteBuffer downloadExcel(User user, boolean extendedByReleases, String token)
+            throws TException {
+        return handler.downloadExcel(user, extendedByReleases,token);
+    }
+
+	@Override
+	public ByteBuffer getReportDataStream(User user, boolean extendedByReleases, String projectId)
+			throws TException {
+		return handler.getReportDataStream(user, extendedByReleases, projectId);
+	}
+
+	@Override
+	public String getReportInEmail(User user, boolean extendedByReleases, String projectId)
+			throws TException {
+		return handler.getReportInEmail(user, extendedByReleases, projectId);
+	}
+
+    @Override
+    public List<ReleaseLink> getReleaseLinksOfProjectNetWorkByTrace(String projectId, List<String> trace, User user) throws TException {
+        return handler.getReleaseLinksOfProjectNetWorkByTrace(trace, projectId, user);
+    }
+
+    @Override
+    public List<Map<String, String>> getAccessibleDependencyNetworkForListView(String projectId, User user) throws SW360Exception {
+        assertNotNull(projectId);
+        return handler.getClearingStateForDependencyNetworkListView(projectId, user, true);
+    }
+
+    @Override
+    public List<Project> refineSearchWithoutUser(String text, Map<String, Set<String>> subQueryRestrictions) {
+        return searchHandler.search(text, subQueryRestrictions);
+    }
+
+    @Override
+    public List<ProjectLink> getLinkedProjectsWithoutReleases(Map<String, ProjectProjectRelationship> relations, boolean depth, User user) throws TException {
+        assertNotNull(relations);
+        assertUser(user);
+
+        return handler.getLinkedProjectsWithoutReleases(relations, depth, user);
+    }
+
+    @Override
+    public List<ProjectLink> getLinkedProjectsOfProjectWithoutReleases(Project project, boolean deep, User user) throws TException {
+        assertNotNull(project);
+        return handler.getLinkedProjectsWithoutReleases(project, deep, user);
+    }
+
+    @Override
+    public List<ProjectLink> getLinkedProjectsOfProjectWithAllReleases(Project project, boolean deep, User user) throws TException {
+        assertNotNull(project);
+        return handler.getLinkedProjectsWithAllReleases(project, deep, user);
+    }
+
 }

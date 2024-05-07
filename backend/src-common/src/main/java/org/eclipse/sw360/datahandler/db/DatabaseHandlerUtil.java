@@ -78,6 +78,8 @@ import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectRe
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.RepositoryMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.VendorMixin;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ObligationMixin;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.LicenseTypeMixin;
+import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.*;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
@@ -95,6 +97,7 @@ import org.eclipse.sw360.datahandler.thrift.components.EccInformation;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.Repository;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
@@ -102,7 +105,23 @@ import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.SPDXDocument;
+import org.eclipse.sw360.datahandler.thrift.spdx.annotations.Annotations;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.CheckSum;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.Creator;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.DocumentCreationInformation;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.ExternalDocumentReferences;
+import org.eclipse.sw360.datahandler.thrift.spdx.otherlicensinginformationdetected.OtherLicensingInformationDetected;
+import org.eclipse.sw360.datahandler.thrift.spdx.relationshipsbetweenspdxelements.RelationshipsBetweenSPDXElements;
+import org.eclipse.sw360.datahandler.thrift.spdx.snippetinformation.SnippetInformation;
+import org.eclipse.sw360.datahandler.thrift.spdx.snippetinformation.SnippetRange;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.ExternalReference;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageVerificationCode;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
+import org.eclipse.sw360.datahandler.thrift.licenses.License;
+import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
+import org.eclipse.sw360.datahandler.thrift.licenses.LicenseObligationList;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -365,6 +384,13 @@ public class DatabaseHandlerUtil {
                 if (fieldValueObj instanceof String) {
                     eccInformation.setFieldValue(eccInformationField, fieldValueObj.toString().trim());
                 }
+            } else if (obj instanceof Package) {
+                Package._Fields pkgField = (Package._Fields) strField;
+                Package pkg = (Package) obj;
+                Object fieldValueObj = pkg.getFieldValue(pkgField);
+                if (fieldValueObj instanceof String) {
+                    pkg.setFieldValue(pkgField, fieldValueObj.toString().trim());
+                }
             }
         });
     }
@@ -386,9 +412,9 @@ public class DatabaseHandlerUtil {
             changeLog.setDocumentType(newProjVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
         } else if (newDocVersion instanceof ObligationList) {
-            ObligationList newProjVer = (ObligationList) newDocVersion;
-            changeLog.setDocumentId(newProjVer.getId());
-            changeLog.setDocumentType(newProjVer.getType());
+            ObligationList newOblListVer = (ObligationList) newDocVersion;
+            changeLog.setDocumentId(newOblListVer.getId());
+            changeLog.setDocumentType(newOblListVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
         } else if (newDocVersion instanceof AttachmentContent) {
             AttachmentContent newAttachmentContentVer = (AttachmentContent) newDocVersion;
@@ -398,22 +424,52 @@ public class DatabaseHandlerUtil {
             info.put(AttachmentContent._Fields.FILENAME.name(), newAttachmentContentVer.getFilename());
             info.put(AttachmentContent._Fields.CONTENT_TYPE.name(), newAttachmentContentVer.getContentType());
         } else if (newDocVersion instanceof Component) {
-            Component newProjVer = (Component) newDocVersion;
-            changeLog.setDocumentId(newProjVer.getId());
-            changeLog.setDocumentType(newProjVer.getType());
+            Component newCompVer = (Component) newDocVersion;
+            changeLog.setDocumentId(newCompVer.getId());
+            changeLog.setDocumentType(newCompVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
         } else if (newDocVersion instanceof Release) {
-            Release newProjVer = (Release) newDocVersion;
-            changeLog.setDocumentId(newProjVer.getId());
-            changeLog.setDocumentType(newProjVer.getType());
+            Release newRelVer = (Release) newDocVersion;
+            changeLog.setDocumentId(newRelVer.getId());
+            changeLog.setDocumentType(newRelVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
         } else if (newDocVersion instanceof ModerationRequest) {
-            ModerationRequest newProjVer = (ModerationRequest) newDocVersion;
+            ModerationRequest newModReqVer = (ModerationRequest) newDocVersion;
+            changeLog.setDocumentId(newModReqVer.getId());
+            changeLog.setDocumentType(newModReqVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
+        } else if (newDocVersion instanceof SPDXDocument) {
+            SPDXDocument newProjVer = (SPDXDocument) newDocVersion;
+            changeLog.setDocumentId(newProjVer.getId());
+            changeLog.setDocumentType(newProjVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_SPDX);
+        } else if (newDocVersion instanceof DocumentCreationInformation) {
+            DocumentCreationInformation newProjVer = (DocumentCreationInformation) newDocVersion;
+            changeLog.setDocumentId(newProjVer.getId());
+            changeLog.setDocumentType(newProjVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_SPDX);
+        } else if (newDocVersion instanceof PackageInformation) {
+            PackageInformation newProjVer = (PackageInformation) newDocVersion;
+            changeLog.setDocumentId(newProjVer.getId());
+            changeLog.setDocumentType(newProjVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_SPDX);
+        } else if (newDocVersion instanceof Obligation) {
+            Obligation newOblVer = (Obligation) newDocVersion;
+            changeLog.setDocumentId(newOblVer.getId());
+            changeLog.setDocumentType(newOblVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
+        } else if (newDocVersion instanceof Package) {
+            Package newPkgVer = (Package) newDocVersion;
+            changeLog.setDocumentId(newPkgVer.getId());
+            changeLog.setDocumentType(newPkgVer.getType());
+            changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
+        } else if (newDocVersion instanceof License) {
+            License newProjVer = (License) newDocVersion;
             changeLog.setDocumentId(newProjVer.getId());
             changeLog.setDocumentType(newProjVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
-        } else if (newDocVersion instanceof Obligation) {
-            Obligation newProjVer = (Obligation) newDocVersion;
+        } else if (newDocVersion instanceof LicenseObligationList) {
+            LicenseObligationList newProjVer = (LicenseObligationList) newDocVersion;
             changeLog.setDocumentId(newProjVer.getId());
             changeLog.setDocumentType(newProjVer.getType());
             changeLog.setDbName(DatabaseSettings.COUCH_DB_DATABASE);
@@ -547,7 +603,6 @@ public class DatabaseHandlerUtil {
             List<ChangeLogs> referenceDocLogList, String parentDocId, Operation parentOperation) {
         return () -> {
             try {
-                log.info("Generating ChangeLogs.");
                 ChangeLogs changeLogParent = initChangeLogsObj(newDocVersion, userEdited, parentDocId, operation,
                         parentOperation);
                 if (oldDocVersion == null) {
@@ -598,8 +653,20 @@ public class DatabaseHandlerUtil {
             fields = Release._Fields.values();
         } else if (neworDeletedVersion instanceof ModerationRequest) {
             fields = ModerationRequest._Fields.values();
+        } else if (neworDeletedVersion instanceof SPDXDocument) {
+            fields = SPDXDocument._Fields.values();
+        } else if (neworDeletedVersion instanceof DocumentCreationInformation) {
+            fields = DocumentCreationInformation._Fields.values();
+        } else if (neworDeletedVersion instanceof PackageInformation) {
+            fields = PackageInformation._Fields.values();
         } else if (neworDeletedVersion instanceof Obligation) {
             fields = Obligation._Fields.values();
+        } else if (neworDeletedVersion instanceof Package) {
+            fields = Package._Fields.values();
+        } else if (neworDeletedVersion instanceof License) {
+            fields = License._Fields.values();
+        } else if (neworDeletedVersion instanceof LicenseObligationList) {
+            fields = LicenseObligationList._Fields.values();
         } else {
             return;
         }
@@ -624,8 +691,20 @@ public class DatabaseHandlerUtil {
             fields = Release._Fields.values();
         } else if (newVersion instanceof ModerationRequest) {
             fields = ModerationRequest._Fields.values();
+        } else if (newVersion instanceof SPDXDocument) {
+            fields = SPDXDocument._Fields.values();
+        } else if (newVersion instanceof DocumentCreationInformation) {
+            fields = DocumentCreationInformation._Fields.values();
+        } else if (newVersion instanceof PackageInformation) {
+            fields = PackageInformation._Fields.values();
         } else if (newVersion instanceof Obligation) {
             fields = Obligation._Fields.values();
+        } else if (newVersion instanceof Package) {
+            fields = Package._Fields.values();
+        } else if (newVersion instanceof License) {
+            fields = License._Fields.values();
+        } else if (newVersion instanceof LicenseObligationList) {
+            fields = LicenseObligationList._Fields.values();
         } else {
             return;
         }
@@ -840,7 +919,18 @@ public class DatabaseHandlerUtil {
             mapper.addMixInAnnotations(Repository.class, RepositoryMixin.class);
             mapper.addMixInAnnotations(ProjectProjectRelationship.class, ProjectProjectRelationshipMixin.class);
             mapper.addMixInAnnotations(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
+            mapper.addMixInAnnotations(CheckSum.class, CheckSumMixin.class);
+            mapper.addMixInAnnotations(Annotations.class, AnnotationsMixin.class);
+            mapper.addMixInAnnotations(ExternalDocumentReferences.class, ExternalDocumentReferencesMixin.class);
+            mapper.addMixInAnnotations(Creator.class, CreatorMixin.class);
+            mapper.addMixInAnnotations(OtherLicensingInformationDetected.class, OtherLicensingInformationDetectedMixin.class);
+            mapper.addMixInAnnotations(PackageVerificationCode.class, PackageVerificationCodeMixin.class);
+            mapper.addMixInAnnotations(ExternalReference.class, ExternalReferenceMixin.class);
+            mapper.addMixInAnnotations(RelationshipsBetweenSPDXElements.class, RelationshipsBetweenSPDXElementsMixin.class);
+            mapper.addMixInAnnotations(SnippetInformation.class, SnippetInformationMixin.class);
+            mapper.addMixInAnnotations(SnippetRange.class, SnippetRangeMixin.class);
             mapper.addMixInAnnotations(Obligation.class, ObligationMixin.class);
+            mapper.addMixInAnnotations(LicenseType.class, LicenseTypeMixin.class);
         }
         return mapper;
     }

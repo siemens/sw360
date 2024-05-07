@@ -15,11 +15,15 @@ import com.google.common.collect.FluentIterable;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.*;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.DocumentCreationInformation;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.SPDXDocument;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -164,6 +168,19 @@ public class ThriftValidate {
 
     }
 
+    public static void preparePackage(Package pkg) throws SW360Exception {
+        // Check required fields
+        assertNotEmpty(pkg.getName());
+        assertNotEmpty(pkg.getVersion());
+        assertNotEmpty(pkg.getPurl());
+        assertNotEmpty(pkg.getPackageManager().name());
+        assertNotEmpty(pkg.getPackageType().name());
+        pkg.unsetRelease();
+
+        // Check type
+        pkg.setType(TYPE_PACKAGE);
+    }
+
     public static void prepareRelease(Release release) throws SW360Exception {
         // Check required fields
         assertNotEmpty(release.getName());
@@ -255,5 +272,30 @@ public class ThriftValidate {
         assertNotNull(obligation.getLinkedObligationStatus());
         assertNotEmpty(obligation.getLinkedObligationStatus().keySet(), "linked obligtions cannot be empty");
         obligation.setType(TYPE_PROJECT_OBLIGATION);
+    }
+
+    public static void prepareSPDXDocument(SPDXDocument spdx) throws SW360Exception {
+        // Check required fields
+
+        // Check type
+        spdx.setType(TYPE_SPDX_DOCUMENT);
+        // Unset temporary fields
+        spdx.unsetPermissions();
+    }
+
+    public static void prepareSpdxDocumentCreationInfo(DocumentCreationInformation documentCreationInfo) throws SW360Exception {
+        // Check required fields
+
+        // Check type
+        documentCreationInfo.setType(TYPE_SPDX_DOCUMENT_CREATION_INFO);
+        // Unset temporary fields
+        documentCreationInfo.unsetPermissions();
+}
+
+    public static void prepareSpdxPackageInfo(PackageInformation packageInfo) throws SW360Exception {
+        // Check type
+        packageInfo.setType(TYPE_SPDX_PACKAGE_INFO);
+        // Unset temporary fields
+        packageInfo.unsetPermissions();
     }
 }

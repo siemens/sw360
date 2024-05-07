@@ -11,6 +11,7 @@ package org.eclipse.sw360.datahandler.common;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -43,26 +44,35 @@ public class DatabaseSettings {
     public static final String COUCH_DB_CONFIG;
     public static final String COUCH_DB_USERS;
     public static final String COUCH_DB_VM;
+    public static final String COUCH_DB_SPDX;
+    public static final boolean COUCH_DB_CACHE;
 
     public static final int LUCENE_SEARCH_LIMIT;
     public static final boolean LUCENE_LEADING_WILDCARD;
 
-    private static final String COUCH_DB_USERNAME;
-    private static final String COUCH_DB_PASSWORD;
+    private static final Optional<String> COUCH_DB_USERNAME;
+    private static final Optional<String> COUCH_DB_PASSWORD;
 
     static {
         Properties props = CommonUtils.loadProperties(DatabaseSettings.class, PROPERTIES_FILE_PATH);
 
-        COUCH_DB_URL = props.getProperty("couchdb.url", "http://localhost:5984");
-        COUCH_DB_LUCENE_URL = props.getProperty("couchdb.lucene.url", "http://localhost:8080/couchdb-lucene");
+        // Try ENV if set first
+        COUCH_DB_URL = System.getenv("COUCHDB_URL") != null ? System.getenv("COUCHDB_URL")
+                : props.getProperty("couchdb.url", "http://localhost:5984");
+        COUCH_DB_USERNAME = Optional.ofNullable(System.getenv("COUCHDB_USER") != null ? System.getenv("COUCHDB_USER")
+                : props.getProperty("couchdb.user", ""));
+        COUCH_DB_PASSWORD = Optional
+                .ofNullable(System.getenv("COUCHDB_PASSWORD") != null ? System.getenv("COUCHDB_PASSWORD")
+                        : props.getProperty("couchdb.password", ""));
         COUCH_DB_DATABASE = props.getProperty("couchdb.database", "sw360db");
-        COUCH_DB_USERNAME = props.getProperty("couchdb.user", "");
-        COUCH_DB_PASSWORD = props.getProperty("couchdb.password", "");
+        COUCH_DB_LUCENE_URL = props.getProperty("couchdb.lucene.url", "http://localhost:8080/couchdb-lucene");
         COUCH_DB_ATTACHMENTS = props.getProperty("couchdb.attachments", "sw360attachments");
         COUCH_DB_CHANGE_LOGS = props.getProperty("couchdb.change_logs", "sw360changelogs");
         COUCH_DB_CONFIG = props.getProperty("couchdb.config", "sw360config");
         COUCH_DB_USERS = props.getProperty("couchdb.usersdb", "sw360users");
         COUCH_DB_VM = props.getProperty("couchdb.vulnerability_management", "sw360vm");
+        COUCH_DB_SPDX = props.getProperty("couchdb.sw360spdx", "sw360spdx");
+        COUCH_DB_CACHE = Boolean.parseBoolean(props.getProperty("couchdb.cache", "true"));
 
         LUCENE_SEARCH_LIMIT = Integer.parseInt(props.getProperty("lucenesearch.limit", "25"));
         LUCENE_LEADING_WILDCARD = Boolean.parseBoolean(props.getProperty("lucenesearch.leading.wildcard", "false"));
@@ -70,11 +80,12 @@ public class DatabaseSettings {
 
     public static Supplier<HttpClient> getConfiguredHttpClient() throws MalformedURLException {
         StdHttpClient.Builder httpClientBuilder = new StdHttpClient.Builder().url(COUCH_DB_URL);
-        if(! "".equals(COUCH_DB_USERNAME)) {
-            httpClientBuilder.username(COUCH_DB_USERNAME);
+        if (!COUCH_DB_CACHE) {
+            httpClientBuilder.caching(false);
         }
-        if (! "".equals(COUCH_DB_PASSWORD)) {
-            httpClientBuilder.password(COUCH_DB_PASSWORD);
+        if (COUCH_DB_USERNAME.isPresent() && COUCH_DB_PASSWORD.isPresent()) {
+            httpClientBuilder.username(COUCH_DB_USERNAME.get());
+            httpClientBuilder.password(COUCH_DB_PASSWORD.get());
         }
         return httpClientBuilder::build;
     }
@@ -91,11 +102,9 @@ public class DatabaseSettings {
         }
         try {
             clientBuilder = ClientBuilder.url(new URL(COUCH_DB_URL)).gsonBuilder(gson);
-            if (!"".equals(COUCH_DB_USERNAME)) {
-                clientBuilder.username(COUCH_DB_USERNAME);
-            }
-            if (!"".equals(COUCH_DB_PASSWORD)) {
-                clientBuilder.password(COUCH_DB_PASSWORD);
+            if (COUCH_DB_USERNAME.isPresent() && COUCH_DB_PASSWORD.isPresent()) {
+                clientBuilder.username(COUCH_DB_USERNAME.get());
+                clientBuilder.password(COUCH_DB_PASSWORD.get());
             }
         } catch (MalformedURLException e) {
             log.error("Error creating client", e);

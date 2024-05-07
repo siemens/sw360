@@ -9,6 +9,8 @@
  */
 package org.eclipse.sw360.portal.common;
 
+import org.eclipse.sw360.datahandler.common.SW360Constants;
+
 import com.google.common.collect.ImmutableList;
 
 /**
@@ -21,7 +23,7 @@ public class ErrorMessages {
     public static final String PROJECT_NAMING_ERROR = "Name of project cannot contain only space characters.";
     public static final String CLOSED_UPDATE_NOT_ALLOWED = "User cannot edit a closed project";
     public static final String COMPONENT_NOT_ADDED = "Component could not be added.";
-    public static final String COMPONENT_DUPLICATE = "A component with the same name already exists.";
+    public static final String COMPONENT_DUPLICATE = "A component with the same name or VCS already exists.";
     public static final String COMPONENT_NAMING_ERROR = "Name and Categories of component cannot contain only space characters.";
     public static final String RELEASE_NOT_ADDED = "Release could not be added.";
     public static final String RELEASE_DUPLICATE = "A release with the same name and version already exists.";
@@ -33,8 +35,10 @@ public class ErrorMessages {
     public static final String ERROR_RELEASE_OR_COMPONENT_NOT_ACCESSIBLE  = "This release or related components are restricted and / or not accessible.";
     public static final String ERROR_GETTING_LICENSE = "No license details found in the database for given license id.";
     public static final String ERROR_GETTING_RELEASE = "Error fetching release from backend.";
+    public static final String ERROR_DELETING_RELEASE = "Error deleting release in backend.";
     public static final String LICENSE_USED_BY_RELEASE =  "Request could not be processed, as license is used by at least one release!";
     public static final String DOCUMENT_USED_BY_PROJECT_OR_RELEASE = "Document could not be processed, as it is used by other Projects or Releases!";
+    public static final String DOCUMENT_USED_BY_PROJECT_OR_RELEASE_OR_PACKAGE = "Document could not be processed, as it is used by other Projects or Releases or Packages!";
     public static final String DOCUMENT_NOT_PROCESSED_SUCCESSFULLY = "Document could not be processed.";
     public static final String FIRST_NAME_CANNOT_BE_EMPTY= "First name cannot be empty.";
     public static final String LAST_NAME_CANNOT_BE_EMPTY = "Last name cannot be empty.";
@@ -65,7 +69,15 @@ public class ErrorMessages {
     public static final String OBLIGATION_NOT_UPDATED = "Obligation could not be updated.";
     public static final String VENDOR_DUPLICATE = "A vendor with the same name already exists.";
     public static final String ERROR_VENDOR = "Error: Invalid vendor Name or Url.";
-
+    public static final String ERROR_BULK_DELETING = "Error while bulk deleting";
+    public static final String ERROR_BULK_DELETING_IN_BACKEND = "Error while bulk deleting in backend.";
+    
+    public static final String PACKAGE_NOT_ADDED = "Package could not be added.";
+    public static final String PACKAGE_DUPLICATE = "A package with the same name and version already exists.";
+    public static final String PACKAGE_NAME_VERSION_ERROR = "Name and version of the package cannot contain only space characters.";
+    public static final String PACKAGE_UPDATE_ACCESS_DENIED = "You do not have permission to update this Package! Package creator or all users with " + SW360Constants.PACKAGE_PORTLET_WRITE_ACCESS_USER_ROLE.name() + " & above role can update the Packages.";
+    public static final String INVALID_PURL_OR_LINKED_RELEASE = "Invalid purl or linked release";
+    public static final String INVALID_LINKED_DOCUMENT = "Invalid linked document id";
 
     public static final String ERROR_VULNERABILITY_USED_BY_RELEASE = "Can not remove vulnerability because it is used by releases";
     public static final String ERROR_VULNERABILITY_DELETE = "Error when delete vulnerability";
@@ -87,6 +99,7 @@ public class ErrorMessages {
             .add(DUPLICATE_ATTACHMENT)
             .add(LICENSE_USED_BY_RELEASE)
             .add(DOCUMENT_USED_BY_PROJECT_OR_RELEASE)
+            .add(DOCUMENT_USED_BY_PROJECT_OR_RELEASE_OR_PACKAGE)
             .add(DOCUMENT_NOT_PROCESSED_SUCCESSFULLY)
             .add(DEFAULT_ERROR_MESSAGE)
             .add(FIRST_NAME_CANNOT_BE_EMPTY)
@@ -105,6 +118,7 @@ public class ErrorMessages {
             .add(ERROR_COMPONENT_NOT_ACCESSIBLE)
             .add(ERROR_RELEASE_OR_COMPONENT_NOT_ACCESSIBLE)
             .add(ERROR_GETTING_RELEASE)
+            .add(ERROR_DELETING_RELEASE)
             .add(ERROR_GETTING_LICENSE)
             .add(LICENSE_SHORTNAME_TAKEN)
             .add(UPDATE_FAILED_SANITY_CHECK)
@@ -127,6 +141,14 @@ public class ErrorMessages {
             .add(ERROR_UPDATE_VULNERABILITY)
             .add(VENDOR_DUPLICATE)
             .add(ERROR_VENDOR)
+            .add(ERROR_BULK_DELETING)
+            .add(ERROR_BULK_DELETING_IN_BACKEND)
+            .add(PACKAGE_NOT_ADDED)
+            .add(PACKAGE_DUPLICATE)
+            .add(PACKAGE_NAME_VERSION_ERROR)
+            .add(PACKAGE_UPDATE_ACCESS_DENIED)
+            .add(INVALID_PURL_OR_LINKED_RELEASE)
+            .add(INVALID_LINKED_DOCUMENT)
             .build();
 
     private ErrorMessages() {

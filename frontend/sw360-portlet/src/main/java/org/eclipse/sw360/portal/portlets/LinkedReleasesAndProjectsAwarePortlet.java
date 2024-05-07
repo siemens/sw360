@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
@@ -20,6 +21,8 @@ import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
@@ -28,6 +31,11 @@ import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.portal.common.PortalConstants;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 
+import com.google.common.collect.Lists;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+
 import javax.portlet.PortletException;
 import javax.portlet.PortletRequest;
 import javax.portlet.ResourceRequest;
@@ -35,7 +43,6 @@ import javax.portlet.ResourceResponse;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -43,10 +50,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.liferay.portal.kernel.json.JSONFactoryUtil.createJSONArray;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyList;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyString;
 import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
@@ -95,9 +104,19 @@ public abstract class LinkedReleasesAndProjectsAwarePortlet extends AttachmentAw
         if (PortalConstants.LOAD_LINKED_PROJECTS_ROWS.equals(action)) {
             boolean overrideToRelease = Boolean.parseBoolean(request.getParameter("overrideToRelease"));
             if (overrideToRelease) {
-                loadLinkedReleasesRows(request, response);
-                include("/html/utils/ajax/linkedReleasesClearingStatusRows.jsp", request, response,
-                        PortletRequest.RESOURCE_PHASE);
+                if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+                    loadLinkedReleasesRows(request, response);
+                    include("/html/utils/ajax/linkedReleasesClearingStatusRows.jsp", request, response,
+                            PortletRequest.RESOURCE_PHASE);
+                } else {
+                    try {
+                        loadLinkedReleaseOfProject(request);
+                        include("/html/utils/ajax/linkedReleaseInNetworkRows.jsp", request, response,
+                                PortletRequest.RESOURCE_PHASE);
+                    } catch (TException e) {
+                        log.error("Error when create new release row for tree view");
+                    }
+                }
                 return;
             }
             serveLoadLinkedProjectsRows(request, response);
@@ -112,6 +131,49 @@ public abstract class LinkedReleasesAndProjectsAwarePortlet extends AttachmentAw
                 rl -> SW360Utils.getVersionedName(nullToEmptyString(rl.getName()), rl.getVersion()), String.CASE_INSENSITIVE_ORDER)
                 ).collect(Collectors.toList());
         request.setAttribute(RELEASE_LIST, linkedReleaseRelations);
+    }
+
+    protected void putDirectlyLinkedPackagesInRequest(PortletRequest request, Set<String> packageIds) {
+        List<Package> linkedPackages = Lists.newArrayList();
+        if (CommonUtils.isNotEmpty(packageIds)) {
+            try {
+                PackageService.Iface client = thriftClients.makePackageClient();
+                linkedPackages.addAll(client.getPackageByIds(packageIds));
+                linkedPackages = linkedPackages.stream()
+                        .sorted(Comparator.comparing(pkg -> SW360Utils.getVersionedName(nullToEmptyString(pkg.getName()), pkg.getVersion()),
+                                String.CASE_INSENSITIVE_ORDER))
+                        .collect(Collectors.toList());
+            } catch (TException e) {
+                log.error("Could not get linked packages", e);
+            }
+        }
+        request.setAttribute(PortalConstants.PACKAGE_LIST, linkedPackages);
+    }
+
+    protected JSONArray getPackageData(List<Package> packages, User user) {
+        JSONArray packageData = createJSONArray();
+        for (Package pkg : packages) {
+            JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+            jsonObject.put("id", pkg.getId());
+            jsonObject.put("DT_RowId", pkg.getId());
+            jsonObject.put("name", SW360Utils.printName(pkg));
+            final String relId = pkg.getReleaseId();
+            jsonObject.put("relId", CommonUtils.nullToEmptyString(relId));
+            if (Objects.nonNull(pkg.getRelease())) {
+                Release rel = pkg.getRelease();
+                jsonObject.put("relName", SW360Utils.printName(rel));
+                jsonObject.put("relCS", ThriftEnumUtils.enumToString(rel.getClearingState()));
+            }
+            JSONArray licenseArray = createJSONArray();
+            if (pkg.isSetLicenseIds()) {
+                pkg.getLicenseIds().stream().sorted().forEach(licenseArray::put);
+            }
+            jsonObject.put("lics", licenseArray);
+            jsonObject.put("pkgMgr", ThriftEnumUtils.enumToString(pkg.getPackageManager()));
+            jsonObject.put("writeAccess", SW360Utils.isWriteAccessUser(pkg.getCreatedBy(), user, SW360Constants.PACKAGE_PORTLET_WRITE_ACCESS_USER_ROLE));
+            packageData.put(jsonObject);
+        }
+        return packageData;
     }
 
     protected void putDirectlyLinkedReleaseRelationsWithAccessibilityInRequest(PortletRequest request, Release release, User user) {
@@ -177,7 +239,12 @@ public abstract class LinkedReleasesAndProjectsAwarePortlet extends AttachmentAw
     }
 
     protected void putDirectlyLinkedProjectsInRequest(PortletRequest request, Project project, User user) {
-        final Collection<ProjectLink> linkedProjects = SW360Utils.getLinkedProjects(project, false, thriftClients, log, user);
+        Collection<ProjectLink> linkedProjects;
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            linkedProjects = SW360Utils.getLinkedProjects(project, false, thriftClients, log, user);
+        } else {
+            linkedProjects = SW360Utils.getLinkedProjectWithoutReleases(project, false, thriftClients, log, user);
+        }
         List<ProjectLink> secondLevelLinks = linkedProjects
                 .stream()
                 .map(ProjectLink::getSubprojects)
@@ -200,8 +267,13 @@ public abstract class LinkedReleasesAndProjectsAwarePortlet extends AttachmentAw
     }
 
     protected void serveLoadLinkedProjectsRows(ResourceRequest request, ResourceResponse response) throws PortletException, IOException {
-        prepareLinkedProjects(request);
-        include("/html/utils/ajax/linkedProjectsRows.jsp", request, response, PortletRequest.RESOURCE_PHASE);
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            prepareLinkedProjects(request);
+            include("/html/utils/ajax/linkedProjectsRows.jsp", request, response, PortletRequest.RESOURCE_PHASE);
+        } else {
+            prepareLinkedProjectDependencyNetwork(request);
+            include("/html/utils/ajax/linkedProjectRowsDependencyNetwork.jsp", request, response, PortletRequest.RESOURCE_PHASE);
+        }
     }
 
     protected void prepareLinkedProjects(ResourceRequest request) throws PortletException {
@@ -299,5 +371,67 @@ public abstract class LinkedReleasesAndProjectsAwarePortlet extends AttachmentAw
             relMainLineState.put(releaseId, ThriftEnumUtils.enumToString(releaseMainlineState));
         }));
         return relMainLineState;
+    }
+
+    protected void loadLinkedReleaseOfProject(ResourceRequest request) throws TException {
+        String projectId = request.getParameter("projectId");
+        String[] trace = request.getParameterValues("trace[]");
+        String branchId = request.getParameter(PortalConstants.NETWORK_PARENT_BRANCH_ID);
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        try {
+            ProjectService.Iface projectClient = thriftClients.makeProjectClient();
+            List<ReleaseLink> linkedReleases = projectClient.getReleaseLinksOfProjectNetWorkByTrace(projectId, Arrays.asList(trace), user);
+            request.setAttribute(PortalConstants.NETWORK_PARENT_BRANCH_ID, branchId);
+            request.setAttribute(PortalConstants.PARENT_SCOPE_GROUP_ID, request.getParameter(PortalConstants.PARENT_SCOPE_GROUP_ID));
+            request.setAttribute(PortalConstants.NETWORK_RELEASE_LIST, linkedReleases);
+            int totalInaccessibleRow = 0;
+            for (ReleaseLink link : linkedReleases) {
+                if (!link.isAccessible()) {
+                    totalInaccessibleRow++;
+                }
+            }
+            request.setAttribute(PortalConstants.NETWORK_TOTAL_INACCESSIBLE_ROWS, totalInaccessibleRow);
+        } catch (TException e) {
+            log.error("Error getting releases!", e);
+            request.setAttribute(PortalConstants.NETWORK_PARENT_BRANCH_ID, branchId);
+            request.setAttribute(PortalConstants.PARENT_SCOPE_GROUP_ID, request.getParameter(PortalConstants.PARENT_SCOPE_GROUP_ID));
+            request.setAttribute(PortalConstants.NETWORK_RELEASE_LIST, Collections.emptyList());
+            request.setAttribute(PortalConstants.NETWORK_TOTAL_INACCESSIBLE_ROWS, 0);
+        }
+    }
+
+    protected void prepareLinkedProjectDependencyNetwork(ResourceRequest request) throws PortletException {
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        String branchId = request.getParameter(PortalConstants.NETWORK_PARENT_BRANCH_ID);
+        Optional<String> projectIdOpt = getProjectIdFromBranchId(branchId);
+        request.setAttribute(PortalConstants.NETWORK_PARENT_BRANCH_ID, branchId);
+        final Project project;
+        if (projectIdOpt.isPresent()) {
+            try {
+                ProjectService.Iface client = thriftClients.makeProjectClient();
+                project = client.getProjectById(projectIdOpt.get(), user);
+            } catch (TException e) {
+                log.error("Error getting projects!", e);
+                throw new PortletException("cannot load project " + projectIdOpt.get(), e);
+            }
+            String parentProjectPath = request.getParameter(PortalConstants.PARENT_PROJECT_PATH);
+            if (parentProjectPath != null) {
+                request.setAttribute(PortalConstants.PARENT_PROJECT_PATH,
+                        parentProjectPath.concat(":").concat(projectIdOpt.get()));
+            }
+        } else {
+            project = new Project();
+        }
+        List<ProjectLink> mappedProjectLinks = createLinkedProjects(project, user);
+
+        mappedProjectLinks = sortProjectLink(mappedProjectLinks);
+        request.setAttribute(PROJECT_LIST, mappedProjectLinks);
+        request.setAttribute(PortalConstants.PARENT_SCOPE_GROUP_ID, request.getParameter(PortalConstants.PARENT_SCOPE_GROUP_ID));
+    }
+
+    protected List<ProjectLink> createLinkedProjectsWithAllReleases(Project project, Function<ProjectLink, ProjectLink> projectLinkMapper, boolean deep,
+                                                                    User user) {
+        final Collection<ProjectLink> linkedProjects = SW360Utils.getLinkedProjectsWithAllReleasesAsFlatList(project, deep, thriftClients, log, user);
+        return linkedProjects.stream().map(projectLinkMapper).collect(Collectors.toList());
     }
 }

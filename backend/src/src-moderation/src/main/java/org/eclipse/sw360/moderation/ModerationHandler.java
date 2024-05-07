@@ -27,6 +27,9 @@ import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.SPDXDocument;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.DocumentCreationInformation;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
 import org.eclipse.sw360.moderation.db.ModerationDatabaseHandler;
 
 import java.io.IOException;
@@ -126,6 +129,54 @@ public class ModerationHandler implements ModerationService.Iface {
     }
 
     @Override
+    public RequestStatus createSPDXDocumentRequest(SPDXDocument spdx, User user) throws TException {
+        assertUser(user);
+        assertNotNull(spdx);
+
+        return handler.createRequest(spdx, user, false);
+    }
+
+    @Override
+    public void createSPDXDocumentDeleteRequest(SPDXDocument spdx, User user) throws TException {
+        assertUser(user);
+        assertNotNull(spdx);
+
+        handler.createRequest(spdx, user, true);
+    }
+
+    @Override
+    public RequestStatus createSpdxDocumentCreationInfoRequest(DocumentCreationInformation documentCreationInfo, User user) throws TException {
+        assertUser(user);
+        assertNotNull(documentCreationInfo);
+
+        return handler.createRequest(documentCreationInfo, user, false);
+    }
+
+    @Override
+    public void createSpdxDocumentCreationInfoDeleteRequest(DocumentCreationInformation documentCreationInfo, User user) throws TException {
+        assertUser(user);
+        assertNotNull(documentCreationInfo);
+
+        handler.createRequest(documentCreationInfo, user, true);
+    }
+
+    @Override
+    public RequestStatus createSpdxPackageInfoRequest(PackageInformation packageInfo, User user) throws TException {
+        assertUser(user);
+        assertNotNull(packageInfo);
+
+        return handler.createRequest(packageInfo, user, false);
+    }
+
+    @Override
+    public void createSpdxPackageInfoDeleteRequest(PackageInformation packageInfo, User user) throws TException {
+        assertUser(user);
+        assertNotNull(packageInfo);
+
+        handler.createRequest(packageInfo, user, true);
+    }
+
+    @Override
     public List<ModerationRequest> getModerationRequestByDocumentId(String documentId) throws TException {
         assertId(documentId);
 
@@ -205,10 +256,24 @@ public class ModerationHandler implements ModerationService.Iface {
     }
 
     @Override
+    public List<ModerationRequest> getRequestsByModeratorWithPaginationNoFilter(User user, PaginationData pageData) throws TException {
+        assertUser(user);
+
+        return handler.getRequestsByModeratorWithPaginationNoFilter(user.getEmail(), pageData);
+    }
+
+    @Override
     public List<ModerationRequest> getRequestsByRequestingUser(User user) throws TException {
         assertUser(user);
 
         return handler.getRequestsByRequestingUser(user.getEmail());
+    }
+
+    @Override
+    public List<ModerationRequest> getRequestsByRequestingUserWithPagination(User user, PaginationData pageData) throws TException {
+        assertUser(user);
+
+        return handler.getRequestsByRequestingUserWithPagination(user.getEmail(), pageData);
     }
 
     @Override
@@ -315,11 +380,25 @@ public class ModerationHandler implements ModerationService.Iface {
     }
 
     @Override
+    public Map<String, Long> getCountByRequester(User user) throws TException {
+        assertUser(user);
+        return handler.getCountByRequester(user.getEmail());
+    }
+
+    @Override
     public Map<PaginationData, List<ModerationRequest>> getRequestsByModeratorWithPagination(User user,
             PaginationData pageData, boolean open) throws TException {
         assertUser(user);
 
         return handler.getRequestsByModerator(user.getEmail(), pageData, open);
+    }
+
+    @Override
+    public Map<PaginationData, List<ModerationRequest>> getRequestsByModeratorWithPaginationAllDetails(User user,
+                                                                                                       PaginationData pageData, boolean open) throws TException {
+        assertUser(user);
+
+        return handler.getRequestsByModeratorAllDetails(user.getEmail(), pageData, open);
     }
 
     @Override

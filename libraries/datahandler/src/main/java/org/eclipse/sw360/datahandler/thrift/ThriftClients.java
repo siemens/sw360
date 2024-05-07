@@ -34,6 +34,7 @@ import org.eclipse.sw360.datahandler.thrift.health.HealthService;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
 import org.eclipse.sw360.datahandler.thrift.projectimport.ProjectImportService;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.schedule.ScheduleService;
@@ -42,6 +43,10 @@ import org.eclipse.sw360.datahandler.thrift.users.UserService;
 import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
 import org.eclipse.sw360.datahandler.thrift.vmcomponents.VMComponentService;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityService;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.SPDXDocumentService;
+import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.DocumentCreationInformationService;
+import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformationService;
+import org.eclipse.sw360.datahandler.thrift.spdx.fileinformation.FileInformationService;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -85,6 +90,11 @@ public class ThriftClients {
     private static final String WSIMPORT_SERVICE_URL = "/wsimport/thrift";
     private static final String CHANGELOGS_SERVICE_URL = "/changelogs/thrift";
     private static final String HEALTH_SERVICE_URL = "/health/thrift";
+    private static final String SPDX_SERVICE_URL = "/spdxdocument/thrift";
+    private static final String SPDX_DOCUMENT_INFO_SERVICE_URL = "/spdxdocumentcreationinfo/thrift";
+    private static final String SPDX_PACKAGE_INFO_SERVICE_URL = "/spdxpackageinfo/thrift";
+    private static final String SPDX_FILE_INFO_SERVICE_URL = "/fileinformation/thrift";
+    private static final String PACKAGE_SERVICE_URL = "/packages/thrift";
 
     // A service which has to be scheduled by the scheduler should be registered here!
     // names of services that can be scheduled by the schedule service, i.e. that have an "update" method
@@ -94,6 +104,8 @@ public class ThriftClients {
     public static final String SVM_LIST_UPDATE_SERVICE = "svmListUpdateService";
     public static final String SVM_TRACKING_FEEDBACK_SERVICE = "svmTrackingFeedbackService";
     public static final String DELETE_ATTACHMENT_SERVICE = "deleteattachmentService";
+    public static final String IMPORT_DEPARTMENT_SERVICE = "importdepartmentService";
+    public static final String SRC_UPLOAD_SERVICE = "srcAttachmentUploadService";
 
 
     static {
@@ -217,5 +229,25 @@ public class ThriftClients {
 
     public HealthService.Iface makeHealthClient() {
         return new HealthService.Client(makeProtocol(BACKEND_URL, HEALTH_SERVICE_URL));
+    }
+
+    public SPDXDocumentService.Iface makeSPDXClient() {
+        return new SPDXDocumentService.Client(makeProtocol(BACKEND_URL, SPDX_SERVICE_URL));
+    }
+
+    public DocumentCreationInformationService.Iface makeSPDXDocumentInfoClient() {
+        return new DocumentCreationInformationService.Client(makeProtocol(BACKEND_URL, SPDX_DOCUMENT_INFO_SERVICE_URL));
+    }
+
+    public PackageInformationService.Iface makeSPDXPackageInfoClient() {
+        return new PackageInformationService.Client(makeProtocol(BACKEND_URL, SPDX_PACKAGE_INFO_SERVICE_URL));
+    }
+
+    public FileInformationService.Iface makeSPDXFileInfoClient() {
+        return new FileInformationService.Client(makeProtocol(BACKEND_URL, SPDX_FILE_INFO_SERVICE_URL));
+    }
+
+    public PackageService.Iface makePackageClient() {
+        return new PackageService.Client(makeProtocol(BACKEND_URL, PACKAGE_SERVICE_URL));
     }
 }

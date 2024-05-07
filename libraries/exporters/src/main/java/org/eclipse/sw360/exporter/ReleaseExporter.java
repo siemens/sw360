@@ -61,15 +61,18 @@ public class ReleaseExporter extends ExcelExporter<Release, ReleaseHelper> {
             .build();
 
    public static final List<Release._Fields> RELEASE_REQUIRED_FIELDS = ImmutableList.<Release._Fields>builder()
+            .add(ID)
             .add(COMPONENT_ID)
             .add(NAME)
             .add(VERSION)
             .add(MAIN_LICENSE_IDS)
             .add(OTHER_LICENSE_IDS)
+            .add(SOURCE_CODE_DOWNLOADURL)
             .add(CLEARING_STATE)
             .add(ECC_INFORMATION)
             .add(VENDOR)
             .add(EXTERNAL_IDS)
+            .add(ATTACHMENTS)
             .build();
 
    public static final List<EccInformation._Fields> ECC_IGNORE_FIELDS = ImmutableList.<EccInformation._Fields>builder()
@@ -130,6 +133,9 @@ public class ReleaseExporter extends ExcelExporter<Release, ReleaseHelper> {
         case ECC_INFORMATION:
             EccInformation.metaDataMap.keySet().stream().filter(f -> !ECC_IGNORE_FIELDS.contains(f))
                     .forEach(f -> headers.add("ECC information: " + f.getFieldName()));
+            break;
+        case ATTACHMENTS:
+            headers.add("SRC/SRS Attachments");
             break;
         default:
             headers.add(displayNameFor(field.getFieldName(), nameToDisplayName));

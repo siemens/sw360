@@ -18,6 +18,7 @@ import com.liferay.portal.kernel.portlet.PortletResponseUtil;
 import com.liferay.portal.kernel.servlet.SessionMessages;
 import com.liferay.portal.kernel.util.ResourceBundleUtil;
 import com.liferay.portal.kernel.language.LanguageUtil;
+import com.liferay.portal.kernel.json.JSONObject;
 
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
@@ -31,6 +32,8 @@ import org.eclipse.sw360.exporter.LicenseExporter;
 import org.eclipse.sw360.portal.common.ErrorMessages;
 import org.eclipse.sw360.portal.common.PortalConstants;
 import org.eclipse.sw360.portal.common.UsedAsLiferayAction;
+import org.eclipse.sw360.portal.common.ChangeLogsPortletUtils;
+import org.eclipse.sw360.portal.common.PortletUtils;
 import org.eclipse.sw360.portal.portlets.Sw360Portlet;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 import org.apache.commons.lang.StringUtils;
@@ -89,6 +92,12 @@ public class LicensesPortlet extends Sw360Portlet {
         } else if (PortalConstants.LOAD_LICENSE_OBLIGATIONS.equals(action)) {
             request.setAttribute(LICENSE_OBLIGATION_DATA, loadLicenseObligation(request));
             include("/html/licenses/includes/licObligations.jsp", request, response, PortletRequest.RESOURCE_PHASE);
+        } else if (PortalConstants.LOAD_CHANGE_LOGS.equals(action) || PortalConstants.VIEW_CHANGE_LOGS.equals(action)) {
+            ChangeLogsPortletUtils changeLogsPortletUtilsPortletUtils = PortletUtils
+                    .getChangeLogsPortletUtils(thriftClients);
+            JSONObject dataForChangeLogs = changeLogsPortletUtilsPortletUtils.serveResourceForChangeLogs(request,
+                    response, action);
+            writeJSON(request, response, dataForChangeLogs);
         }
     }
 
@@ -348,12 +357,14 @@ public class LicensesPortlet extends Sw360Portlet {
         boolean checked = "true".equals(request.getParameter(License._Fields.CHECKED.toString()));
         String licenseTypeString =
                 request.getParameter(License._Fields.LICENSE_TYPE.toString() + LicenseType._Fields.LICENSE_TYPE.toString());
+        String note = request.getParameter(License._Fields.NOTE.name());
         license.setText(CommonUtils.nullToEmptyString(text));
         license.setFullname(CommonUtils.nullToEmptyString(fullname));
         license.setShortname((CommonUtils.nullToEmptyString(shortname)));
         license.setOSIApproved(osiApproved);
         license.setFSFLibre(fsfLibre);
         license.setChecked(checked);
+        license.setNote(note);
         String obligationIds = request.getParameter("obligations");
         List<String> oblIds = CommonUtils.isNotNullEmptyOrWhitespace(obligationIds) ? Arrays.asList(obligationIds.split(",")) : Lists.newArrayList();
         license.setObligationDatabaseIds(Sets.newHashSet(oblIds));

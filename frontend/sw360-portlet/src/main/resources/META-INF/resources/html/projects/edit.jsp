@@ -27,6 +27,7 @@
 <%-- the following is needed by liferay to display error messages--%>
 <%@ include file="/html/utils/includes/errorKeyToMessage.jspf"%>
 <core_rt:set var="isSvmEnabled" value='<%=PortalConstants.IS_SVM_ENABLED%>' />
+<core_rt:set var="isPackagePortletEnabled" value='<%=SW360Constants.IS_PACKAGE_PORTLET_ENABLED%>' scope="request"/>
 <portlet:resourceURL var="obligationediturl">
     <portlet:param name="<%=PortalConstants.ACTION%>" value="<%=PortalConstants.LOAD_OBLIGATIONS_EDIT%>"/>
     <portlet:param name="<%=PortalConstants.DOCUMENT_ID%>" value="${project.id}"/>
@@ -79,6 +80,7 @@
 
 <core_rt:set var="isObligationPresent" value="${not empty project.releaseIdToUsage}" />
 <core_rt:set var="isProjectObligationsEnabled"  value="${isProjectObligationsEnabled and hasWritePermissions}" />
+<core_rt:set var="enableSearchForReleasesFromLinkedProjects" value="${true}" scope="request"/>
 
 <div class="container" style="display: none;">
     <div class="row">
@@ -87,6 +89,9 @@
                 <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Summary'}">active</core_rt:if>" href="#tab-Summary" data-toggle="list" role="tab"><liferay-ui:message key="summary" /></a>
                 <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Administration'}">active</core_rt:if>" href="#tab-Administration" data-toggle="list" role="tab"><liferay-ui:message key="administration" /></a>
                 <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-linkedProjects'}">active</core_rt:if>" href="#tab-linkedProjects" data-toggle="list" role="tab"><liferay-ui:message key="linked.releases.and.projects" /></a>
+                <core_rt:if test="${isPackagePortletEnabled}">
+                    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-linkedPackages'}">active</core_rt:if>" href="#tab-linkedPackages" data-toggle="list" role="tab"><liferay-ui:message key="linked.packages" /></a>
+                </core_rt:if>
                 <core_rt:if test="${not addMode}" >
                     <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Attachments'}">active</core_rt:if>" href="#tab-Attachments" data-toggle="list" role="tab"><liferay-ui:message key="attachments" /></a>
                     <core_rt:if test="${isProjectObligationsEnabled}">
@@ -121,6 +126,18 @@
                         <div class="btn-group" role="group">
                             <button id="cancelEditButton" type="button" class="btn btn-light"><liferay-ui:message key="cancel" /></button>
                         </div>
+                        <core_rt:if test="${isFlexibleProjectReleaseRelationshipEnabled}">
+                            <div class="btn-group" role="group">
+                                <button id="checkDependency" type="button" class="btn btn-outline-success">
+                                    <liferay-ui:message key="check.dependency.network" />
+                                    <span class="spinner text-center" style="display: none;">
+                                        <div class="spinner-border" role="status" style="height: 20px; width: 20px;" >
+                                            <span class="sr-only"><liferay-ui:message key="loading" /></span>
+                                        </div>
+                                    </span>
+                                </button>
+                            </div>
+                        </core_rt:if>
                         <div class="list-group-companion" data-belong-to="tab-Obligations">
                             <core_rt:if test="${not addMode and isProjectObligationsEnabled and isObligationPresent}">
                                 <div class="nav nav-pills justify-content-center bg-light font-weight-bold" id="pills-tab" role="tablist">
@@ -144,6 +161,7 @@
                         data-comment-parameter-name="<%=PortalConstants.MODERATION_REQUEST_COMMENT%>"
                         data-linked-projects="${project.linkedProjectsSize}"
                         data-linked-releases="${project.releaseIdToUsageSize}"
+                        data-linked-packages="${project.packageIdsSize}"
                         data-attachments="${project.attachmentsSize}"
                     >
                         <div class="tab-content">
@@ -166,8 +184,18 @@
                             </div>
                             <div id="tab-linkedProjects" class="tab-pane <core_rt:if test="${selectedTab == 'tab-linkedProjects'}">active show</core_rt:if>">
                                 <%@include file="/html/projects/includes/linkedProjectsEdit.jspf" %>
-                                <%@include file="/html/utils/includes/linkedReleasesEdit.jspf" %>
+                                <core_rt:if test="${not isFlexibleProjectReleaseRelationshipEnabled}">
+                                    <%@include file="/html/utils/includes/linkedReleasesEdit.jspf" %>
+                                </core_rt:if>
+                                <core_rt:if test="${isFlexibleProjectReleaseRelationshipEnabled}">
+                                    <jsp:include page="/html/utils/includes/editLinkedReleasesInNetwork.jsp" />
+                                </core_rt:if>
                             </div>
+                            <core_rt:if test="${isPackagePortletEnabled}">
+                                <div id="tab-linkedPackages" class="tab-pane <core_rt:if test="${selectedTab == 'tab-linkedPackages'}">active show</core_rt:if>">
+                                    <jsp:include page="/html/utils/includes/editLinkedPackages.jsp" />
+                                </div>
+                            </core_rt:if>
                             <core_rt:if test="${not addMode}" >
                                 <div id="tab-Attachments" class="tab-pane <core_rt:if test="${selectedTab == 'tab-Attachments'}">active show</core_rt:if>">
                                     <%@include file="/html/utils/includes/editAttachments.jspf" %>
@@ -209,6 +237,7 @@
                     <ul>
                         <li data-hide="hasNoLinkedProjects"><span data-name="linkedProjects"></span> <liferay-ui:message key="linked.projects" /></li>
                         <li data-hide="hasNoLinkedReleases"><span data-name="linkedReleases"></span> <liferay-ui:message key="linked.releases" /></li>
+                        <li data-hide="hasNoLinkedPackages"><span data-name="linkedPackages"></span> <liferay-ui:message key="linked.packages" /></li>
                         <li data-hide="hasNoAttachments"><span data-name="attachments"></span> <liferay-ui:message key="attachments" /></li>
                     </ul>
                 </div>
@@ -229,10 +258,11 @@
     </div>
 </div>
 
-<core_rt:set var="enableSearchForReleasesFromLinkedProjects" value="${true}" scope="request"/>
-
 <jsp:include page="/html/projects/includes/searchProjects.jsp" />
 <jsp:include page="/html/utils/includes/searchReleases.jsp" />
+<core_rt:if test="${isPackagePortletEnabled}">
+    <jsp:include page="/html/utils/includes/searchPackages.jsp" />
+</core_rt:if>
 <jsp:include page="/html/utils/includes/searchAndSelectUsers.jsp" />
 <jsp:include page="/html/utils/includes/searchUsers.jsp" />
 <%@include file="/html/components/includes/vendors/searchVendor.jspf" %>
@@ -319,6 +349,7 @@ require(['jquery', 'modules/autocomplete', 'modules/dialog', 'modules/listgroup'
         </core_rt:if>
         $(document).find(".checkStatus select").attr("disabled", false);
         $(document).find(".checkedComment input").attr("disabled", false);
+        localStorage.clear();
         $('#projectEditForm').submit();
     }
 
@@ -331,6 +362,7 @@ require(['jquery', 'modules/autocomplete', 'modules/dialog', 'modules/listgroup'
                 "<portlet:namespace/><%=PortalConstants.DOCUMENT_ID%>": "${project.id}"
             }
         }).always(function() {
+            localStorage.clear();
             var baseUrl = '<%= PortletURLFactoryUtil.create(request, portletDisplay.getId(), themeDisplay.getPlid(), PortletRequest.RENDER_PHASE) %>',
                 portletURL = Liferay.PortletURL.createURL(baseUrl)
             <core_rt:if test="${not addMode}">
@@ -350,6 +382,7 @@ require(['jquery', 'modules/autocomplete', 'modules/dialog', 'modules/listgroup'
             data = $('#projectEditForm').data(),
             linkedProjectsSize = data.linkedProjects,
             linkedReleasesSize = data.linkedReleases,
+            linkedPackagesSize = data.linkedPackages,
             attachmentsSize = data.attachments;
 
         function deleteProjectInternal() {
@@ -362,10 +395,12 @@ require(['jquery', 'modules/autocomplete', 'modules/dialog', 'modules/listgroup'
             name: name,
             linkedProjects: linkedProjectsSize,
             linkedReleases: linkedReleasesSize,
+            linkedPackages: linkedPackagesSize,
             attachments: attachmentsSize,
-            hasNoDependencies: linkedProjectsSize == 0 && linkedReleasesSize == 0 && attachmentsSize == 0,
+            hasNoDependencies: linkedProjectsSize == 0 && linkedReleasesSize == 0 && attachmentsSize == 0 && linkedPackagesSize == 0,
             hasNoLinkedProjects: linkedProjectsSize == 0,
             hasNoLinkedReleases: linkedReleasesSize == 0,
+            hasNoLinkedPackages: linkedPackagesSize == 0,
             hasNoAttachments: attachmentsSize == 0
         }, function(submit, callback) {
             deleteProjectInternal();

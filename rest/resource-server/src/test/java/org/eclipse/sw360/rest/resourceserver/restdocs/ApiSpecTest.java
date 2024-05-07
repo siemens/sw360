@@ -24,17 +24,17 @@ import org.springframework.http.MediaType;
 import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import static org.mockito.BDDMockito.given;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.responseHeaders;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.linkWithRel;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.links;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
 import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
-import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -166,9 +166,11 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                 .andDo(this.documentationHandler.document(
                         links(
                                 linkWithRel("sw360:users").description("The <<resources-users,Users resource>>"),
+                                linkWithRel("sw360:reports").description("The <<resources-reports,Reports resource>>"),
                                 linkWithRel("sw360:projects").description("The <<resources-projects,Projects resource>>"),
                                 linkWithRel("sw360:components").description("The <<resources-components,Components resource>>"),
                                 linkWithRel("sw360:releases").description("The <<resources-releases,Releases resource>>"),
+                                linkWithRel("sw360:packages").description("The <<resources-packages,Packages resource>>"),
                                 linkWithRel("sw360:attachments").description("The <<resources-attachments,Attachments resource>>"),
                                 linkWithRel("sw360:vendors").description("The <<resources-vendors,Vendors resource>>"),
                                 linkWithRel("sw360:licenses").description("The <<resources-licenses,Licenses resource>>"),
@@ -179,6 +181,11 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("sw360:changeLogs").description("The <<resources-changelog,Changelog resource>>"),
                                 linkWithRel("sw360:clearingRequests").description("The <<resources-clearingRequest,ClearingRequest resource>>"),
                                 linkWithRel("sw360:obligations").description("The <<resources-obligations,Obligation resource>>"),
+                                linkWithRel("sw360:moderationRequests").description("The <<resources-moderationRequest,ModerationRequest resource>>"),
+                                linkWithRel("sw360:fossology").description("The <<resources-fossology,Fossology resource>>"),
+                                linkWithRel("sw360:schedule").description("The <<resources-schedule,Schedule resource>>"),
+                                linkWithRel("sw360:ecc").description("The <<resources-ecc,Ecc resource>>"),
+                                linkWithRel("sw360:attachmentCleanUp").description("The <<resources-attachmentCleanUp,attachmentCleanUp resource>>"),
                                 linkWithRel("curies").description("The Curies for documentation"),
                                 linkWithRel("profile").description("The profiles of the REST resources")
                         ),

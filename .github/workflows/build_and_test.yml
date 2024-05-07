@@ -10,13 +10,15 @@
 #
 # -----------------------------------------------------------------------------
 
-name: SW360
+name: SW360 Build and Test
 
 on:
   pull_request:
     branches: [ main ]
     paths-ignore:
       - "**.md"
+      - ".github/workflows/docker_deploy.yml"
+  workflow_dispatch:
 
 permissions: write-all
 
@@ -27,11 +29,11 @@ env:
 jobs:
   build:
     name: Build and Test
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: webiny/action-conventional-commits@v1.1.0
+    - uses: actions/checkout@v4
+    - uses: webiny/action-conventional-commits@v1.3.0
 
     - name: Verify license headers
       run: |
@@ -40,6 +42,7 @@ jobs:
 
     - name: Set environment variables
       run: |
+        echo _JAVA_OPTIONS= '-Djdk.util.zip.disableZip64ExtraFieldValidation=true' >> $GITHUB_ENV
         cat .versions >> $GITHUB_ENV
 
     - name: Setup CouchDB
@@ -53,20 +56,23 @@ jobs:
         sudo sed -i 's/^couchdb.user\s*=/& '${COUCHDB_USER}'/' /etc/sw360/couchdb-test.properties
         sudo sed -i 's/^couchdb.password\s*=/& '${COUCHDB_PASSWORD}'/' /etc/sw360/couchdb-test.properties
 
-    - name: Set up JDK 11
-      run: |
-        wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | sudo tee /usr/share/keyrings/adoptium.asc
-        echo "deb [signed-by=/usr/share/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | sudo tee /etc/apt/sources.list.d/adoptium.list
-
     - name: Prepare build environment
       run: |
         sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq python3-pip build-essential libboost-dev libboost-test-dev libboost-program-options-dev libevent-dev automake libtool flex bison pkg-config libssl-dev git temurin-11-jdk maven cmake
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq python3-pip build-essential libboost-dev libboost-test-dev libboost-program-options-dev libevent-dev automake libtool flex bison pkg-config libssl-dev git cmake
         pip install mkdocs mkdocs-material
+
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        check-latest: true
+        cache: 'maven'
 
     - name: Cache Thrift
       id: cache-thrift
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           /usr/local/bin/thrift
@@ -81,17 +87,9 @@ jobs:
         chmod +x scripts/install-thrift.sh
         bash scripts/install-thrift.sh
 
-    - name: Cache local Maven repository
-      uses: actions/cache@v3
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-
     - name: Build SW360
       run: |
-        mvn clean package --no-transfer-progress -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. -Dliferay.deploy.dir=${PWD}/deploy -Dbackend.deploy.dir=${PWD}/deploy/webapps -Drest.deploy.dir=${PWD}/deploy/webapps -DRunComponentVisibilityRestrictionTest=false -DRunPrivateProjectAccessTest=false -DRunRestForceUpdateTest=false
+        mvn clean install --no-transfer-progress -P deploy -Dhelp-docs=true -Dbase.deploy.dir=. -Dliferay.deploy.dir=${PWD}/deploy -Dbackend.deploy.dir=${PWD}/deploy/webapps -Drest.deploy.dir=${PWD}/deploy/webapps -DRunComponentVisibilityRestrictionTest=false -DRunPrivateProjectAccessTest=false -DRunRestForceUpdateTest=false
 
     - name: Run PrivateProjectAccessTest
       run: |
@@ -100,6 +98,12 @@ jobs:
         cd ..
         cd libraries/datahandler
         mvn test -Dtest=ProjectPermissionsVisibilityTest -DRunPrivateProjectAccessTest=true -DRunRestForceUpdateTest=true
+        cd ../..
+
+    - name: Run BulkReleaseDeletingTest
+      run: |
+        cd backend/src/src-components
+        mvn test -Dtest=BulkDeleteUtilTest -DRunPrivateProjectAccessTest=true -DRunBulkReleaseDeletingTest=true
 
     - name: Deploy Backend and Rest Server
       run: |

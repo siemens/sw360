@@ -52,11 +52,19 @@ public class ScheduleConstants {
     public static final String SVM_TRACKING_FEEDBACK_INTERVAL_PROPERTY_NAME = "schedule.trackingfeedback.interval.seconds";
     public static final String SVM_TRACKING_FEEDBACK_OFFSET_DEFAULT  = (4*60*60) + "" ; // default 04:00 am, in seconds
     public static final String SVM_TRACKING_FEEDBACK_INTERVAL_DEFAULT  = (24*60*60)+"" ; // default 24h, in seconds
+    public static final String SRC_UPLOAD_SERVICE_OFFSET_PROPERTY_NAME = "schedule.srcupload.firstOffset.seconds";
+    public static final String SRC_UPLOAD_SERVICE_OFFSET_DEFAULT = (22*60*60) + ""; //default 10:00 pm, in seconds
+    public static final String SRC_UPLOAD_SERVICE_INTERVAL_PROPERTY_NAME = "schedule.srcupload.interval.seconds";
+    public static final String SRC_UPLOAD_SERVICE_INTERVAL_DEFAULT = (24*60*60)+"" ; // default 24h, in seconds;
 
     public static final String DELETE_ATTACHMENT_OFFSET_DEFAULT  = "0"; // default 00:00 am, in seconds
     public static final String DELETE_ATTACHMENT_INTERVAL_DEFAULT  = (24*60*60) + "" ; // default 24h, in seconds
     public static final String DELETE_ATTACHMENT_OFFSET_PROPERTY_NAME = "schedule.delete.attachment.firstOffset.seconds";
     public static final String DELETE_ATTACHMENT_INTERVAL_PROPERTY_NAME = "schedule.delete.attachment.interval.seconds";
+    public static final String DEPARTMENT_OFFSET_PROPERTY_NAME = "schedule.department.firstOffset.seconds";
+    public static final String DEPARTMENT_OFFSET_DEFAULT  = "0" ; // default 00:00 am, in seconds
+    public static final String DEPARTMENT_INTERVAL_PROPERTY_NAME = "schedule.department.interval.seconds";
+    public static final String DEPARTMENT_INTERVAL_DEFAULT  = (24*60*60) + "" ; // default 24h, in seconds
 
     // scheduler properties
     public static final ConcurrentHashMap<String, Integer> SYNC_FIRST_RUN_OFFSET_SEC = new ConcurrentHashMap<>();
@@ -72,6 +80,7 @@ public class ScheduleConstants {
         loadScheduledServiceProperties(props, ThriftClients.SVMMATCH_SERVICE, SVMMATCH_OFFSET_PROPERTY_NAME, SVMMATCH_OFFSET_DEFAULT, SVMMATCH_INTERVAL_PROPERTY_NAME, SVMMATCH_INTERVAL_DEFAULT);
         loadScheduledServiceProperties(props, ThriftClients.SVM_LIST_UPDATE_SERVICE, SVM_LIST_UPDATE_OFFSET_PROPERTY_NAME, SVM_LIST_UPDATE_OFFSET_DEFAULT, SVM_LIST_UPDATE_INTERVAL_PROPERTY_NAME, SVM_LIST_UPDATE_INTERVAL_DEFAULT);
         loadScheduledServiceProperties(props, ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE, SVM_TRACKING_FEEDBACK_OFFSET_PROPERTY_NAME, SVM_TRACKING_FEEDBACK_OFFSET_DEFAULT, SVM_TRACKING_FEEDBACK_INTERVAL_PROPERTY_NAME, SVM_TRACKING_FEEDBACK_INTERVAL_DEFAULT);
+        loadScheduledServiceProperties(props, ThriftClients.SRC_UPLOAD_SERVICE, SRC_UPLOAD_SERVICE_OFFSET_PROPERTY_NAME, SRC_UPLOAD_SERVICE_OFFSET_DEFAULT, SRC_UPLOAD_SERVICE_INTERVAL_PROPERTY_NAME, SRC_UPLOAD_SERVICE_INTERVAL_DEFAULT);
 
         String autostartServicesString = props.getProperty(AUTOSTART_PROPERTY_NAME, "");
         autostartServices = autostartServicesString.split(",");
@@ -120,6 +129,27 @@ public class ScheduleConstants {
         } catch (NumberFormatException nfe){
             log.error("Property " + DELETE_ATTACHMENT_INTERVAL_PROPERTY_NAME + " is not an integer.");
             invalidConfiguredServices.add(ThriftClients.DELETE_ATTACHMENT_SERVICE);
+        }
+
+        if(! props.containsKey(DEPARTMENT_OFFSET_PROPERTY_NAME)){
+            log.info("Property "+ DEPARTMENT_OFFSET_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String departmentOffset  = props.getProperty(DEPARTMENT_OFFSET_PROPERTY_NAME, DEPARTMENT_OFFSET_DEFAULT);
+        try {
+            SYNC_FIRST_RUN_OFFSET_SEC.put(ThriftClients.IMPORT_DEPARTMENT_SERVICE, Integer.parseInt(departmentOffset));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + DEPARTMENT_OFFSET_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.IMPORT_DEPARTMENT_SERVICE);
+        }
+        if(! props.containsKey(DEPARTMENT_INTERVAL_PROPERTY_NAME)){
+            log.info("Property "+ DEPARTMENT_INTERVAL_PROPERTY_NAME + " not set. Using default value.");
+        }
+        String departmentInterval  = props.getProperty(DEPARTMENT_INTERVAL_PROPERTY_NAME, DEPARTMENT_INTERVAL_DEFAULT);
+        try {
+            SYNC_INTERVAL_SEC.put(ThriftClients.IMPORT_DEPARTMENT_SERVICE, Integer.parseInt(departmentInterval));
+        } catch (NumberFormatException nfe){
+            log.error("Property " + DEPARTMENT_INTERVAL_PROPERTY_NAME + " is not an integer.");
+            invalidConfiguredServices.add(ThriftClients.IMPORT_DEPARTMENT_SERVICE);
         }
     }
 }

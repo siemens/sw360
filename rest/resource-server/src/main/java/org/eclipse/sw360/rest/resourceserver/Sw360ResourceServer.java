@@ -10,15 +10,22 @@
 
 package org.eclipse.sw360.rest.resourceserver;
 
-import java.util.Properties;
-import java.util.Set;
-
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.OAuthFlow;
+import io.swagger.v3.oas.models.security.OAuthFlows;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.common.PropertyUtils;
 import org.eclipse.sw360.rest.common.Sw360CORSFilter;
+import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationFilter;
+import org.springdoc.core.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -34,6 +41,8 @@ import org.springframework.hateoas.mediatype.hal.DefaultCurieProvider;
 import org.springframework.web.filter.ForwardedHeaderFilter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 
+import java.util.*;
+
 @SpringBootApplication
 @Import(Sw360CORSFilter.class)
 public class Sw360ResourceServer extends SpringBootServletInitializer {
@@ -44,12 +53,15 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     private int defaultPageSize;
 
     private static final String SW360_PROPERTIES_FILE_PATH = "/sw360.properties";
+    private static final String VERSION_INFO_PROPERTIES_FILE = "/restInfo.properties";
+    private static final String VERSION_INFO_KEY = "sw360RestVersion";
     private static final String CURIE_NAMESPACE = "sw360";
     private static final String APPLICATION_ID = "rest";
 
     public static final String API_TOKEN_HASH_SALT;
     public static final String API_TOKEN_MAX_VALIDITY_READ_IN_DAYS;
     public static final String API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS;
+    public static final UserGroup API_WRITE_ACCESS_USERGROUP;
     public static final Set<String> DOMAIN;
     public static final String REPORT_FILENAME_MAPPING;
     public static final String JWKS_ISSUER_URL;
@@ -60,12 +72,16 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     public static final UserGroup CONFIG_ADMIN_ACCESS_USERGROUP;
     private static final String DEFAULT_WRITE_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
     private static final String DEFAULT_ADMIN_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
+    private static final String SERVER_PATH_URL;
+    private static final String APPLICATION_NAME = "/resource";
+    private static final Map<Object, Object> versionInfo;
 
     static {
         Properties props = CommonUtils.loadProperties(Sw360ResourceServer.class, SW360_PROPERTIES_FILE_PATH);
         API_TOKEN_MAX_VALIDITY_READ_IN_DAYS = props.getProperty("rest.apitoken.read.validity.days", "90");
         API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS = props.getProperty("rest.apitoken.write.validity.days", "30");
         API_TOKEN_HASH_SALT = props.getProperty("rest.apitoken.hash.salt", "$2a$04$Software360RestApiSalt");
+        API_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", UserGroup.ADMIN.name()));
         DOMAIN = CommonUtils.splitToSet(props.getProperty("domain",
                 "Application Software, Documentation, Embedded Software, Hardware, Test and Diagnostics"));
         REPORT_FILENAME_MAPPING = props.getProperty("org.eclipse.sw360.licensinfo.projectclearing.templatemapping", "");
@@ -76,6 +92,17 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
                 System.getProperty("RunRestForceUpdateTest", props.getProperty("rest.force.update.enabled", "false")));
         CONFIG_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", DEFAULT_WRITE_ACCESS_USERGROUP));
         CONFIG_ADMIN_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.admin.access.usergroup", DEFAULT_ADMIN_ACCESS_USERGROUP));
+        SERVER_PATH_URL = props.getProperty("backend.url", "http://localhost:8080");
+
+        versionInfo = new HashMap<>();
+        Properties properties = CommonUtils.loadProperties(Sw360ResourceServer.class, VERSION_INFO_PROPERTIES_FILE, false);
+        versionInfo.putAll(properties);
+
+        SpringDocUtils.getConfig()
+                .replaceWithClass(org.springframework.data.domain.Pageable.class,
+                        OpenAPIPaginationHelper.class)
+                .replaceWithClass(org.springframework.data.domain.PageRequest.class,
+                        OpenAPIPaginationHelper.class);
     }
 
     @Bean
@@ -118,5 +145,33 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
         FilterRegistrationBean<ForwardedHeaderFilter> bean = new FilterRegistrationBean<>();
         bean.setFilter(new ForwardedHeaderFilter());
         return bean;
+    }
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        Server server = new Server();
+        server.setUrl(SERVER_PATH_URL + APPLICATION_NAME + REST_BASE_PATH);
+        server.setDescription("Current instance.");
+        Object restVersion = versionInfo.get(VERSION_INFO_KEY);
+        String restVersionString = "1.0.0";
+        if (restVersion != null) {
+            restVersionString = restVersion.toString();
+        }
+        return new OpenAPI()
+                .components(new Components()
+                        .addSecuritySchemes("tokenAuth",
+                                new SecurityScheme().type(SecurityScheme.Type.APIKEY).name("Authorization")
+                                        .in(SecurityScheme.In.HEADER)
+                                        .description("Enter the token with the `Token ` prefix, e.g. \"Token abcde12345\"."))
+                        .addSecuritySchemes("oauth",
+                                new SecurityScheme().type(SecurityScheme.Type.OAUTH2)
+                                        .flows(new OAuthFlows().password(new OAuthFlow()
+                                                .tokenUrl(SERVER_PATH_URL + "/authorization/oauth/token")
+                                                .refreshUrl(SERVER_PATH_URL + "/authorization/oauth/token"))
+                                        )))
+                .info(new Info().title("SW360 API").license(new License().name("EPL-2.0")
+                                .url("https://github.com/eclipse-sw360/sw360/blob/main/LICENSE"))
+                        .version(restVersionString))
+                .servers(List.of(server));
     }
 }
