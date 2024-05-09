@@ -50,8 +50,8 @@
     <module>utils</module>
     <module>libraries</module>
     <module>backend</module>
-    <!--<module>frontend</module>-->
     <module>rest</module>
+    <module>keycloak</module>
     <module>clients</module>
   </modules>
 

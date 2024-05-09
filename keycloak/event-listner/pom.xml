@@ -6,14 +6,20 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-    <name>Keycloak Sw360: Event Listener For Adding User to Couchdb</name>
+    <name>Keycloak Event Listner</name>
     <description/>
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.eclipse.sw360</groupId>
     <version>23.0.4</version>
-    <artifactId>event-listener-adduser</artifactId>
+    <artifactId>event-listner</artifactId>
     <packaging>jar</packaging>
+    
+    <parent>
+        <artifactId>keycloak</artifactId>
+        <groupId>org.eclipse.sw360</groupId>
+        <version>23.0.4</version>
+    </parent>
 
     <properties>
         <version.compiler.maven.plugin>3.5.1</version.compiler.maven.plugin>
@@ -70,7 +76,7 @@
     </dependencies>
     
     <build>
-        <finalName>sw360-user-rgistration-to-database</finalName>
+        <finalName>user-registration-to-sw360users-db</finalName>
         <pluginManagement>
             <plugins>
                 <plugin>
