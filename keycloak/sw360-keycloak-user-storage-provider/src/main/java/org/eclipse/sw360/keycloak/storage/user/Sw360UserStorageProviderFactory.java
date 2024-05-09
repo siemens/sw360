@@ -1,3 +1,7 @@
+/*
+SPDX-FileCopyrightText: © 2023-24 Siemens AG
+SPDX-License-Identifier: EPL-2.0
+*/
 package org.eclipse.sw360.keycloak.storage.user;
 
 import org.jboss.logging.Logger;
@@ -6,7 +10,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.storage.UserStorageProviderFactory;
 
 public class Sw360UserStorageProviderFactory implements UserStorageProviderFactory<Sw360UserStorageProvider> {
-    public static final String PROVIDER_ID = "example-user-storage-jpa";
+    public static final String PROVIDER_ID = "sw360-user-storage-jpa";
 
     private static final Logger logger = Logger.getLogger(Sw360UserStorageProviderFactory.class);
 
@@ -22,7 +26,7 @@ public class Sw360UserStorageProviderFactory implements UserStorageProviderFacto
 
     @Override
     public String getHelpText() {
-        return "JPA Example User Storage Provider";
+        return "SW360 User Storage Provider";
     }
 
     @Override

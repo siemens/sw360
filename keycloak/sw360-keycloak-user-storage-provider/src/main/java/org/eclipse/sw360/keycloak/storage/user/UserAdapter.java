@@ -1,3 +1,7 @@
+/*
+SPDX-FileCopyrightText: © 2023-24 Siemens AG
+SPDX-License-Identifier: EPL-2.0
+*/
 package org.eclipse.sw360.keycloak.storage.user;
 
 import java.util.LinkedList;
