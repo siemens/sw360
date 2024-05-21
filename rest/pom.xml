@@ -25,6 +25,7 @@
 	<modules>
 		<module>rest-common</module>
 		<module>resource-server</module>
+		<module>authorization-server</module>
 	</modules>
 	<!--<properties>
 		<revision>17.0.${patchlevel}</revision>

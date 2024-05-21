@@ -9,31 +9,48 @@
  */
 package org.eclipse.sw360.rest.authserver.client.rest;
 
-import com.google.common.collect.Sets;
+import java.io.IOException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.sw360.rest.authserver.client.persistence.OAuthClientEntity;
 import org.eclipse.sw360.rest.authserver.client.persistence.OAuthClientRepository;
 import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority;
-
-import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import com.nimbusds.jose.jwk.JWKSet;
+import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.eclipse.sw360.rest.authserver.security.key.KeyManager;
+
+import com.google.common.collect.Sets;
 
 /**
  * This REST controller can be accessed by users having the authority
  * {@link Sw360GrantedAuthority#ADMIN}. Such users can perform CRUD operations
  * on the configured {@link OAuthClientResource}s via these REST endpoints.
  */
-@Controller
+@RestController
 @RequestMapping(path = "/" + OAuthClientController.ENDPOINT_URL)
 @PreAuthorize("hasAuthority('ADMIN')")
 public class OAuthClientController {
@@ -42,9 +59,18 @@ public class OAuthClientController {
 
     @Value("${security.oauth2.resource.id}")
     private String resourceId;
-
+    
+    @Autowired
+    private KeyManager keyManager;
+    
     @Autowired
     private OAuthClientRepository repo;
+
+    @RequestMapping(path = "/.well-known/jwks.json")
+    public Map<String, Object> keys() throws UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+        JWKSet set = new JWKSet(keyManager.rsaKey());
+        return set.toJSONObject();
+    }
 
     @RequestMapping(method = RequestMethod.GET, path = "")
     public ResponseEntity<List<OAuthClientResource>> getAllClients() {

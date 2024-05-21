@@ -9,20 +9,21 @@
  */
 package org.eclipse.sw360.rest.authserver.security;
 
+import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.READ;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.authserver.Sw360AuthorizationServer;
-
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.provider.ClientDetails;
-
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthority.READ;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 
 /**
  * This class offer helper methods to calculate the {@GrantedAuthority} for a user and/or client. 
@@ -36,7 +37,7 @@ public class Sw360GrantedAuthoritiesCalculator {
 
     public List<GrantedAuthority> generateFromUser(User user) {
         List<GrantedAuthority> grantedAuthorities = new ArrayList<>();
-        
+
         grantedAuthorities.add(new SimpleGrantedAuthority(READ.getAuthority()));
         if (user != null) {
             if (PermissionUtils.isUserAtLeast(Sw360AuthorizationServer.CONFIG_WRITE_ACCESS_USERGROUP, user)) {
@@ -50,8 +51,8 @@ public class Sw360GrantedAuthoritiesCalculator {
         return grantedAuthorities;
     }
 
-    public List<GrantedAuthority> intersectWithClient(List<GrantedAuthority> grantedAuthorities, ClientDetails clientDetails) {
-        Set<String> clientScopes = clientDetails.getScope();
+    public List<GrantedAuthority> intersectWithClient(List<GrantedAuthority> grantedAuthorities, RegisteredClient clientDetails) {
+        Set<String> clientScopes = clientDetails.getScopes();
 
         grantedAuthorities = grantedAuthorities.stream()
                 .filter(ga -> clientScopes.contains(ga.toString()))
@@ -60,12 +61,12 @@ public class Sw360GrantedAuthoritiesCalculator {
         return grantedAuthorities;
     }
 
-    public List<GrantedAuthority> mergedAuthoritiesOf(User user, ClientDetails clientDetails) {
+    public List<GrantedAuthority> mergedAuthoritiesOf(User user, RegisteredClient clientDetails) {
         List<GrantedAuthority> grantedAuthorities = generateFromUser(user);
 
         if(clientDetails != null) {
             log.debug("User " + user.email + " has authorities " + grantedAuthorities + " while used client "
-                        + clientDetails.getClientId() + " has scopes " + clientDetails.getScope()
+                        + clientDetails.getClientId() + " has scopes " + clientDetails.getScopes()
                         + ". Setting intersection as granted authorities for access token!");
             grantedAuthorities = intersectWithClient(grantedAuthorities, clientDetails);
         }

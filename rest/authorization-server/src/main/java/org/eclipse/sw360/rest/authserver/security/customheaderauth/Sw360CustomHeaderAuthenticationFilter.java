@@ -9,76 +9,70 @@
  */
 package org.eclipse.sw360.rest.authserver.security.customheaderauth;
 
-import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
+import java.io.IOException;
+
+import javax.annotation.PostConstruct;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.common.util.OAuth2Utils;
-import org.springframework.security.oauth2.provider.ClientDetails;
-import org.springframework.security.oauth2.provider.TokenRequest;
-import org.springframework.security.oauth2.provider.password.ResourceOwnerPasswordTokenGranter;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.web.filter.GenericFilterBean;
 
-import javax.annotation.PostConstruct;
-import javax.servlet.*;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 
-import java.io.IOException;
-
-/**
- * This {@link Filter} is able to detect a pre-authentication indicated by some
- * headers. If such information is found, the sw360 thrift user service is
- * queried if the user is known. If so, everything is prepared for a later
- * authentication in the {@link Sw360CustomHeaderAuthenticationProvider}.
- *
- * In addition it supports the special password grant flow of spring! Grant type
- * 'password' for OAuth has an interesting implementation in spring security:
- * The user for BasicAuth is the client with its secret. After that one has been
- * authenticated via the ClientDetailsStore, the method
- * org.springframework.security.oauth2.provider.password.ResourceOwnerPasswordTokenGranter.getOAuth2Authentication(ClientDetails,
- * TokenRequest) is exchanging the current {@link Authentication} object and
- * setting a new one from the credentials given via request params "username"
- * and "password". These credentials are validated again as well by an
- * {@link AuthenticationManager} that can contain different
- * {@link AuthenticationProvider}s.
- *
- * So what we are doing for our custom header flow is to retrieve the client
- * information from request parameters and expect an already authenticated user
- * id in a configurable header. We then create an {@link Authentication} object
- * for the client and set the request params for the user from the header. In
- * this way the standard oauth workflow can take place. We just need to add a
- * {@link Sw360CustomHeaderAuthenticationProvider} that only uses the given
- * username from the proxy and another custom request parameter to know that the
- * user has already been authenticated and create the correct authentication
- * object from these information.
- *
- * It is important that the authenticating webserver is removing all configured
- * headers for this workflow that might already be set by a client (as usual).
- * These are the ones given in the configuration file.
- */
+///**
+// * This {@link Filter} is able to detect a pre-authentication indicated by some
+// * headers. If such information is found, the sw360 thrift user service is
+// * queried if the user is known. If so, everything is prepared for a later
+// * authentication in the {@link Sw360CustomHeaderAuthenticationProvider}.
+// *
+// * In addition it supports the special password grant flow of spring! Grant type
+// * 'password' for OAuth has an interesting implementation in spring security:
+// * The user for BasicAuth is the client with its secret. After that one has been
+// * authenticated via the ClientDetailsStore, the method
+// * org.springframework.security.oauth2.provider.password.ResourceOwnerPasswordTokenGranter.getOAuth2Authentication(ClientDetails,
+// * TokenRequest) is exchanging the current {@link Authentication} object and
+// * setting a new one from the credentials given via request params "username"
+// * and "password". These credentials are validated again as well by an
+// * {@link AuthenticationManager} that can contain different
+// * {@link AuthenticationProvider}s.
+// *
+// * So what we are doing for our custom header flow is to retrieve the client
+// * information from request parameters and expect an already authenticated user
+// * id in a configurable header. We then create an {@link Authentication} object
+// * for the client and set the request params for the user from the header. In
+// * this way the standard oauth workflow can take place. We just need to add a
+// * {@link Sw360CustomHeaderAuthenticationProvider} that only uses the given
+// * username from the proxy and another custom request parameter to know that the
+// * user has already been authenticated and create the correct authentication
+// * object from these information.
+// *
+// * It is important that the authenticating webserver is removing all configured
+// * headers for this workflow that might already be set by a client (as usual).
+// * These are the ones given in the configuration file.
+// */
 public class Sw360CustomHeaderAuthenticationFilter extends GenericFilterBean {
 
     private final Logger log = LogManager.getLogger(this.getClass());
 
-    /**
-     * Has to match username extraction in
-     * {@link ResourceOwnerPasswordTokenGranter#getOAuth2Authentication(ClientDetails, TokenRequest)}
-     */
+//    /**
+//     * Has to match username extraction in
+//     * {@link ResourceOwnerPasswordTokenGranter#getOAuth2Authentication(ClientDetails, TokenRequest)}
+//     */
     private static final String PARAMETER_NAME_USERNAME = "username";
 
-    /**
-     * Not available as constant in {@link OAuth2Utils}...
-     */
     private static final String PARAMETER_NAME_CLIENT_SECRET = "client_secret";
 
     @Value("${security.customheader.headername.email:#{null}}")
@@ -149,12 +143,12 @@ public class Sw360CustomHeaderAuthenticationFilter extends GenericFilterBean {
     private CustomHeaderAuthRequestDetails extractRequestDetails(HttpServletRequest request) {
         CustomHeaderAuthRequestDetails result;
 
-        if (request.getParameterMap().containsKey(OAuth2Utils.GRANT_TYPE)) {
+        if (request.getParameterMap().containsKey("grant_type")) {
             result = new CustomHeaderOAuthRequestDetails();
 
-            ((CustomHeaderOAuthRequestDetails) result).customParamClientId = request.getParameter(OAuth2Utils.CLIENT_ID);
+            ((CustomHeaderOAuthRequestDetails) result).customParamClientId = request.getParameter("client_id");
             ((CustomHeaderOAuthRequestDetails) result).customParamClientSecret = request.getParameter(PARAMETER_NAME_CLIENT_SECRET);
-            ((CustomHeaderOAuthRequestDetails) result).grantType = request.getParameter(OAuth2Utils.GRANT_TYPE);
+            ((CustomHeaderOAuthRequestDetails) result).grantType = request.getParameter("grant_type");
         } else {
             result = new CustomHeaderRestRequestDetails();
         }

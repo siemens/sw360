@@ -10,86 +10,64 @@
 package org.eclipse.sw360.rest.authserver.security;
 
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
-import org.eclipse.sw360.rest.authserver.security.basicauth.Sw360LiferayAuthenticationProvider;
-import org.eclipse.sw360.rest.authserver.security.customheaderauth.Sw360CustomHeaderAuthenticationFilter;
-import org.eclipse.sw360.rest.authserver.security.customheaderauth.Sw360CustomHeaderAuthenticationProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
+import org.springframework.security.web.SecurityFilterChain;
 
-/**
- * This class configures the standard spring security for this server. Some of
- * the created beans are also necessary in the special oauth 2 flows, so they
- * are injected and used in the second security config class
- * {@link Sw360AuthorizationServerConfiguration}.
- */
 @Configuration
 @EnableWebSecurity
-@EnableGlobalMethodSecurity(prePostEnabled = true)
-public class Sw360WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
+public class Sw360WebSecurityConfiguration {
+    
+//    @Autowired
+//    public RegisteredClientRepository clientDetailsService;
 
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-        http
-                .authorizeRequests()
-                .antMatchers(HttpMethod.OPTIONS)
-                    .permitAll() // some JS frameworks make HTTP OPTIONS requests
-                .anyRequest()
-                    .authenticated()
-                .and()
-                .addFilterBefore(sw360CustomHeaderAuthenticationFilter(),
-                        AbstractPreAuthenticatedProcessingFilter.class)
-                .httpBasic()
-                .and()
-                    .csrf().disable();
-    }
+//    @Bean
+//    public SecurityFilterChain securityFilterChainWS(HttpSecurity http) throws Exception {
+//        return http
+//                .httpBasic()
+//                .and()
+//                .authorizeRequests().requestMatchers("/client-managment").permitAll()
+//                .anyRequest()
+//                .authenticated()
+//                .and()
+//                .build();
+//    }
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder authenticationManagerBuilder) {
-        authenticationManagerBuilder
-                .authenticationProvider(sw360LiferayAuthenticationProvider())
-                .authenticationProvider(sw360CustomHeaderAuthenticationProvider());
-    }
+//    @Bean
+//    public Sw360ClientDetailsAuthenticationProvider ccprovider() {
+//        return new Sw360ClientDetailsAuthenticationProvider();
+//    }
 
-    /**
-     * We have to publish our configured authentication manager because otherwise
-     * some boot default manager will be populated from
-     * {@link AuthenticationManagerConfiguration}.
-     */
-    @Bean(name = "authenticationManager")
-    @Override
-    public AuthenticationManager authenticationManagerBean() throws Exception {
-        return super.authenticationManagerBean();
-    }
+//    @Bean
+//    protected Sw360CustomHeaderAuthenticationProvider sw360CustomHeaderAuthenticationProvider() {
+//        return new Sw360CustomHeaderAuthenticationProvider();
+//    }
 
-    @Bean
-    protected Sw360CustomHeaderAuthenticationFilter sw360CustomHeaderAuthenticationFilter() {
-        return new Sw360CustomHeaderAuthenticationFilter();
-    }
+//    @Bean
+//    protected Sw360ClientDetailsAuthenticationProvider getclientsAuthenticatioinProvider() {
+//        return new Sw360ClientDetailsAuthenticationProvider();
+//        
+//    }
 
-    @Bean
-    protected Sw360CustomHeaderAuthenticationProvider sw360CustomHeaderAuthenticationProvider() {
-        return new Sw360CustomHeaderAuthenticationProvider();
-    }
+//    @Bean
+//    public UserDetailsService userDetailsService() {
+//        var u1 = User.withUsername("bill").password("12345").authorities("ADMIN").build();
+//        var uds = new InMemoryUserDetailsManager();
+//        uds.createUser(u1);
+//        return uds;
+//        return new Sw360UserDetailsService(principalProvider(), clientDetailsService,
+//                sw360UserAndClientAuthoritiesCalculator());
+//    }
 
-    @Bean
-    protected Sw360LiferayAuthenticationProvider sw360LiferayAuthenticationProvider() {
-        return new Sw360LiferayAuthenticationProvider();
-    }
+//    @Bean
+//    protected Sw360CustomHeaderAuthenticationFilter sw360CustomHeaderAuthenticationFilter() {
+//        return new Sw360CustomHeaderAuthenticationFilter();
+//    }
 
-    @Bean
-    protected Sw360UserDetailsProvider principalProvider() {
-        return new Sw360UserDetailsProvider();
-    }
 
     @Bean
     protected ThriftClients thriftClients() {

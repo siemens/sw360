@@ -55,3 +55,5 @@ security:
   oauth2:
     resource:
       id: sw360-REST-API
+  accesstoken:
+    validity: 30
