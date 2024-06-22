@@ -312,36 +312,34 @@ public class PortletUtils {
     }
 
 
-    public static Release cloneRelease(String emailFromRequest, Release release) {
+	public static Release cloneRelease(String emailFromRequest, Release release) {
+		Release newRelease = release.deepCopy();
+		Map<String, String> extIdHmap = new ConcurrentHashMap<>(release.getExternalIds());
+		for (Entry<String, String> names : extIdHmap.entrySet()) {
+			if (names.getKey() != null && names.getKey().equals(EXTERNALID_BLOCKLIST_CLONING_RELEASE)) {
+				extIdHmap.remove(names.getKey());
+			}
+		}
+		newRelease.setExternalIds(extIdHmap);
 
-        Release newRelease = release.deepCopy();
-        Map<String, String> extIdHmap = new ConcurrentHashMap<String, String>();
-        extIdHmap = release.getExternalIds();
-        for (Entry<String, String> names : extIdHmap.entrySet()) {
-            if (names.getKey() != null && names.getKey().equals(EXTERNALID_BLOCKLIST_CLONING_RELEASE)) {
-                extIdHmap.remove(names.getKey());
-            }
-        }
-        newRelease.setExternalIds(extIdHmap);
+		// new DB object
+		newRelease.unsetId();
+		newRelease.unsetRevision();
 
-        //new DB object
-        newRelease.unsetId();
-        newRelease.unsetRevision();
+		// new Owner
+		newRelease.setCreatedBy(emailFromRequest);
+		newRelease.setCreatedOn(SW360Utils.getCreatedOn());
 
-        //new Owner
-        newRelease.setCreatedBy(emailFromRequest);
-        newRelease.setCreatedOn(SW360Utils.getCreatedOn());
+		// release specifics
+		newRelease.unsetCpeid();
+		newRelease.unsetAttachments();
+		newRelease.unsetClearingInformation();
+		newRelease.unsetModifiedBy();
+		newRelease.unsetModifiedOn();
+		newRelease.unsetAdditionalData();
 
-        //release specifics
-        newRelease.unsetCpeid();
-        newRelease.unsetAttachments();
-        newRelease.unsetClearingInformation();
-        newRelease.unsetModifiedBy();
-        newRelease.unsetModifiedOn();
-        newRelease.unsetAdditionalData();
-
-        return newRelease;
-    }
+		return newRelease;
+	}
 
     public static Project cloneProject(String emailFromRequest, String department, Project project) {
 
