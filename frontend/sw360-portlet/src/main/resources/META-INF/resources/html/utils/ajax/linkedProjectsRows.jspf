@@ -56,6 +56,8 @@
             </td>
             <td>
             </td>
+            <td>
+            </td>
             <td class="editProjectAction" data-projectid="${projectLink.id}">
             </td>
         </tr>
@@ -106,6 +108,9 @@
                     <core_rt:if test='${not empty requestScope["projectReleaseRelation"][releaseLink.id]}'>
                         <sw360:DisplayEnum value='${requestScope["projectReleaseRelation"][releaseLink.id]["mainlineState"]}'/>
                     </core_rt:if>
+                </td>
+                <td>
+                    <sw360:out value='${requestScope["projectReleaseRelation"][releaseLink.id]["createdOn"]}' />
                 </td>
                 <td>
                     <core_rt:if test='${not empty requestScope["projectReleaseRelation"][releaseLink.id]}'>
