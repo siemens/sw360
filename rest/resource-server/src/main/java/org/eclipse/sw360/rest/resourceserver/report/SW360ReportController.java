@@ -50,6 +50,8 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
 
     private static final String LICENSES = "licenses";
 
+    private static final String LICENSE_INFO = "licenseInfo";
+
     public static final String REPORTS_URL = "/reports";
 
     private static final String CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -93,17 +95,20 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
         try {
             if (validateMimeType(mimeType)) {
                 switch (module) {
-                    case PROJECTS:
-                        getProjectReports(withLinkedReleases, mailRequest, response, request, sw360User, module, projectId);
-                        break;
-                    case COMPONENTS:
-                        getComponentsReports(withLinkedReleases, mailRequest, response, request, sw360User, module);
-                        break;
-                    case LICENSES:
-                        getLicensesReports(response, sw360User, module);
-                        break;
-                    default:
-                        break;
+                case PROJECTS:
+                    getProjectReports(withLinkedReleases, mailRequest, response, request, sw360User, module, projectId);
+                    break;
+                case COMPONENTS:
+                    getComponentsReports(withLinkedReleases, mailRequest, response, request, sw360User, module);
+                    break;
+                case LICENSES:
+                    getLicensesReports(request, response, sw360User, module);
+                    break;
+                case LICENSE_INFO:
+                    getLicensesInfoReports(request, response, sw360User, module, projectId);
+                    break;
+                default:
+                    break;
                 }
             } else {
                 throw new TException("Error : Mimetype either should be : xls/xlsx");
@@ -117,12 +122,13 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
             HttpServletRequest request, User sw360User, String module, String projectId) throws TException {
         try {
             if (mailRequest) {
-                sw360ReportService.getUploadedProjectPath(sw360User, withLinkedReleases,getBaseUrl(request), projectId);
+                sw360ReportService.getUploadedProjectPath(sw360User, withLinkedReleases, getBaseUrl(request),
+                        projectId);
                 JsonObject responseJson = new JsonObject();
                 responseJson.addProperty("response", "Project report download link will get send to the end user.");
                 response.getWriter().write(responseJson.toString());
             } else {
-                downloadExcelReport(withLinkedReleases, response, sw360User, module, projectId);
+                downloadExcelReport(withLinkedReleases, request, response, sw360User, module, projectId);
             }
         } catch (Exception e) {
             throw new TException(e.getMessage());
@@ -138,48 +144,68 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
                 responseJson.addProperty("response", "Component report download link will get send to the end user.");
                 response.getWriter().write(responseJson.toString());
             } else {
-                downloadExcelReport(withLinkedReleases, response, sw360User, module, null);
+                downloadExcelReport(withLinkedReleases, request, response, sw360User, module, null);
             }
         } catch (Exception e) {
             throw new TException(e.getMessage());
         }
     }
 
-    private void getLicensesReports(HttpServletResponse response, User sw360User, String module) throws TException {
-        try {
-            downloadExcelReport(false, response, sw360User, module, null);
-        } catch (Exception e) {
-            throw new TException(e.getMessage());
-        }
-    }
+	private void getLicensesReports(HttpServletRequest request, HttpServletResponse response, User sw360User,
+			String module) throws TException {
+		try {
+			downloadExcelReport(false, request, response, sw360User, module, null);
+		} catch (Exception e) {
+			throw new TException(e.getMessage());
+		}
+	}
 
-    private void downloadExcelReport(boolean withLinkedReleases, HttpServletResponse response, User user, String module, String projectId)
-            throws TException {
+	private void getLicensesInfoReports(HttpServletRequest request, HttpServletResponse response, User sw360User,
+			String module, String projectId) throws TException {
+		try {
+			downloadExcelReport(false, request, response, sw360User, module, projectId);
+		} catch (Exception e) {
+			throw new TException(e.getMessage());
+		}
+	}
+
+	private void downloadExcelReport(boolean withLinkedReleases, HttpServletRequest request,
+            HttpServletResponse response, User user, String module, String projectId) throws TException {
         try {
             ByteBuffer buffer = null;
             switch (module) {
-                case PROJECTS:
-                    buffer = sw360ReportService.getProjectBuffer(user, withLinkedReleases, projectId);
-                    break;
-                case COMPONENTS:
-                    buffer = sw360ReportService.getComponentBuffer(user, withLinkedReleases);
-                    break;
-                case LICENSES:
-                    buffer = sw360ReportService.getLicenseBuffer();
-                    break;
-                default:
-                    break;
+            case PROJECTS:
+                buffer = sw360ReportService.getProjectBuffer(user, withLinkedReleases, projectId);
+                break;
+            case COMPONENTS:
+                buffer = sw360ReportService.getComponentBuffer(user, withLinkedReleases);
+                break;
+            case LICENSES:
+                buffer = sw360ReportService.getLicenseBuffer();
+                break;
+            case LICENSE_INFO:
+                final String generatorClassName = request.getParameter("generatorClassName");
+                final String variant = request.getParameter("variant");
+                final String template = request.getParameter("template");
+                final String externalIds = request.getParameter("externalIds");
+                buffer = sw360ReportService.getLicenseInfoBuffer(user, projectId, generatorClassName, variant, template,
+                        externalIds);
+                break;
+            default:
+                break;
             }
             if (null == buffer) {
                 throw new TException("No data available for the user " + user.getEmail());
             }
             response.setContentType(CONTENT_TYPE);
             String fileName;
-            if(module.equals(LICENSES)) {
+            if (module.equals(LICENSES)) {
                 fileName = String.format("licenses-%s.xlsx", SW360Utils.getCreatedOn());
-            } else if(module.equals(PROJECTS)) {
+            } else if (module.equals(PROJECTS)) {
                 fileName = sw360ReportService.getDocumentName(user, projectId);
-            }else {
+            } else if (module.equals(LICENSE_INFO)) {
+                fileName = sw360ReportService.getGenericLicInfoFileName(request, user);
+            } else {
                 fileName = sw360ReportService.getDocumentName(user, null);
             }
             response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", fileName));
