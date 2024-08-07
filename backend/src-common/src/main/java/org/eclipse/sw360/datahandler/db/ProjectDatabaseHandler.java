@@ -1920,7 +1920,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
         if (releaseIdToUsage != null && !releaseIdToUsage.isEmpty()) {
             flattenClearingStatusForReleases(releaseIdToUsage, projectOrigin, releaseOrigin, clearingStatusList, user, isInaccessibleLinkMasked);
         }
-
+        
         return clearingStatusList;
     }
 
@@ -1957,13 +1957,12 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private void flattenClearingStatusForReleases(Map<String, ProjectReleaseRelationship> linkedReleases,
             LinkedHashMap<String, String> projectOrigin, LinkedHashMap<String, String> releaseOrigin,
             List<Map<String, String>> clearingStatusList, User user, boolean isInaccessibleLinkMasked) {
-
         linkedReleases.entrySet().stream().forEach(rl -> wrapTException(() -> {
             String relation = ThriftEnumUtils.enumToString(rl.getValue().getReleaseRelation());
             String projectMailLineState = ThriftEnumUtils.enumToString(rl.getValue().getMainlineState());
             String comment = rl.getValue().getComment();
             String releaseId = rl.getKey();
-            String createdOn = rl.getValue().getCreatedOn();
+            String createdOn = rl.getValue().isSetCreatedOn() ? rl.getValue().getCreatedOn() : "";
             if (releaseOrigin.containsKey(releaseId))
                 return;
             Release rel = componentDatabaseHandler.getRelease(releaseId, user);
