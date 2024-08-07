@@ -22,23 +22,31 @@ define('utils/includes/fossologyClearing', [
         // no timeout running which can be cancelled - but we still have to cancel the recursive calling, so we need an
         // extra flag for that
         dialogOpen,
+        stepSize,
+        report_counter = 0,
+        outdated_counter = 0,
+        reportDownloaded = false,
         timeoutId;
 
     function initialize() {
         config = $('#fossologyClearingDialog').data(),
         objectNamespacer = object.namespacerOf(config.portletNamespace);
+        reportDownloaded = localStorage.getItem('reportDownloaded') === 'true';
     }
 
     function openFossologyProcessDialog(releaseId) {
+
         $dialog = dialog.open('#fossologyClearingDialog',
             // data:
             {},
             // submitCallback
             function(submit, callback, data) {
                 if (submit == 'outdated') {
+                    outdated_counter = 1;
                     setOutdated(releaseId);
                     callback(false);
                 } else if (submit == 'reload_report') {
+                    report_counter = 1;
                     generateReport(releaseId);
                     callback(false);
                 }
@@ -110,7 +118,13 @@ define('utils/includes/fossologyClearing', [
             .then(function(data) {
                 var numberOfSourceAttachments = data["sourceAttachments"];
                 if (numberOfSourceAttachments === 1) {
-                    $('.auto-refresh').show();
+                    if (!reportDownloaded) {
+                        $('.auto-refresh').show();
+                    }
+                    if (outdated_counter == 1) {
+                        $('.auto-refresh').show();
+                        outdated_counter = 0;
+                    }
                     $('#name-of-source-attachment').text(data["sourceAttachmentName"]).removeClass("spinner-border spinner-border-sm");
                     handleSuccessResult($dialog, releaseId, data);
                 } else {
@@ -150,7 +164,15 @@ define('utils/includes/fossologyClearing', [
     }
 
     function handleSuccessResult($dialog, releaseId, data) {
-        var finished = updateUI(data);
+        // 7 steps from 0 to 100 means 100/6 = 16.66 each step size
+        var isClearingReportDownloadDisabled = $('#fossologyClearingDialog').data('disable-clearing-report-download');
+        if(report_counter == 0) {
+            stepSize = isClearingReportDownloadDisabled ? 25 : 16.66;
+        } else {
+            stepSize = 16.66;
+        }
+
+        var finished = updateUI(data, stepSize);
         if (!finished) {
             if (dialogOpen) {
                 timeoutId = setTimeout(process.bind(this, $dialog, releaseId, 5), 1000);
@@ -160,7 +182,15 @@ define('utils/includes/fossologyClearing', [
             clearTimeout(timeoutId);
             dialogOpen = false;
             $dialog.closeMessage();
-            $dialog.success("The FOSSology process already finished. You should find the resulting report as attachment at this release.", false);
+            if (isClearingReportDownloadDisabled && report_counter == 0) {
+                $dialog.success("The FOSSology process finished. You can download the report by clicking Reload Report", false);
+            } else {
+                $dialog.success("The FOSSology process already finished. You should find the resulting report as attachment at this release.", false);
+                report_counter = 0;
+                reportDownloaded = true;
+                localStorage.setItem('reportDownloaded', 'true');
+            }
+
         }
     }
 
@@ -188,10 +218,8 @@ define('utils/includes/fossologyClearing', [
         }
     }
 
-    function updateUI(data) {
-        // 7 steps from 0 to 100 means 100/6 = 16.66 each step size
-        var stepSize = 16.66,
-            progressText = "",
+    function updateUI(data, stepSize) {
+        var progressText = "",
             progressPercent = 0;
         if (data["stepName"] == config.stepNameReport) {
             progressText += "Report generation";
@@ -218,7 +246,9 @@ define('utils/includes/fossologyClearing', [
         }
 
         $('.progress-bar').css("width", progressPercent + "%").attr("aria-valuenow", progressPercent).text(progressText);
-
+        if (stepSize == 25) {
+            return data["stepName"] == config.stepNameScan && data["stepStatus"] == config.stepStatusDone;
+        }
         return data["stepName"] == config.stepNameReport && data["stepStatus"] == config.stepStatusDone;
     }
 

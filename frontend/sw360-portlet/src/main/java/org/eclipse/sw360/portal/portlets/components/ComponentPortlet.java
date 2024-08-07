@@ -1796,7 +1796,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(COMPONENT_VISIBILITY_RESTRICTION, IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED);
                 request.setAttribute(BULK_RELEASE_DELETING, IS_BULK_RELEASE_DELETING_ENABLED);
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.ADMIN, user));
-                
+                request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeastClearingAdminOrExpert(user));
 
                 // get vulnerabilities
                 Set<UserGroup> allSecRoles = !CommonUtils.isNullOrEmptyMap(user.getSecondaryDepartmentsAndRoles())
@@ -1884,6 +1884,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(FOSSOLOGY_JOB_VIEW_LINK, fossologyJobsViewLink);
                 request.setAttribute(RELEASE_ID, releaseId);
                 request.setAttribute(RELEASE, release);
+                request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeastClearingAdminOrExpert(user));
                 request.setAttribute(DOCUMENT_ID, releaseId);
                 request.setAttribute(DOCUMENT_TYPE, SW360Constants.TYPE_RELEASE);
                 setAttachmentsInRequest(request, release);
