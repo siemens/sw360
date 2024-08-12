@@ -332,8 +332,10 @@ public class VendorPortlet extends Sw360Portlet {
         Set<Release> releases = componentClient.getReleasesByVendorId(vendorSourceId);
 
         jsonGenerator.writeStartObject();
-        jsonGenerator.writeRaw("\"vendorTarget\":" + JSON_THRIFT_SERIALIZER.toString(vendorTarget) + ",");
-        jsonGenerator.writeRaw("\"vendorSource\":" + JSON_THRIFT_SERIALIZER.toString(vendorSource) + ",");
+        jsonGenerator.writeFieldName("vendorTarget");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(vendorTarget));
+        jsonGenerator.writeFieldName("vendorSource");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(vendorSource));
         jsonGenerator.writeNumberField("affectedComponents",  components.size());
         jsonGenerator.writeNumberField("affectedReleases",  releases.size());
         jsonGenerator.writeEndObject();
@@ -346,7 +348,8 @@ public class VendorPortlet extends Sw360Portlet {
         jsonGenerator.writeStartObject();
 
         // adding common title
-        jsonGenerator.writeRaw("\""+ VENDOR_SELECTION +"\":" + JSON_THRIFT_SERIALIZER.toString(vendorSelection) + ",");
+        jsonGenerator.writeFieldName(VENDOR_SELECTION);
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(vendorSelection));
         jsonGenerator.writeStringField(VENDOR_SOURCE_ID, vendorSourceId);
 
         jsonGenerator.writeEndObject();

@@ -1441,8 +1441,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         jsonGenerator.writeStartObject();
 
         // adding common title
-        jsonGenerator.writeRaw("\"componentTarget\":" + JSON_THRIFT_SERIALIZER.toString(componentTarget) + ",");
-        jsonGenerator.writeRaw("\"componentSource\":" + JSON_THRIFT_SERIALIZER.toString(componentSource));
+        jsonGenerator.writeFieldName("componentTarget");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(componentTarget));
+        jsonGenerator.writeFieldName("componentSource");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(componentSource));
 
         jsonGenerator.writeEndObject();
     }
@@ -1457,7 +1459,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         jsonGenerator.writeStartObject();
 
         // adding common title
-        jsonGenerator.writeRaw("\""+ COMPONENT_SELECTION +"\":" + JSON_THRIFT_SERIALIZER.toString(componentSelection) + ",");
+        jsonGenerator.writeFieldName(COMPONENT_SELECTION);
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(componentSelection));
         jsonGenerator.writeStringField(COMPONENT_SOURCE_ID, componentSourceId);
 
         jsonGenerator.writeEndObject();
@@ -1498,8 +1501,10 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         Component srcComponent = OBJECT_MAPPER.readValue(request.getParameter(SOURCE_COMPONENT), Component.class);
         Component targetComponent = OBJECT_MAPPER.readValue(request.getParameter(TARGET_COMPONENT), Component.class);
         jsonGenerator.writeStartObject();
-        jsonGenerator.writeRaw("\"" + SOURCE_COMPONENT + "\":" + JSON_THRIFT_SERIALIZER.toString(srcComponent) + ",");
-        jsonGenerator.writeRaw("\"" + TARGET_COMPONENT + "\":" + JSON_THRIFT_SERIALIZER.toString(targetComponent));
+        jsonGenerator.writeFieldName(SOURCE_COMPONENT);
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(srcComponent));
+        jsonGenerator.writeFieldName(TARGET_COMPONENT);
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(targetComponent));
         jsonGenerator.writeEndObject();
     }
 
@@ -1676,10 +1681,14 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         jsonGenerator.writeStartObject();
 
         // adding common title
-        jsonGenerator.writeRaw("\"releaseTarget\":" + JSON_THRIFT_SERIALIZER.toString(releaseTarget) + ",");
-        jsonGenerator.writeRaw("\"releaseSource\":" + JSON_THRIFT_SERIALIZER.toString(releaseSource) + ",");
-        jsonGenerator.writeRaw("\"displayInformation\":" + OBJECT_MAPPER.writeValueAsString(displayInformation) + ",");
-        jsonGenerator.writeRaw("\"usageInformation\":" + OBJECT_MAPPER.writeValueAsString(getUsageInformationForReleaseMerge(releaseSourceId, sessionUser)));
+        jsonGenerator.writeFieldName("releaseTarget");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(releaseTarget));
+        jsonGenerator.writeFieldName("releaseSource");
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(releaseSource));
+        jsonGenerator.writeFieldName("displayInformation");
+        jsonGenerator.writeRawValue(OBJECT_MAPPER.writeValueAsString(displayInformation));
+        jsonGenerator.writeFieldName("usageInformation");
+        jsonGenerator.writeRawValue(OBJECT_MAPPER.writeValueAsString(getUsageInformationForReleaseMerge(releaseSourceId, sessionUser)));
 
         jsonGenerator.writeEndObject();
     }
@@ -1726,7 +1735,8 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         jsonGenerator.writeStartObject();
 
         // adding common title
-        jsonGenerator.writeRaw("\""+ RELEASE_SELECTION +"\":" + JSON_THRIFT_SERIALIZER.toString(releaseSelection) + ",");
+        jsonGenerator.writeFieldName(RELEASE_SELECTION);
+        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(releaseSelection));
         jsonGenerator.writeStringField(RELEASE_SOURCE_ID, releaseSourceId);
 
         jsonGenerator.writeEndObject();
