@@ -3366,6 +3366,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
     private void serveClearingStatusList(ResourceRequest request, ResourceResponse response) {
         ProjectService.Iface client = thriftClients.makeProjectClient();
         User user = UserCacheHolder.getUserFromRequest(request);
+        boolean isClearingAdmin = PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user);
         String projectId = request.getParameter(DOCUMENT_ID);
         List<Map<String, String>> clearingStatusList = new ArrayList<Map<String, String>>();
         try {
@@ -3382,6 +3383,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         }
         JSONObject jsonResult = createJSONObject();
         jsonResult.put("data", clearingStatusData);
+        jsonResult.put("isClearingAdmin", isClearingAdmin);
         try {
             writeJSON(request, response, jsonResult);
         } catch (IOException e) {

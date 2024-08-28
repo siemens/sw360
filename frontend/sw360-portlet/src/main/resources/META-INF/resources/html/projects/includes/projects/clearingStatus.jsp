@@ -491,6 +491,11 @@ AUI().use('liferay-portlet-url', function () {
 
         function createClearingStatusTable(clearingStatusJsonData) {
             var clearingStatusTable;
+            if(!clearingStatusJsonData.isClearingAdmin){
+            	$('#addLicenseToRelease').hide();
+            }else{
+            	$('#addLicenseToRelease').show();
+            }
             clearingStatusTable = datatables.create('#clearingStatusTable', {
                 data: clearingStatusJsonData.data.map(function(row){
                 	if(row.isAccessible === "false"){
