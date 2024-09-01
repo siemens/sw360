@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 #
-# Copyright Siemens AG, 2014-2015. Part of the SW360 Portal Project.
+# Copyright Siemens AG, 2014-2015,2024. Part of the SW360 Portal Project.
 #
 # This program and the accompanying materials are made
 # available under the terms of the Eclipse Public License 2.0
@@ -10,20 +10,21 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 #
-# script to start tomcat
+# script to copy packages
 #
 # -----------------------------------------------------------------------------
 
-start_tomcat() {
-    echo "Starting tomcat ...";
-    cd /home/siemagrant
-    sudo -u siemagrant sh ${SSH_DEPLOY_SERVER_TOMCAT}/bin/startup.sh
+copy_packages() {
+    echo "Copying packages ..."
+    sudo -u siemagrant cp -f /tmp/sw360_codedeploy/packages/deploy/* ${SSH_LIFERAY_DEPLOY_PATH}
+    sudo -u siemagrant cp -f /tmp/sw360_codedeploy/packages/webapps/* ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/
+    rm -rf /tmp/sw360_codedeploy/packages
 }
 
 main() {
     SSH_DEPLOY_SERVER_TOMCAT="/opt/liferay-ce-portal-7.4.3.18-ga18/tomcat-9.0.56"
     SSH_LIFERAY_DEPLOY_PATH="/opt/liferay-ce-portal-7.4.3.18-ga18/deploy"
-    start_tomcat
+    copy_packages
 }
 
 main
