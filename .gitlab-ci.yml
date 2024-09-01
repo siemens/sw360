@@ -86,6 +86,12 @@ build_sw360:
     key: maven
     paths:
       - ~/.m2/
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - ./**/target/surefire-reports/TEST-*.xml
+        - ./**/target/failsafe-reports/TEST-*.xml
 
 deploy_sw360_DEV_server:
   allow_failure: true
