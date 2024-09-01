@@ -82,6 +82,10 @@ build_sw360:
 
   # Upload packages to S3 if CI_COMMIT_REF_SLUG matches DEPLOY_BRANCH
   - ./scripts/aws_codedeploy/upload_packages_to_s3.sh ${GITLAB_PACKAGE_PATH}/artifacts.zip
+  cache:
+    key: maven
+    paths:
+      - ~/.m2/
 
 deploy_sw360_DEV_server:
   allow_failure: true
