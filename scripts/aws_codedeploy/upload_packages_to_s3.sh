@@ -18,11 +18,10 @@ upload_to_s3() {
     if [[ ${ALLOWED_USER_LIST_TO_TRIGGER_DEPLOYMENT} =~ (.*;|^)${GITLAB_USER_EMAIL}(;.*|$) ]]
     then
         echo "Uploading packages."
-        aws s3 cp "${GITLAB_PACKAGE_PATH}/artifacts.zip" "s3://${SW360_BUCKET_NAME}/${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip"
+        aws s3 cp "$1" "s3://${SW360_BUCKET_NAME}/${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip"
     else
         echo "Warning! Packages not uploaded."
     fi
 }
 
-upload_to_s3
-
+upload_to_s3 $@

@@ -8,6 +8,8 @@ hooks:
     - location: scripts/application-stop
       runas: root
   AfterInstall:
+    - location: scripts/application-config
+      runas: root
+  ApplicationStart:
     - location: scripts/application-start
       runas: root
-

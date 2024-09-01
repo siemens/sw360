@@ -15,7 +15,7 @@
 # -----------------------------------------------------------------------------
 
 stop_tomcat() {
-    echo "Stoping tomcat ..."
+    echo "Stopping tomcat ..."
     sudo -u siemagrant sh ${SSH_DEPLOY_SERVER_TOMCAT}/bin/shutdown.sh
     sudo -u siemagrant sleep 1m 
     sudo -u siemagrant pkill -9 -f tomcat
@@ -24,7 +24,7 @@ stop_tomcat() {
 clean_tomcat() {
     echo "Clean tomcat ..."
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/attachments.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/attachments/
-    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization/ ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization.war
+    sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/authorization/
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/components.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/components/
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/cvesearch.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/cvesearch/
     sudo -u siemagrant rm -rf ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/fossology.war ${SSH_DEPLOY_SERVER_TOMCAT}/webapps/fossology/

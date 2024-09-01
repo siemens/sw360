@@ -1,13 +1,15 @@
+# SPDX-FileCopyrightText: © Siemens AG
+
+# SPDX-License-Identifier: EPL-2.0
+
 image: maven:3.6.3-openjdk-11
 
 stages:
 - build
-- deploy_to_dev
-- deploy_to_stage
-- deploy_to_prod
+- deploy
 
 services:
-- couchdb:3.1.1
+- couchdb:3.3
 
 variables:
   PACKAGE_STORE_PATH: "/home/${SSH_PACKAGE_USER}/cipackages/${CI_COMMIT_REF_SLUG}"
@@ -15,6 +17,7 @@ variables:
   PACKAGE_NAME_PREFIX: "sw360"
   COUCHDB_USER: $COUCHDB_TEST_USER
   COUCHDB_PASSWORD: $COUCHDB_TEST_PWD
+  GITLAB_PACKAGE_PATH: "/packages"
   HOME: /root
   https_proxy: $CODE_PROXY
   http_proxy: $CODE_PROXY
@@ -29,7 +32,7 @@ build_sw360:
   - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts /etc/sw360/
 
   # setting remote repos url to download mvn packages
-  - echo '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
+  - printf '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
   # setting proxy for gradle, required to build thrift
   - |
@@ -44,20 +47,15 @@ build_sw360:
       "$CODE_PROXY_HOST" "$CODE_PROXY_PORT" >> $GRADLE_USER_HOME/gradle.properties
 
   # Create couchdb-test.properties in /etc/sw360 to run testcases
-  - echo 'couchdb.url = http://couchdb:5984' > /etc/sw360/couchdb-test.properties
-  - echo "couchdb.user = ${COUCHDB_TEST_USER}" >> /etc/sw360/couchdb-test.properties
-  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/couchdb-test.properties
+  - printf "couchdb.url = %s\ncouchdb.user = %s\ncouchdb.password = %s\n" "http://couchdb:5984" "$COUCHDB_TEST_USER" "$COUCHDB_TEST_PWD" > /etc/sw360/couchdb-test.properties
 
   # Create databasetest.properties in /etc/sw360 to run testcases
-  - echo 'couch_db_url = http://couchdb:5984' > /etc/sw360/databasetest.properties
-  - echo "couchdb.username = ${COUCHDB_TEST_USER}" >> /etc/sw360/databasetest.properties
-  - echo "couchdb.password = ${COUCHDB_TEST_PWD}" >> /etc/sw360/databasetest.properties
+  - printf "couch_db_url = %s\ncouchdb.username = %s\ncouchdb.password = %s\n" "http://couchdb:5984" "$COUCHDB_TEST_USER" "$COUCHDB_TEST_PWD" > /etc/sw360/databasetest.properties
 
   - |
     DEBIAN_FRONTEND=noninteractive apt-get -qq update
-    DEBIAN_FRONTEND=noninteractive apt-get -qq -y install \
-      build-essential rsync
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive apt-get -qq -y install --no-install-recommends \
+      build-essential rsync \
       zip python3 python3-pip \
       cmake pkg-config flex bison
     python3 -m pip install --upgrade setuptools wheel pip
@@ -78,18 +76,30 @@ build_sw360:
      -Drest.deploy.dir=${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps
   - cp ./scripts/aws_codedeploy/application* ${GITLAB_PACKAGE_PATH}/artifacts/scripts
   - cp ./scripts/aws_codedeploy/appspec.yml ${GITLAB_PACKAGE_PATH}/artifacts/
-  - cd ${GITLAB_PACKAGE_PATH}/artifacts
+  - pushd ${GITLAB_PACKAGE_PATH}/artifacts
   - zip -r ${GITLAB_PACKAGE_PATH}/artifacts.zip *
+  - popd
 
-  # Upload packages to s3 if CI_COMMIT_REF_SLUG matches DEPLOY_BRANCH
-  - cd /builds/sw360/sw360portal
-  - ./scripts/aws_codedeploy/upload_packages_to_s3.sh
+  # Upload packages to S3 if CI_COMMIT_REF_SLUG matches DEPLOY_BRANCH
+  - ./scripts/aws_codedeploy/upload_packages_to_s3.sh ${GITLAB_PACKAGE_PATH}/artifacts.zip
+  cache:
+    key: maven
+    paths:
+      - ~/.m2/
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - ./**/target/surefire-reports/TEST-*.xml
+        - ./**/target/failsafe-reports/TEST-*.xml
 
 deploy_sw360_DEV_server:
   allow_failure: true
-  stage: deploy_to_dev
+  stage: deploy
   environment:
     name: Dev
+    url: "https://dev.sw360.siemens.com/"
+    deployment_tier: testing
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: never
@@ -103,14 +113,16 @@ deploy_sw360_DEV_server:
   - echo "Trigger aws CodeDeploy for Dev server"
   - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
-  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_DEV} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_DEV} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_DEV} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_DEV} --description "Trigger from GitLab CI ${CI_COMMIT_REF_SLUG} ${CI_COMMIT_SHA}" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
 
 deploy_sw360_STAGE_server:
   allow_failure: true
-  stage: deploy_to_stage
+  stage: deploy
   environment:
     name: Stage
+    url: "https://stage.sw360.siemens.com/"
+    deployment_tier: staging
   when: manual
   before_script:
   - echo "Running deploy_sw360_STAGE_server by user - ${GITLAB_USER_EMAIL}"
@@ -118,14 +130,16 @@ deploy_sw360_STAGE_server:
   - echo "Trigger aws CodeDeploy for Stage server"
   - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
-  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_STAGE} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_STAGE} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_STAGE} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_STAGE} --description "Trigger from GitLab CI ${CI_COMMIT_REF_SLUG} ${CI_COMMIT_SHA}" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
 
 deploy_sw360_PROD_server:
   allow_failure: true
-  stage: deploy_to_prod
+  stage: deploy
   environment:
     name: Prod
+    url: "https://sw360.siemens.com/"
+    deployment_tier: production
   when: manual
   only:
     - masterct
@@ -135,5 +149,5 @@ deploy_sw360_PROD_server:
   - echo "Trigger aws CodeDeploy for Prod server"
   - ./scripts/aws_codedeploy/check_is_user_allowed_to_trigger_job.sh
   - apt-get -qq update && apt-get install awscli -y --no-install-recommends
-  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_PROD} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_PROD} --description "Trigger from Gitlab ci" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
+  - DEPLOYMENT_ID=$(aws deploy create-deployment --application-name ${CODE_DEPLOY_APP_NAME_PROD} --deployment-group-name ${CODE_DEPLOY_GROUP_NAME_PROD} --description "Trigger from GitLab CI ${CI_COMMIT_REF_SLUG} ${CI_COMMIT_SHA}" --s3-location bucket=${SW360_BUCKET_NAME},bundleType=zip,key=${PACKAGE_NAME_PREFIX}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}.zip | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["deploymentId"]')
   - ./scripts/aws_codedeploy/check_deployment_status.sh ${DEPLOYMENT_ID}
