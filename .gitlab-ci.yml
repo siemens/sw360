@@ -24,12 +24,14 @@ variables:
   no_proxy: couchdb,linux.siemens.com,.siemens.com,.siemens.de,.siemens.co.in
   _JAVA_OPTIONS: -Djdk.net.URLClassPath.disableClassPathURLCheck=true -DSPDXParser.OnlyUseLocalLicenses=true -Dhttp.proxySet=true -Dhttp.proxyHost=$CODE_PROXY_HOST -Dhttp.proxyPort=$CODE_PROXY_PORT -Dhttp.nonProxyHosts=localhost|couchdb
   GRADLE_USER_HOME: $HOME/.gradle
+  # Use m2 repository in build dir for caching
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Xmx3072m"
 
 build_sw360:
   stage: build
   script:
   - echo "Running build_sw360 by user - ${GITLAB_USER_EMAIL}"
-  - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts /etc/sw360/
+  - mkdir -p ${GITLAB_PACKAGE_PATH}/artifacts/packages/deploy ${GITLAB_PACKAGE_PATH}/artifacts/packages/webapps ${GITLAB_PACKAGE_PATH}/artifacts/scripts /etc/sw360/ $CI_PROJECT_DIR/.m2/repository
 
   # setting remote repos url to download mvn packages
   - printf '<settings><mirrors><mirror><mirrorOf>*</mirrorOf><name>remote-repos</name><url>https://devops.bt.siemens.com/artifactory/maven2-all</url><id>remote-repos</id></mirror></mirrors></settings>' > ~/.m2/settings.xml
@@ -85,7 +87,7 @@ build_sw360:
   cache:
     key: maven
     paths:
-      - ~/.m2/
+      - .m2/repository
   artifacts:
     when: always
     reports:
