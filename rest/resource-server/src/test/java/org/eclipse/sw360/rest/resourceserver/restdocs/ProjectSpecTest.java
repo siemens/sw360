@@ -2454,6 +2454,25 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_download_license_info_with_all_attachemnts() throws Exception {
+    	String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword); 
+        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE&includeAllAttachments=true")
+        		.header("Authorization", "Bearer " + accessToken)
+                        .accept("application/xhtml+xml"))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler
+                        .document(requestFields(
+                        		fieldWithPath("generatorClassName")
+                                        .description("All possible values for output generator class names are "
+                                                + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
+                                        fieldWithPath("variant").description("All the possible values for variants are "
+                                        + Arrays.asList(OutputFormatVariant.values())),
+                                        fieldWithPath("includeAllAttachments").description("Set this option to `true` to include all attachments from linked releases. "
+                                        + "Note that only one attachment per release will be parsed for "
+                                        + "license information, and if available, a CLX file will be preferred over an ISR file."))));
+    }
+
+    @Test
     public void should_document_update_project_with_network() throws Exception {
         Project updateProject = new Project();
         updateProject.setName("updated project");

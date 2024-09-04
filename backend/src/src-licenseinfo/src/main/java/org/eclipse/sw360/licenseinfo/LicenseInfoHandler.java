@@ -127,6 +127,9 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
             Map<String, Map<String, Boolean>> releaseIdsToSelectedAttachmentIds,
             Map<String, Set<LicenseNameWithText>> excludedLicensesPerAttachment, String externalIds, String fileName)
             throws TException {
+
+        System.out.println("In Method getLicenseInfoFile in licenseinfohandler.java");
+
         assertNotNull(project);
         assertNotNull(user);
         assertNotNull(outputGenerator);
@@ -135,9 +138,17 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
 
         Map<Release, Map<String, Boolean>> releaseToAttachmentId = mapKeysToReleases(releaseIdsToSelectedAttachmentIds,
                 user);
+
+        System.out.println("fetched releaseToAttachmentId : " + releaseToAttachmentId);
+
         Collection<LicenseInfoParsingResult> projectLicenseInfoResults = getAllReleaseLicenseInfos(
                 releaseToAttachmentId, user, excludedLicensesPerAttachment);
+
+        System.out.println("fetched projectLicenseInfoResults : " + projectLicenseInfoResults);
+
         Collection<ObligationParsingResult> obligationsResults = getAllReleaseObligations(releaseToAttachmentId, user);
+
+        System.out.println("fetched obligationsResults : " + obligationsResults);
 
         String[] outputGeneratorClassnameAndVariant = outputGenerator.split("::");
         if (outputGeneratorClassnameAndVariant.length != 2) {
@@ -150,16 +161,28 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
                     obligationsResults, releaseToAttachmentId, user);
         }
 
+        System.out.println("fetched obligationsStatusInfoMap : " + obligationsStatusInfoMap);
+
         String outputGeneratorClassName = outputGeneratorClassnameAndVariant[0];
         OutputFormatVariant outputGeneratorVariant = Enums
                 .getIfPresent(OutputFormatVariant.class, outputGeneratorClassnameAndVariant[1]).orNull();
         OutputGenerator<?> generator = getOutputGeneratorByClassnameAndVariant(outputGeneratorClassName,
                 outputGeneratorVariant);
+
+        System.out.println("getOutputGeneratorByClassnameAndVariant generator is : " + generator);
+
         LicenseInfoFile licenseInfoFile = new LicenseInfoFile();
+
+        System.out.println("Setting Output formatInfo starts at : " + System.currentTimeMillis());
 
         licenseInfoFile.setOutputFormatInfo(generator.getOutputFormatInfo());
 
+        System.out.println(
+                "Setting Output formatInfo ends at : " + System.currentTimeMillis() + " and started fillDefaults ");
+
         fillDefaults(project);
+
+        System.out.println("fillDefaults ends at : " + System.currentTimeMillis());
 
         Map<String, String> filteredExtIdMap = Collections.emptyMap();
         if (!StringUtils.isEmpty(externalIds)) {
@@ -169,8 +192,14 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
                     .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
         }
 
+        System.out.println("filteredExtIdMap : " + filteredExtIdMap);
+        System.out.println("Started generateOutputFile");
+
         Object output = generator.generateOutputFile(projectLicenseInfoResults, project, obligationsResults, user,
                 filteredExtIdMap, obligationsStatusInfoMap, fileName);
+
+        System.out.println("generateOutputFile ends");
+
         if (output instanceof byte[]) {
             licenseInfoFile.setGeneratedOutput((byte[]) output);
         } else if (output instanceof String) {
@@ -179,6 +208,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
             throw new TException("Unsupported output generator result: " + output.getClass().getSimpleName());
         }
 
+        System.out.println("exiting method getLicenseInfoFile in licenseinfohandler.java");
         return licenseInfoFile;
     }
 
