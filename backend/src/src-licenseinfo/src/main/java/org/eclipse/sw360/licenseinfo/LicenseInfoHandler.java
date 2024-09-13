@@ -138,7 +138,6 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         Collection<LicenseInfoParsingResult> projectLicenseInfoResults = getAllReleaseLicenseInfos(
                 releaseToAttachmentId, user, excludedLicensesPerAttachment);
         Collection<ObligationParsingResult> obligationsResults = getAllReleaseObligations(releaseToAttachmentId, user);
-
         String[] outputGeneratorClassnameAndVariant = outputGenerator.split("::");
         if (outputGeneratorClassnameAndVariant.length != 2) {
             throw new TException("Unsupported output generator value: " + outputGenerator);
@@ -149,7 +148,6 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
             obligationsStatusInfoMap = createLicenseToObligationMappingForReport(project, projectLicenseInfoResults,
                     obligationsResults, releaseToAttachmentId, user);
         }
-
         String outputGeneratorClassName = outputGeneratorClassnameAndVariant[0];
         OutputFormatVariant outputGeneratorVariant = Enums
                 .getIfPresent(OutputFormatVariant.class, outputGeneratorClassnameAndVariant[1]).orNull();

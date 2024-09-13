@@ -1217,13 +1217,21 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @Parameter(description = "The external Ids of the project", example = "376577")
             @RequestParam(value = "externalIds", required = false) String externalIds,
             @RequestParam(value = "template", required = false) String template,
+            @Parameter(description = "Generate license info including all attachments of the linked releases")
+            @RequestParam(value = "includeAllAttachments", required = false ) boolean includeAllAttachments,
             HttpServletResponse response
     ) throws TException, IOException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+        List<ProjectLink> mappedProjectLinks = new ArrayList<>();
 
-        List<ProjectLink> mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
-                projectService.filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
+        if (includeAllAttachments) {
+            mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
+                    projectService.filterAndSortAllAttachments(SW360Constants.INITIAL_LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
+        } else {
+            mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
+                    projectService.filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
+        }
 
         List<AttachmentUsage> attchmntUsg = attachmentService.getAttachemntUsages(id);
 
@@ -1246,27 +1254,30 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
         mappedProjectLinks.forEach(projectLink -> wrapTException(() ->
                 projectLink.getLinkedReleases().stream().filter(ReleaseLink::isSetAttachments).forEach(releaseLink -> {
-            String releaseLinkId = releaseLink.getId();
-            Set<String> excludedLicenseIds = releaseIdToExcludedLicenses.get(Source.releaseId(releaseLinkId));
+                    String releaseLinkId = releaseLink.getId();
+                    Set<String> excludedLicenseIds = releaseIdToExcludedLicenses.get(Source.releaseId(releaseLinkId));
 
-            if (!selectedReleaseAndAttachmentIds.containsKey(releaseLinkId)) {
-                selectedReleaseAndAttachmentIds.put(releaseLinkId, new HashMap<>());
-            }
-            final List<Attachment> attachments = releaseLink.getAttachments();
-            Release release = componentService.getReleaseById(releaseLinkId, sw360User);
-            for (final Attachment attachment : attachments) {
-                String attachemntContentId = attachment.getAttachmentContentId();
-                if (usedAttachmentContentIds.containsKey(attachemntContentId)) {
-                    boolean includeConcludedLicense = usedAttachmentContentIds.get(attachemntContentId);
-                    List<LicenseInfoParsingResult> licenseInfoParsingResult = licenseInfoService
-                            .getLicenseInfoForAttachment(release, sw360User, attachemntContentId, includeConcludedLicense);
-                    excludedLicensesPerAttachments.put(attachemntContentId,
-                            getExcludedLicenses(excludedLicenseIds, licenseInfoParsingResult));
-                    selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId,
-                            includeConcludedLicense);
-                }
-            }
-        })));
+                    if (!selectedReleaseAndAttachmentIds.containsKey(releaseLinkId)) {
+                        selectedReleaseAndAttachmentIds.put(releaseLinkId, new HashMap<>());
+                    }
+                    final List<Attachment> attachments = releaseLink.getAttachments();
+                    Release release = componentService.getReleaseById(releaseLinkId, sw360User);
+                    for (final Attachment attachment : attachments) {
+                        String attachemntContentId = attachment.getAttachmentContentId();
+                        if (includeAllAttachments) {
+                            selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId,
+                                    false);
+                        } else {
+                            if (usedAttachmentContentIds.containsKey(attachemntContentId)) {
+                                boolean includeConcludedLicense = usedAttachmentContentIds.get(attachemntContentId);
+                                List<LicenseInfoParsingResult> licenseInfoParsingResult = licenseInfoService
+                                        .getLicenseInfoForAttachment(release, sw360User, attachemntContentId, includeConcludedLicense);
+                                excludedLicensesPerAttachments.put(attachemntContentId, getExcludedLicenses(excludedLicenseIds, licenseInfoParsingResult));
+                                selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId, includeConcludedLicense);
+                            }
+                        }
+                    }
+                })));
 
         final String projectName = sw360Project.getName();
         final String projectVersion = sw360Project.getVersion();
@@ -1274,8 +1285,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         String outputGeneratorClassNameWithVariant = generatorClassName+"::"+variant;
         final OutputFormatInfo outputFormatInfo = licenseInfoService.getOutputFormatInfoForGeneratorClass(generatorClassName);
         final String filename = String.format("%s-%s%s-%s.%s", Strings.nullToEmpty(variant).equals("DISCLOSURE") ? "LicenseInfo" : "ProjectClearingReport", projectName,
-			StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
-			outputFormatInfo.getFileExtension());
+                StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
+                outputFormatInfo.getFileExtension());
 
         String fileName = "";
         if (CommonUtils.isNotNullEmptyOrWhitespace(template) && CommonUtils.isNotNullEmptyOrWhitespace(REPORT_FILENAME_MAPPING)) {
@@ -1284,7 +1295,9 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             fileName = orgToTemplate.get(template);
         }
 
-        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User, outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicensesPerAttachments, externalIds, fileName);
+        final LicenseInfoFile licenseInfoFile = licenseInfoService.getLicenseInfoFile(sw360Project, sw360User,
+                outputGeneratorClassNameWithVariant, selectedReleaseAndAttachmentIds, excludedLicensesPerAttachments,
+                externalIds, fileName);
         byte[] byteContent = licenseInfoFile.bufferForGeneratedOutput().array();
         response.setContentType(outputFormatInfo.getMimeType());
         response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));

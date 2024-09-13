@@ -42,7 +42,6 @@ import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
-import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.packages.PackageManager;
@@ -2451,6 +2450,28 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                     subsectionWithPath("_embedded.createdBy").description("The user who created this project")
                             )));
         }
+    }
+
+    @Test
+    public void should_document_get_download_license_info_with_all_attachemnts() throws Exception {
+    	String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword); 
+        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo")
+                .param("generatorClassName", "XhtmlGenerator")
+                .param("variant", OutputFormatVariant.DISCLOSURE.toString())
+                .param("includeAllAttachments", "true")
+        		.header("Authorization", "Bearer " + accessToken)
+                .accept("application/xhtml+xml"))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler
+                        .document(requestParameters(
+                        		parameterWithName("generatorClassName")
+                                        .description("All possible values for output generator class names are "
+                                                + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
+                                parameterWithName("variant").description("All the possible values for variants are "
+                                        + Arrays.asList(OutputFormatVariant.values())),
+                                parameterWithName("includeAllAttachments").description("Set this option to `true` to include all attachments from linked releases. "
+                                        + "Note that only one attachment per release will be parsed for "
+                                        + "license information, and if available, a CLX file will be preferred over an ISR file."))));
     }
 
     @Test

@@ -16,6 +16,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
@@ -890,5 +891,31 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
             log.error(e.getMessage());
             return 0;
         }
+    }
+
+    public Function<ProjectLink, ProjectLink> filterAndSortAllAttachments(Collection<AttachmentType> attachmentTypes) {
+        Predicate<Attachment> filter = att -> attachmentTypes.contains(att.getAttachmentType());
+        return createProjectLinkMapper(rl -> {
+            List<Attachment> attachments = nullToEmptyList(rl.getAttachments()).stream()
+                    .filter(filter)
+                    .collect(Collectors.toList());
+
+            if (attachments.size() > 1) {
+                Optional<Attachment> acceptedAttachment = attachments.stream()
+                        .filter(att -> att.getCheckStatus() == CheckStatus.ACCEPTED).findFirst();
+
+                if (acceptedAttachment.isPresent()) {
+                    attachments = List.of(acceptedAttachment.get());
+                } else {
+                    attachments = attachments.stream()
+                            .filter(att -> SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES.contains(att.getAttachmentType()))
+                            .limit(1)
+                            .collect(Collectors.toList());
+                }
+            }
+
+            rl.setAttachments(attachments);
+            return rl;
+        });
     }
 }
