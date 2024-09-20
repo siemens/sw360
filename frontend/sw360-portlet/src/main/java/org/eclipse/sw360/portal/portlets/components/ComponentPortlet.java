@@ -1440,11 +1440,11 @@ public class ComponentPortlet extends FossologyAwarePortlet {
 
         jsonGenerator.writeStartObject();
 
-        // adding common title
-        jsonGenerator.writeFieldName("componentTarget");
-        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(componentTarget));
-        jsonGenerator.writeFieldName("componentSource");
-        jsonGenerator.writeRawValue(JSON_THRIFT_SERIALIZER.toString(componentSource));
+        // Add componentTarget to the JSON
+        jsonGenerator.writeObjectField("componentTarget", componentTarget);
+
+        // Add componentSource to the JSON
+        jsonGenerator.writeObjectField("componentSource", componentSource);
 
         jsonGenerator.writeEndObject();
     }

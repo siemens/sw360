@@ -177,10 +177,12 @@ define('modules/sw360Wizard', [ 'jquery', 'modules/button' ], function($, button
                     button.finish($('.wizardNext', $wizardRoot));
                 }).done(function(data, textStatus, xhr) {
                     try {
-                        var dataJson = data;
-                        if (typeof data === 'string')
-                        {
-                            dataJson = JSON.parse(data);
+                        var cleanedData = cleanJsonString(data);
+                        var dataJson;
+                        if (typeof data === 'string') {
+                            dataJson = JSON.parse(cleanedData);
+                        } else {
+                            dataJson = data;
                         }
 
                         if(dataJson.error) {
@@ -195,6 +197,8 @@ define('modules/sw360Wizard', [ 'jquery', 'modules/button' ], function($, button
                             button.finish($('.wizardNext', $wizardRoot));
                         }
                     } catch(error) {
+                        // Handle parsing error
+                        console.error("Error parsing cleaned JSON response: ", error);
                         stepFailed(activeIndex, activeElement, '', error);
                     }
                 }).fail(function(xhr, textStatus, error){
@@ -204,6 +208,14 @@ define('modules/sw360Wizard', [ 'jquery', 'modules/button' ], function($, button
             } else {
                 return false;
             }
+        }
+
+        function cleanJsonString(jsonString) {
+            // Remove any comma before an opening brace
+            jsonString = jsonString.replace(/,\s*{/g, '{');
+
+            // Add more cleaning rules as needed
+            return jsonString;
         }
 
         function stepFailed(activeIndex, activeElement, textStatus, error) {
