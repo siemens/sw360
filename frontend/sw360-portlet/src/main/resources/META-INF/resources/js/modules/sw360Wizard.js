@@ -213,7 +213,7 @@ define('modules/sw360Wizard', [ 'jquery', 'modules/button' ], function($, button
         function cleanJsonString(jsonString) {
             // Remove any comma before an opening brace
             if (typeof data === 'string') {
-                jsonString = jsonString.replace(/^,\s*{/g, '{');
+                jsonString = jsonString.replace(/:+\s*,?\s*{/g, ':{');
             }
 
             // Add more cleaning rules as needed
