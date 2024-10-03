@@ -79,9 +79,9 @@ define('modules/datatables-renderer', ['jquery', 'modules/dialog', /* jquery-plu
         return $container;
     }
 
-    function createTextInput(name, clazz, placeholder, value) {
+    function createTextInput(name, clazz, placeholder, value, disabled=false ) {
         var $container = $('<div class="form-group"></div>'),
-            $text = $('<input>', { type: 'text', name: name, "class": clazz, placeholder: placeholder, title: value, value: value });
+            $text = $('<input>', { type: 'text', name: name, "class": clazz, placeholder: placeholder, title: value, value: value, disabled: disabled });
         $text.addClass('form-control');
 
         $container.append($text);
@@ -272,12 +272,12 @@ define('modules/datatables-renderer', ['jquery', 'modules/dialog', /* jquery-plu
      *
      * Example usage in column definition: <code>..., renderer: $.fn.dataTable.render.inputText("comment", "comment edit", "Please enter a comment"), ...</code>
      */
-    $.fn.dataTable.render.inputText = function(name, clazz, placeholder, hook) {
+    $.fn.dataTable.render.inputText = function(name, clazz, placeholder, hook, disabled=false ) {
         return function(value, type, row, meta) {
             var input;
 
             if(type === 'display') {
-                input = createTextInput(name, clazz, placeholder, value);
+                input = createTextInput(name, clazz, placeholder, value, disabled);
                 if(typeof hook === 'function') {
                     hook.call(input, value, type, row, meta);
                 }

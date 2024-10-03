@@ -71,4 +71,12 @@
             });
         });
     });
+
+    $(document).ready(function() {
+            if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {
+                document.querySelectorAll("#hideRelDelIconBasedOnAdminRole").forEach(function(element) {
+                    element.style.display = "none";
+                });
+            }
+        });
 </script>

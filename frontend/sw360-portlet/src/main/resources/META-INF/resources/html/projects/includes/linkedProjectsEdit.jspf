@@ -74,4 +74,12 @@
             });
         });
     });
+
+    $(document).ready(function() {
+        if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {
+            document.querySelectorAll("#hideProjDelIconBasedOnAdminRole").forEach(function(element) {
+                element.style.display = "none";
+            });
+        }
+    });
 </script>

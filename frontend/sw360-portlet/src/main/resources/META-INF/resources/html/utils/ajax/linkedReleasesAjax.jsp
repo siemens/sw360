@@ -71,14 +71,14 @@
                             value="<sw360:out value="${releaseLink.comment}"/>"/>
                     </div>
                 </td>
-                <td class="content-middle">
+                <td class="content-middle" id="hideRelDelIconBasedOnAdminRole">
                     <svg class="action lexicon-icon" data-row-id="releaseLinkRow${uuid}" data-release-name="<sw360:out value='${releaseLink.longName}' jsQuoting="true"/>">
                         <title><liferay-ui:message key="delete" /></title>
                         <use href="/o/org.eclipse.sw360.liferay-theme/images/clay/icons.svg#trash"/>
                     </svg>
                 </td>
             </tr>
-    
+
         </core_rt:when>
         <core_rt:otherwise>
 

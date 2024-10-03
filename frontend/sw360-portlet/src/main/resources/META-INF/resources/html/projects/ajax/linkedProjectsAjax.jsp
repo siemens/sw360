@@ -48,7 +48,7 @@
                 <input type="checkbox" name="<portlet:namespace/><%=Project._Fields.LINKED_PROJECTS%><%=ProjectLink._Fields.ENABLE_SVM%>${projectLink.id}" <core_rt:if test="${projectLink.enableSvm}"> checked="checked" </core_rt:if> class="form-check-input" />
             </div>
         </td>
-        <td class="content-middle">
+        <td class="content-middle" id="hideProjDelIconBasedOnAdminRole">
             <svg class="action lexicon-icon" data-row-id="projectLinkRow${uuid}">
                 <title><liferay-ui:message key="delete" /></title>
                 <use href="/o/org.eclipse.sw360.liferay-theme/images/clay/icons.svg#trash"/>
