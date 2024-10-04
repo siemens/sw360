@@ -49,6 +49,8 @@ public class PackageRepository extends DatabaseRepositoryCloudantClient<Package>
     private static final String BY_RELEASE_ID = "function(doc) { if (doc.type == 'package') { emit(doc.releaseId, doc._id); } }";
     private static final String BY_LICENSE_IDS = "function(doc) { if (doc.type == 'package') { if (doc.licenseIds) { emit(doc.licenseIds.join(), doc._id); } else { emit('', doc._id); } } }";
     private static final String BY_PURL = "function(doc) { if (doc.type == 'package') { emit(doc.purl.trim(), doc._id) } }";
+    private static final String BY_PURL_LOWERCASE = "function(doc) { if (doc.type == 'package') { emit(doc.purl.toLowerCase().trim(), doc._id) } }";
+    private static final String BY_VERSION = "function(doc) { if (doc.type == 'package') { emit(doc.version.trim(), doc._id) } }";
 
     public PackageRepository(DatabaseConnectorCloudant db) {
         super(db, Package.class);
@@ -63,6 +65,8 @@ public class PackageRepository extends DatabaseRepositoryCloudantClient<Package>
         views.put("byReleaseId", createMapReduce(BY_RELEASE_ID, null));
         views.put("byLicenseIds", createMapReduce(BY_LICENSE_IDS, null));
         views.put("byPurl", createMapReduce(BY_PURL, null));
+        views.put("byPurlLowercase", createMapReduce(BY_PURL_LOWERCASE, null));
+        views.put("byVersion", createMapReduce(BY_VERSION, null));
         initStandardDesignDocument(views, db);
     }
 
@@ -74,24 +78,28 @@ public class PackageRepository extends DatabaseRepositoryCloudantClient<Package>
         return queryView("byReleaseId", id);
     }
 
-    public List<Package> searchByName(String name, User user) {
+    public List<Package> searchByName(String name) {
         return queryView("byName", name);
     }
 
-    public List<Package> searchByNameLowerCase(String name, User user) {
+    public List<Package> searchByNameLowerCase(String name) {
         return queryView("byNameLowerCase", name.toLowerCase());
     }
 
-    public List<Package> searchByPackageManager(String pkgType, User user) {
-        return queryView("byPackageManager", pkgType.toUpperCase());
+    public List<Package> searchByPackageManager(String pkgType) {
+        return queryView("byPackageManager", pkgType.toLowerCase());
     }
 
-    public List<Package> searchByCreator(String email, User user) {
+    public List<Package> searchByCreator(String email) {
         return queryView("byCreator", email);
     }
 
     public List<Package> searchByLicenseeId(String id) {
         return queryView("byLicenseIds", id);
+    }
+
+    public List<Package> searchByVersion(String version) {
+        return queryView("byVersion", version);
     }
 
     public List<Package> searchByNameAndVersion(String name, String version, boolean caseInsenstive) {
@@ -107,9 +115,13 @@ public class PackageRepository extends DatabaseRepositoryCloudantClient<Package>
         return releasesMatchingNameAndVersion;
     }
 
-    public List<Package> searchByPurl(String purl) {
-        List<org.eclipse.sw360.datahandler.thrift.packages.Package> packagesMatchingPurl
-                = new ArrayList<org.eclipse.sw360.datahandler.thrift.packages.Package>(queryView("byPurl", purl));
+    public List<Package> searchByPurl(String purl, boolean caseInsenstive) {
+        List<Package> packagesMatchingPurl;
+        if(caseInsenstive){
+            packagesMatchingPurl = new ArrayList<Package>(queryView("byPurlLowercase", purl.toLowerCase()));
+        }else{
+            packagesMatchingPurl = new ArrayList<Package>(queryView("byPurl", purl));
+        }
         return packagesMatchingPurl;
     }
 
