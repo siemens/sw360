@@ -541,7 +541,6 @@ public class JacksonCustomizations {
                 "setModifiedOn",
                 "setModifiedBy",
                 "modifiedBy",
-                "cdxComponentType",
                 "setCdxComponentType",
                 "setVcs",
                 "createdByIsSet",
