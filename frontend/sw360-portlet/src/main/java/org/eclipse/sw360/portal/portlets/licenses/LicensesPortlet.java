@@ -226,7 +226,6 @@ public class LicensesPortlet extends Sw360Portlet {
             log.error("Could not fetch license summary from backend!", e);
             licenses = new ArrayList<>();
         }
-
         request.setAttribute(LICENSE_LIST, licenses);
     }
 

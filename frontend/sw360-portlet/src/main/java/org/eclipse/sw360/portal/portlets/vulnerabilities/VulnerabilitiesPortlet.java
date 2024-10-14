@@ -34,6 +34,7 @@ import org.eclipse.sw360.portal.portlets.components.ComponentPortletUtils;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.springframework.security.access.AccessDeniedException;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 
 import javax.portlet.*;
 import java.io.IOException;
@@ -142,13 +143,13 @@ public class VulnerabilitiesPortlet extends Sw360Portlet {
 
     private void getFilteredVulnerabilityList(PortletRequest request) throws IOException {
         List<Vulnerability> vulnerabilities = Collections.emptyList();
+        User user = UserCacheHolder.getUserFromRequest(request);
         int totalRows = 0;
 
         String externalId = request.getParameter(EXTERNAL_ID);
         String vulnerableConfig = request.getParameter(VULNERABLE_CONFIGURATION);
 
         try {
-            final User user = UserCacheHolder.getUserFromRequest(request);
             int limit = CustomFieldHelper.loadAndStoreStickyViewSize(request, user, CUSTOM_FIELD_VULNERABILITIES_VIEW_SIZE);
 
             VulnerabilityService.Iface vulnerabilityClient = thriftClients.makeVulnerabilityClient();
@@ -174,6 +175,7 @@ public class VulnerabilitiesPortlet extends Sw360Portlet {
         }
         request.setAttribute(TOTAL_ROWS, totalRows);
         request.setAttribute(VULNERABILITY_LIST, vulnerabilities);
+        request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? "Yes" : "No");
     }
 
 

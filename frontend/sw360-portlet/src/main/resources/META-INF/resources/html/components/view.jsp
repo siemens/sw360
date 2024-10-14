@@ -37,6 +37,7 @@
 <jsp:useBean id="businessUnit" class="java.lang.String" scope="request"/>
 <jsp:useBean id="componentVisibilityRestriction" class="java.lang.Boolean" scope="request"/>
 <jsp:useBean id="exactMatchCheckBox" class="java.lang.String" scope="request"/>
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 
 <core_rt:set var="programmingLanguages" value='<%=PortalConstants.PROGRAMMING_LANGUAGES%>'/>
 <core_rt:set var="operatingSystemsAutoC" value='<%=PortalConstants.OPERATING_SYSTEMS%>'/>
@@ -182,19 +183,31 @@
             <div class="row portlet-toolbar">
         <div class="col-auto">
           <div class="btn-toolbar" role="toolbar">
-                        <div class="btn-group" role="group">
-              <button type="button" class="btn btn-primary" onclick="window.location.href='<%=addComponentURL%>'"><liferay-ui:message key="add.component" /></button>
-              <button type="button" class="btn btn-secondary" id="import-spdx-bom" data-action="import-spdx-bom" style="display:none;"><liferay-ui:message key="import.spdx.bom" /></button>
-            </div>
-            <div id="btnExportGroup" class="btn-group" role="group">
+              <div class="btn-group" role="group">
+              <button type="button" class="btn btn-primary" onclick="window.location.href='<%=addComponentURL%>'"
+              <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                  disabled="disabled"
+              </core_rt:if>
+              >
+                  <liferay-ui:message key="add.component" />
+              </button>
+              <button type="button" class="btn btn-secondary" id="import-spdx-bom" data-action="import-spdx-bom" style="display:none;"
+              <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                  disabled="disabled"
+              </core_rt:if>
+              >
+                  <liferay-ui:message key="import.spdx.sbom" />
+              </button>
+              </div>
+              <div id="btnExportGroup" class="btn-group" role="group">
               <button id="btnExport" type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <liferay-ui:message key="export.spreadsheet" />
-                    <clay:icon symbol="caret-bottom" />
-                </button>
-                <div class="dropdown-menu" aria-labelledby="btnExport">
+                  <liferay-ui:message key="export.spreadsheet" />
+                  <clay:icon symbol="caret-bottom" />
+              </button>
+              <div class="dropdown-menu" aria-labelledby="btnExport">
                   <a class="dropdown-item" href="#" data-type="componentOnly"><liferay-ui:message key="components.only" /></a>
                   <a class="dropdown-item" href="#" data-type="componentWithReleases"><liferay-ui:message key="components.with.releases" /></a>
-                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -328,9 +341,12 @@
                         }
                     }, render: {display: renderComponentNameLink}},
                     {"title": "<liferay-ui:message key="main.licenses" />", data: "lics", render: {display: renderLicenseLink}},
-                    {"title": "<liferay-ui:message key="component.type" />", data: "cType"},
-                    {"title": "<liferay-ui:message key="actions" />", data: "id", render: {display: renderComponentActions}, className: 'two actions', orderable: false }
+                    {"title": "<liferay-ui:message key="component.type" />", data: "cType"}
+
                 ];
+                if (${isSecurityUser != 'Yes'}) {
+                    columns.push({"title": "<liferay-ui:message key="actions" />", data: "id", render: {display: renderComponentActions}, className: 'two actions', orderable: false });
+                }
                 let printColumns = [0, 1, 2, 3];
                 var componentsTable = datatables.create('#componentsTable', {
                     bServerSide: true,

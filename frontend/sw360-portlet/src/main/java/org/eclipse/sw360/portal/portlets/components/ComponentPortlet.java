@@ -1807,6 +1807,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 request.setAttribute(BULK_RELEASE_DELETING, IS_BULK_RELEASE_DELETING_ENABLED);
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.ADMIN, user));
                 request.setAttribute(IS_USER_AT_LEAST_CLEARING_ADMIN, PermissionUtils.isUserAtLeastClearingAdminOrExpert(user));
+                request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? "Yes" : "No");
 
                 // get vulnerabilities
                 Set<UserGroup> allSecRoles = !CommonUtils.isNullOrEmptyMap(user.getSecondaryDepartmentsAndRoles())
@@ -1915,6 +1916,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
                 }
                 request.setAttribute(BULK_RELEASE_DELETING, IS_BULK_RELEASE_DELETING_ENABLED);
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.ADMIN, user));
+                request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? "Yes" : "No");
 
                 Map<RequestedAction, Boolean> permissions = release.getPermissions();
 
@@ -2223,6 +2225,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
     }
 
     private void prepareStandardView(RenderRequest request) throws IOException {
+        User user = UserCacheHolder.getUserFromRequest(request);
         Set<String> vendorNames;
 
         try {
@@ -2240,6 +2243,7 @@ public class ComponentPortlet extends FossologyAwarePortlet {
         List<Organization> organizations = UserUtils.getOrganizations(request);
         request.setAttribute(ORGANIZATIONS, organizations);
         request.setAttribute(VENDOR_LIST, new HashSet<String>(vendorNames));
+        request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? "Yes" : "No");
         request.setAttribute(COMPONENT_TYPE_LIST, new ThriftJsonSerializer().toJson(componentTypeNames));
         request.setAttribute(COMPONENT_VISIBILITY_RESTRICTION, IS_COMPONENT_VISIBILITY_RESTRICTION_ENABLED);
         setComponentViewFilterAttributes(request);

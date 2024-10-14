@@ -92,16 +92,21 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
             });
         </core_rt:forEach>
 
+        var columns = [
+        {title: "<liferay-ui:message key="name" />"},
+        {title: "<liferay-ui:message key="version" />"},
+        {title: "<liferay-ui:message key="clearing.state" />"},
+        {title: "<liferay-ui:message key="clearing.report" />"},
+        {title: "<liferay-ui:message key="release.mainline.state" />"}
+        ];
+
+        if (${isSecurityUser != 'Yes'}) {
+           columns.push({title: "<liferay-ui:message key="action" />", render: {display: renderActions}, className: "six actions" });
+        }
+
         table = datatables.create('#releasesTable', {
             data: result,
-            columns: [
-                {title: "<liferay-ui:message key="name" />"},
-                {title: "<liferay-ui:message key="version" />"},
-                {title: "<liferay-ui:message key="clearing.state" />"},
-                {title: "<liferay-ui:message key="clearing.report" />"},
-                {title: "<liferay-ui:message key="release.mainline.state" />"},
-                {title: "<liferay-ui:message key="action" />", render: {display: renderActions}, className: "six actions" }
-            ],
+            columns: columns,
             language: {
                  url: "<liferay-ui:message key="datatables.lang" />",
                  loadingRecords: "<liferay-ui:message key="loading" />"
@@ -112,12 +117,12 @@ require(['jquery', 'bridges/datatables', 'components/includes/releases/linkProje
                     type: 'natural-nohtml'
                 },
                 {
-                    targets: [5],
+                    targets: [columns.length - 1],
                     visible: $('#releasesTable').data() ? $('#releasesTable').data().detailsContext : false
                 }
             ],
             order: [1, 'desc']
-        }, [0, 1, 2, 3, 4], [5], true);
+        }, [0, 1, 2, 3, 4], [columns.length - 1], true);
 
         function renderActions(id, type, row) {
             if(!row[5]) {

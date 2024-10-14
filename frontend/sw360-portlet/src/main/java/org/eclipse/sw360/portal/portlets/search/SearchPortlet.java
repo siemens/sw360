@@ -14,6 +14,7 @@ import org.eclipse.sw360.datahandler.thrift.search.SearchService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.portal.portlets.Sw360Portlet;
 import org.eclipse.sw360.portal.users.UserCacheHolder;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -94,6 +95,7 @@ public class SearchPortlet extends Sw360Portlet {
         request.setAttribute(KEY_SEARCH_TEXT, searchtext);
         request.setAttribute(KEY_SUMMARY, searchResults);
         request.setAttribute(TYPE_MASK, typeMask);
+        request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? "Yes" : "No");
 
         // Proceed with page rendering
         super.doView(request, response);

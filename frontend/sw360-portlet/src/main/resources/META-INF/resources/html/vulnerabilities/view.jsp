@@ -28,6 +28,7 @@
 
 <jsp:useBean id="externalId" class="java.lang.String" scope="request"/>
 <jsp:useBean id="vulnerableConfiguration" class="java.lang.String" scope="request"/>
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 
 <portlet:actionURL var="applyFiltersURL" name="applyFilters">
 </portlet:actionURL>
@@ -81,7 +82,13 @@
 				<div class="col-auto">
 					<div class="btn-toolbar" role="toolbar">
 					    <div class="btn-group" role="group">
-				<button type="button" class="btn btn-primary" onclick="window.location.href='<%=addVulnerabilitiesURL%>'"><liferay-ui:message key="add.vulnerability" /></button>
+				            <button type="button" class="btn btn-primary" onclick="window.location.href='<%=addVulnerabilitiesURL%>'"
+				            <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                disabled="disabled"
+                             </core_rt:if>
+				            >
+				                <liferay-ui:message key="add.vulnerability" />
+				            </button>
                         </div>
 						<div class="btn-group" role="group">
 								<button id="viewSizeBtn" type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -237,17 +244,21 @@
                     }
                 }
 
+                var columns = [
+                    { title: "<liferay-ui:message key="external.id" />", data: 'externalId', render: renderDetailURL },
+                    { title: "<liferay-ui:message key="title" />", data: 'title', render: $.fn.dataTable.render.infoText() },
+                    { title: "<liferay-ui:message key="weighting" />", data: 'cvss', render: renderCvss },
+                    { title: "<liferay-ui:message key="publish.date" />", data: 'publishDate', default: '' },
+                    { title: "<liferay-ui:message key="last.update" />", data: 'lastExternalUpdate', default: '' }
+                ];
+                if (${isSecurityUser != 'Yes'}) {
+                    columns.push({ title: "<liferay-ui:message key="actions" />", data: 'action', default: '', orderable: false})
+                }
+
                 table = datatables.create('#vulnerabilitiesTable', {
                     data:result,
                     searching: true,
-                    columns: [
-                        { title: "<liferay-ui:message key="external.id" />", data: 'externalId', render: renderDetailURL },
-                        { title: "<liferay-ui:message key="title" />", data: 'title', render: $.fn.dataTable.render.infoText() },
-                        { title: "<liferay-ui:message key="weighting" />", data: 'cvss', render: renderCvss },
-                        { title: "<liferay-ui:message key="publish.date" />", data: 'publishDate', default: '' },
-                        { title: "<liferay-ui:message key="last.update" />", data: 'lastExternalUpdate', default: '' },
-                        { title: "<liferay-ui:message key="actions" />", data: 'action', default: '', orderable: false}
-                    ],
+                    columns: columns,
                     order: [[4, 'desc'],[3, 'desc']],
                     language: {
                         url: "<liferay-ui:message key="datatables.lang" />",
