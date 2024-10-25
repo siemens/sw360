@@ -43,6 +43,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import lombok.NonNull;
@@ -84,6 +85,7 @@ public class ClearingRequestController implements RepresentationModelProcessor<R
             HttpServletRequest request
     ) throws TException, URISyntaxException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         ClearingRequest clearingRequest = sw360ClearingRequestService.getClearingRequestById(docId, sw360User);
         HalResource<ClearingRequest> halClearingRequest = createHalClearingRequestWithAllDetails(clearingRequest, sw360User);
         HttpStatus status = halClearingRequest == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
@@ -103,6 +105,7 @@ public class ClearingRequestController implements RepresentationModelProcessor<R
             HttpServletRequest request
     ) throws TException, URISyntaxException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         ClearingRequest clearingRequest = sw360ClearingRequestService.getClearingRequestByProjectId(projectId, sw360User);
         HalResource<ClearingRequest> halClearingRequest = createHalClearingRequestWithAllDetails(clearingRequest, sw360User);
         HttpStatus status = halClearingRequest == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
@@ -141,6 +144,7 @@ public class ClearingRequestController implements RepresentationModelProcessor<R
     ) throws TException {
 
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         Set<ClearingRequest> clearingRequestSet = new TreeSet<>();
         ClearingRequestState crState = null;
         if (StringUtils.hasText(state)) {

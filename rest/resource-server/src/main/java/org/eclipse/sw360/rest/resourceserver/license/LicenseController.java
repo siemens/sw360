@@ -79,6 +79,8 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
     )
     @RequestMapping(value = LICENSES_URL, method = RequestMethod.GET)
     public ResponseEntity<CollectionModel<EntityModel<License>>> getLicenses() throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         List<License> sw360Licenses = licenseService.getLicenses();
 
         List<EntityModel<License>> licenseResources = new ArrayList<>();
@@ -95,6 +97,8 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
     @RequestMapping(value = LICENSES_URL + "/{id}/obligations", method = RequestMethod.GET)
     public ResponseEntity<CollectionModel<EntityModel<Obligation>>> getObligationsByLicenseId(
             @PathVariable("id") String id) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         List<Obligation> obligations = licenseService.getObligationsByLicenseId(id);
         List<EntityModel<Obligation>> obligationResources = new ArrayList<>();
         obligations.forEach(o -> {
@@ -115,6 +119,8 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id
     ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         License sw360License = licenseService.getLicenseById(id);
         HalResource<License> licenseHalResource = createHalLicense(sw360License);
         return new ResponseEntity<>(licenseHalResource, HttpStatus.OK);
@@ -291,6 +297,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException, IOException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         licenseService.getDownloadLicenseArchive(sw360User,request,response);
 
     }

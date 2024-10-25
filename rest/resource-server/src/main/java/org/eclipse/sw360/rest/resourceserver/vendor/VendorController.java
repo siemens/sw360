@@ -16,6 +16,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
@@ -30,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
@@ -72,6 +74,8 @@ public class VendorController implements RepresentationModelProcessor<Repository
             Pageable pageable,
             HttpServletRequest request
             ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         List<Vendor> vendors = vendorService.getVendors();
 
         PaginationResult<Vendor> paginationResult = restControllerHelper.createPaginationResult(request, pageable, vendors, SW360Constants.TYPE_VENDOR);
@@ -102,6 +106,8 @@ public class VendorController implements RepresentationModelProcessor<Repository
             @Parameter(description = "The id of the vendor to get.")
             @PathVariable("id") String id
     ) {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         Vendor sw360Vendor = vendorService.getVendorById(id);
         HalResource<Vendor> halResource = createHalVendor(sw360Vendor);
         return new ResponseEntity<>(halResource, HttpStatus.OK);

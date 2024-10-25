@@ -12,6 +12,8 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
@@ -146,6 +148,8 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         license2.setObligationDatabaseIds(obligationIds);
         license2.setObligations(obligations);
         given(this.licenseServiceMock.getObligationsByLicenseId(any())).willReturn(obligations);
+        given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
     }
 
     @Test

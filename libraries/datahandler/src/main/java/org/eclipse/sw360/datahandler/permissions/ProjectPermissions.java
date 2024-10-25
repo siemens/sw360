@@ -101,7 +101,8 @@ public class ProjectPermissions extends DocumentPermissions<Project> {
             case BUISNESSUNIT_AND_MODERATORS: {
                 boolean isVisibleBasedOnPrimaryCondition = isUserInBU(input, user.getDepartment())
                         || userIsEquivalentToModeratorInProject(input, user.getEmail())
-                        || isUserAtLeast(CLEARING_ADMIN, user);
+                        || isUserAtLeast(CLEARING_ADMIN, user)
+                        || isSecurityUser;
                 boolean isVisibleBasedOnSecondaryCondition = false;
                 if (!isVisibleBasedOnPrimaryCondition) {
                     Map<String, Set<UserGroup>> secondaryDepartmentsAndRoles = user.getSecondaryDepartmentsAndRoles();
