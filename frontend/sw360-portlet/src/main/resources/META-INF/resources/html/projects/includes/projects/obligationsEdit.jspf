@@ -250,6 +250,10 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
         });
     </core_rt:forEach >
 
+    var defDisable = false;
+    if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {
+        defDisable = true;
+    }
     /* create table */
     var table = datatables.create('#editObligationsTable', {
         "data": obligationJSON,
@@ -272,7 +276,7 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             { "data": "id", className: 'text-center' },
             { "data": function(row) {
                             return $('<span></span>').html(row.comment).text();
-                      }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />')
+                      }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />', undefined ,defDisable)
             },
         ],
         "columnDefs": [
@@ -291,6 +295,9 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             {
                 "targets": 7,
                 "createdCell": function (td, cellData, rowData, row, col) {
+                    if("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true'){
+                       return;
+                    }
                     $.fn.dataTable.render.inputText.updateTitle(td);
                     $.fn.dataTable.render.inputText.useInputDialog(td, "<liferay-ui:message key="enter.obligation.comment" />");
                     $(td).css('max-width', '15rem');
@@ -349,8 +356,18 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
           }
     }, undefined, [0, 4, 7]);
 
+    $(document).ready(function() {
+        if("${clearingStateClosedAndUserNotAdmin}"!= undefined && "${clearingStateClosedAndUserNotAdmin}"=='true'){
+            $("#obligationsFromLicenseDatabase").addClass('disabled');
+        }
+    });
+
     function renderStatus(status, type, row) {
+    if("${clearingStateClosedAndUserNotAdmin}"!= undefined && "${clearingStateClosedAndUserNotAdmin}"=='true'){
+        return '<select class="obl_status toplabelledInput form-control" disabled>' + status + '</select>';
+    }else{
         return '<select class="obl_status toplabelledInput form-control">' + status + '</select>';
+      }
     }
 
     function renderComment(comment, type, row, meta) {
@@ -594,7 +611,7 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             { "data": "id", className: 'text-center obl_id' },
             { "data": function(row) {
                             return $('<span></span>').html(row.comment).text();
-                      }, className: 'obl_comment', defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />')
+                      }, className: 'obl_comment', defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />', undefined ,defDisable)
             },
         ],
         "columnDefs": [
@@ -613,6 +630,9 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             {
                 "targets": 5,
                 "createdCell": function (td, cellData, rowData, row, col) {
+                    if("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true'){
+                        return;
+                    }
                     $.fn.dataTable.render.inputText.updateTitle(td);
                     $.fn.dataTable.render.inputText.useInputDialog(td, "<liferay-ui:message key="enter.obligation.comment" />");
                     $(td).css('max-width', '15rem');
@@ -684,7 +704,7 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             { "data": "id", className: 'text-center' },
             { "data": function(row) {
                             return $('<span></span>').html(row.comment).text();
-                      }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />')
+                      }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />', undefined ,defDisable)
             },
         ],
         "columnDefs": [
@@ -703,6 +723,9 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
             {
                 "targets": 5,
                 "createdCell": function (td, cellData, rowData, row, col) {
+                    if("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true'){
+                       return;
+                    }
                     $.fn.dataTable.render.inputText.updateTitle(td);
                     $.fn.dataTable.render.inputText.useInputDialog(td, "<liferay-ui:message key="enter.obligation.comment" />");
                     $(td).css('max-width', '15rem');
@@ -774,7 +797,7 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
               { "data": "id", className: 'text-center obl_id' },
               { "data": function(row) {
                               return $('<span></span>').html(row.comment).text();
-                        }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />')
+                        }, defaultContent: "", render: $.fn.dataTable.render.inputText('comment', 'obl_comment toplabelledInput', '<liferay-ui:message key="enter.comments" />', undefined ,defDisable)
               },
           ],
           "columnDefs": [
@@ -793,6 +816,9 @@ require(['jquery', 'bridges/datatables', 'utils/render', 'modules/button', 'modu
               {
                   "targets": 5,
                   "createdCell": function (td, cellData, rowData, row, col) {
+                      if("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true'){
+                          return;
+                      }
                       $.fn.dataTable.render.inputText.updateTitle(td);
                       $.fn.dataTable.render.inputText.useInputDialog(td, "<liferay-ui:message key="enter.obligation.comment" />");
                       $(td).css('max-width', '15rem');

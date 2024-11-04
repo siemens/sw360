@@ -307,6 +307,13 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             } else {
                 request.setAttribute("inProjectDetailsContext", false);
             }
+            if(PortalConstants.LOAD_OBLIGATIONS_EDIT.equals(action)){
+                try {
+                    toggleEnableDisableForOblgnEditBtn(request);
+                } catch (TException e) {
+                    throw new RuntimeException(e);
+                }
+            }
 
             request.setAttribute("isObligationPresent", true);
             include("/html/projects/includes/projects/linkedObligations.jsp", request, response,
@@ -329,6 +336,25 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             serveDependencyNetworkList(request, response);
         } else if (PortalConstants.DEPENDENCY_NETWORK_ON_LOAD.equals(action)) {
             serveDependencyNetworkOnLoad(request, response);
+        }
+    }
+
+    private void toggleEnableDisableForOblgnEditBtn(ResourceRequest request) throws TException{
+        String docId = request.getParameter(PortalConstants.DOCUMENT_ID);
+        final User user = UserCacheHolder.getUserFromRequest(request);
+        final ProjectService.Iface projectClient = thriftClients.makeProjectClient();
+        Project project = null;
+        try {
+            project=projectClient.getProjectById(docId, user);
+        }
+        catch(TException e) {
+            throw new TException("Could not retrieve Project from backend.");
+        }
+        boolean closedClearingState = project.clearingState.name().equals(ProjectClearingState.CLOSED.name());
+        if(PermissionUtils.isAdmin(user) && closedClearingState){
+            request.setAttribute("clearingStateClosedAndUserNotAdmin",false);
+        }else{
+            request.setAttribute("clearingStateClosedAndUserNotAdmin",true);
         }
     }
 
