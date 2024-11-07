@@ -64,9 +64,9 @@ define('modules/datatables-renderer', ['jquery', 'modules/dialog', /* jquery-plu
         return $projectStateBox[0].outerHTML +  $clearingStateBox[0].outerHTML;
     }
 
-    function createSelectInput(selectDataKey, selectData, name, clazz, optionClazz, currentKey) {
+    function createSelectInput(selectDataKey, selectData, name, clazz, optionClazz, currentKey, disabled=false) {
         var $container = $('<div class="form-group"></div>'),
-            $select = $('<select>', { name: name, "class": clazz, title: selectData[currentKey] });
+            $select = $('<select>', { name: name, "class": clazz, title: selectData[currentKey], disabled: disabled });
         $select.addClass('form-control');
 
         Object.keys(selectData).forEach(function(key) {
@@ -207,7 +207,7 @@ define('modules/datatables-renderer', ['jquery', 'modules/dialog', /* jquery-plu
      *
      * Example usage in column definition: <code>..., renderer: $.fn.dataTable.render.inputSelect("attachmentTypes", "type", "select-field", "select-option"), ...</code>
      */
-    $.fn.dataTable.render.inputSelect = function(selectDataKey, name, clazz, optionClazz, hook) {
+    $.fn.dataTable.render.inputSelect = function(selectDataKey, name, clazz, optionClazz, hook, disabled=false) {
         return function(key, type, row, meta) {
             var select,
                 isString = typeof selectDataKey === 'string',
@@ -221,9 +221,9 @@ define('modules/datatables-renderer', ['jquery', 'modules/dialog', /* jquery-plu
                 }
             } else if(type === 'display') {
                 if (isString) {
-                    select = createSelectInput(selectDataKey, meta.settings.json[selectDataKey], name, clazz, optionClazz, key);
+                    select = createSelectInput(selectDataKey, meta.settings.json[selectDataKey], name, clazz, optionClazz, key, disabled);
                 } else if (isObject) {
-                    select = createSelectInput(selectDataKey, selectDataKey, name, clazz, optionClazz, key);
+                    select = createSelectInput(selectDataKey, selectDataKey, name, clazz, optionClazz, key, disabled);
                 }
                 if(typeof hook === 'function') {
                     hook.call(select, key, type, row, meta);

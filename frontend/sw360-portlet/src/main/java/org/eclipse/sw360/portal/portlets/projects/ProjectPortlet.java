@@ -2575,6 +2575,12 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             request.setAttribute(PROJECT, project);
             request.setAttribute(DOCUMENT_ID, id);
 
+            boolean closedClearingState = project.clearingState.name().equals(ProjectClearingState.CLOSED.name());
+            if(closedClearingState){
+                request.setAttribute("clearingStateClosedAndUserNotAdmin", !PermissionUtils.isAdmin(user));
+            }else{
+                request.setAttribute("clearingStateClosedAndUserNotAdmin",false);
+            }
             setAttachmentsInRequest(request, project);
             try {
                 if (isUpdateOrCreateProjectFailed && project.isSetLinkedProjects()) {
