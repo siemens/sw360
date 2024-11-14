@@ -351,10 +351,10 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             throw new TException("Could not retrieve Project from backend.");
         }
         boolean closedClearingState = project.clearingState.name().equals(ProjectClearingState.CLOSED.name());
-        if(PermissionUtils.isAdmin(user) && closedClearingState){
-            request.setAttribute("clearingStateClosedAndUserNotAdmin",false);
-        }else{
-            request.setAttribute("clearingStateClosedAndUserNotAdmin",true);
+        if (closedClearingState) {
+            request.setAttribute("clearingStateClosedAndUserNotAdmin", !PermissionUtils.isAdmin(user));
+        } else {
+            request.setAttribute("clearingStateClosedAndUserNotAdmin", false);
         }
     }
 
