@@ -92,6 +92,10 @@
 <%@include file="/html/utils/includes/attachmentsUpload.jspf" %>
 
 <script>
+    var disableAttchCmt = false;
+    if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {
+        disableAttchCmt = true;
+    }
     require(['jquery', 'utils/includes/attachmentsUpload', 'modules/dialog', 'bridges/datatables'], function($, attachmentUploader, dialog, datatables) {
         var attachmentTable,
             config = $('#attachmentInfo').data();
@@ -110,23 +114,23 @@
             autoWidth: false,
             columns: [
               /*  0 */ { data: "filename", render: renderFilename, className: 'content-middle' },
-              /*  1 */ { data: "attachmentType", render: $.fn.dataTable.render.inputSelect('attachmentTypes', config.inputTypeName, 'attachmentType toplabelledInput', 'textlabel stackedLabel') },
-              /*  2 */ { data: "createdComment", defaultContent: "", render: $.fn.dataTable.render.inputText(config.inputCreatedCommentName, 'toplabelledInput', 'Enter comments') },
+              /*  1 */ { data: "attachmentType", render: $.fn.dataTable.render.inputSelect('attachmentTypes', config.inputTypeName, 'attachmentType toplabelledInput', 'textlabel stackedLabel', undefined, disableAttchCmt) },
+              /*  2 */ { data: "createdComment", defaultContent: "", render: $.fn.dataTable.render.inputText(config.inputCreatedCommentName, 'toplabelledInput', 'Enter comments', undefined, disableAttchCmt) },
               /*  3 */ { data: "createdTeam", defaultContent: "", render: $.fn.dataTable.render.ellipsis, className: 'content-middle' },
               /*  4 */ { data: "createdBy", defaultContent: "", render: $.fn.dataTable.render.ellipsis, className: 'content-middle'  },
               /*  5 */ { data: "createdOn", defaultContent: "", className: 'content-middle' },
-              /*  6 */ { data: "checkStatus", render: $.fn.dataTable.render.inputSelect('checkStatuses', config.inputCheckStatusName, 'toplabelledInput', 'textlabel stackedLabel'), className: 'checkStatus' },
+              /*  6 */ { data: "checkStatus", render: $.fn.dataTable.render.inputSelect('checkStatuses', config.inputCheckStatusName, 'toplabelledInput', 'textlabel stackedLabel', undefined, disableAttchCmt), className: 'checkStatus' },
               /*  7 */ { data: "checkedComment", defaultContent: "", render: $.fn.dataTable.render.inputText(config.inputCheckedCommentName, 'toplabelledInput check-comment', 'Enter comments',
-                                                      function(value, type, row, meta) {
+                                                      ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') ? undefined : function(value, type, row, meta) {
                                                           if(row.checkStatus == 0) {
                                                               this.attr('readonly', 'readonly');
                                                           }
-                                                      }), className: 'checkedComment'
+                                                      }, disableAttchCmt), className: 'checkedComment'
                          },
               /*  8 */ { data: "checkedTeam", defaultContent: "", render: $.fn.dataTable.render.ellipsis, className: 'content-middle checkedTeam' },
               /*  9 */ { data: "checkedBy", defaultContent: "", render: $.fn.dataTable.render.ellipsis, className: 'content-middle checkedBy' },
               /* 10 */ { data: "checkedOn", defaultContent: "", className: 'content-middle checkedOn' },
-              /* 11 */ { data: "actions", orderable: false, render: $.fn.dataTable.render.actions( [{ key: 'attachmentContentId', 'class': 'delete-attachment', icon: 'trash', title: '<liferay-ui:message key="delete.attachment" />', approvalKey: 'checkStatus', usageCountsKey: 'usageCounts'}] ), className: "content-middle one action" }
+              /* 11 */ {data: "actions", orderable: false, render: function(data, type, row, meta) { if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {return ''} else {return $.fn.dataTable.render.actions([{ key: 'attachmentContentId', 'class': 'delete-attachment', 'id': 'hideDelAttachmentBasedOnAdminRole', icon: 'trash', title: 'Delete Attachment', approvalKey: 'checkStatus', usageCountsKey: 'usageCounts'}])(data, type, row, meta); }}, className: "content-middle one action" }
             ],
             columnDefs: [{
                   targets: 1,
@@ -165,6 +169,9 @@
                         }
                     });
                     functionForCheckStatusOfInitialScanType(rowData.attachmentType, $(td).find('select'));
+                    if(disableAttchCmt){
+                        $(td).find('select').attr("disabled", true);
+                    }
                 }
               }, {
                   targets: 2,
@@ -175,6 +182,9 @@
             }, {
                   targets: 7,
                   createdCell: function(td, cellData, rowData, row, col) {
+                      if (disableAttchCmt) {
+                          return;
+                      }
                       $.fn.dataTable.render.inputText.updateTitle(td);
                       $.fn.dataTable.render.inputText.useInputDialog(td, "<liferay-ui:message key="update.approval.comment" />");
                       functionForCheckCommentOfInitialScanType(rowData.attachmentType, $(td).find('input'));

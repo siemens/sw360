@@ -95,7 +95,7 @@
                 '<liferay-ui:message key="prease.enter.a.valid.url" />' +
                 '</div>' +
                 '</td>' +
-                '<td class="content-middle">' +
+                '<td class="content-middle" id="hideExtUrlDelIconBasedOnAdminRole">' +
                 '<svg class="action lexicon-icon" data-row-id="' + rowId + '">' +
                 '<title>Delete</title>' +
                 '<use href="/o/org.eclipse.sw360.liferay-theme/images/clay/icons.svg#trash"/>' +
@@ -118,6 +118,14 @@
 			addRowsToExternalUrlsTable('<sw360:out value="${tableEntry.key}"/>', '<sw360:out value="${tableEntry.value}"/>', 'externalUrlsTableRow${loop.count}');
             </core_rt:forEach>
         }
+
+        $(document).ready(function() {
+            if ("${clearingStateClosedAndUserNotAdmin}" != undefined && "${clearingStateClosedAndUserNotAdmin}" == 'true') {
+                document.querySelectorAll("#hideExtUrlDelIconBasedOnAdminRole").forEach(function(element) {
+                    element.style.display = "none";
+                });
+            }
+        });
 
     });
 
