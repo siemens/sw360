@@ -16,8 +16,8 @@
 # -----------------------------------------------------------------------------
 
 COUCHDB_URL="${COUCHDB_URL:-http://localhost:5984}"
-COUCHDB_USER="${COUCHDB_USER:-admin}"
-COUCHDB_PASSWORD="${COUCHDB_PASSWORD:-password}"
+COUCHDB_USER="${COUCHDB_USER:-sw360}"
+COUCHDB_PASSWORD="${COUCHDB_PASSWORD:-sw360fossie}"
 
 export COUCHDB_URL COUCHDB_USER COUCHDB_PASSWORD
 
@@ -46,6 +46,6 @@ docker run -it --rm \
     -P deploy \
     -Dhelp-docs=true \
     -Dbase.deploy.dir=. \
-    -Dliferay.deploy.dir="${PWD}/deploy" \
+    -Djars.deploy.dir="${PWD}/deploy" \
     -Dbackend.deploy.dir="${PWD}/deploy/webapps" \
     -Drest.deploy.dir="${PWD}/deploy/webapps"

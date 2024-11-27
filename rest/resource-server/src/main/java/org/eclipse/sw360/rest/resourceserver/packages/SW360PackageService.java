@@ -19,7 +19,7 @@ import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
-import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
@@ -130,16 +130,36 @@ public class SW360PackageService {
 
         if (field.equals("name")) {
             if (isExactMatch) {
-                values = values.stream().map(s -> "\"" + s + "\"").map(LuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
+                values = values.stream().map(s -> "\"" + s + "\"").map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
             }
             else {
-                values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
+                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
             }
         }
         Map<String, Set<String>> queryMap = new HashMap<>();
 
         queryMap.put(field, values);
         return sw360PackageClient.searchPackagesWithFilter(searchQuery, queryMap);
+    }
+
+    public List<Package> searchPackageByName(String name) throws TException {
+        final PackageService.Iface sw360PackageClient = getThriftPackageClient();
+        return sw360PackageClient.searchByName(name);
+    }
+
+    public List<Package> searchByPackageManager(String pkgManager) throws TException {
+        final PackageService.Iface sw360PackageClient = getThriftPackageClient();
+        return sw360PackageClient.searchByPackageManager(pkgManager);
+    }
+
+    public List<Package> searchPackageByVersion(String version) throws TException {
+        final PackageService.Iface sw360PackageClient = getThriftPackageClient();
+        return sw360PackageClient.searchByVersion(version);
+    }
+
+    public List<Package> searchPackageByPurl(String purl) throws TException {
+        final PackageService.Iface sw360PackageClient = getThriftPackageClient();
+        return sw360PackageClient.searchByPurl(purl);
     }
 
     public int getTotalPackagesCounts() throws TException {

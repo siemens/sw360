@@ -16,7 +16,10 @@ import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TTransportException;
+import org.eclipse.sw360.datahandler.thrift.ClearingRequestSize;
 import org.eclipse.sw360.datahandler.thrift.ClearingRequestState;
+import org.eclipse.sw360.datahandler.thrift.Comment;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
@@ -88,4 +91,43 @@ public class Sw360ClearingRequestService {
         return clearingrequests;
     }
 
+    public ClearingRequest addCommentToClearingRequest(String crId, Comment comment, User sw360User) throws TException {
+        if (crId == null || crId.isBlank()) {
+            throw new IllegalArgumentException("Clearing request ID cannot be null or empty.");
+        }
+        if (comment.getText() == null || comment.getText().trim().isEmpty()) {
+            throw new IllegalArgumentException("Comment text cannot be empty.");
+        }
+
+        comment.setCommentedBy(sw360User.getEmail());
+        comment.setText(comment.getText().trim());
+
+        ModerationService.Iface clearingRequestClient = getThriftModerationClient();
+        RequestStatus requestStatus = clearingRequestClient.addCommentToClearingRequest(crId, comment, sw360User);
+        if (requestStatus != RequestStatus.SUCCESS) {
+            throw new TException("Error adding comment to clearing request");
+        }
+        return getClearingRequestById(crId, sw360User);
+    }
+
+    public RequestStatus updateClearingRequest(ClearingRequest clearingRequest, User sw360User, String baseUrl, String projectId) throws TException {
+        ModerationService.Iface sw360ModerationClient = getThriftModerationClient();
+        String projectUrl = baseUrl + "/projects/-/project/detail/" + projectId;
+
+        RequestStatus requestStatus;
+        requestStatus = sw360ModerationClient.updateClearingRequest(clearingRequest, sw360User, projectUrl);
+
+        if (requestStatus == RequestStatus.FAILURE) {
+            throw new RuntimeException("Clearing Request with id '" + clearingRequest.getId() + " cannot be updated.");
+        }
+        return requestStatus;
+    }
+
+    public void updateClearingRequestForChangeInClearingSize(String crId, ClearingRequestSize size) throws TException{
+        try {
+            getThriftModerationClient().updateClearingRequestForChangeInClearingSize(crId, size);
+        } catch (SW360Exception e) {
+            log.error("Error updating clearing request for change in clearing size: " + e.getMessage());
+        }
+    }
 }

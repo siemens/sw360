@@ -4,6 +4,367 @@ This is the changelog file of the sw360 project. It starts with the first releas
 
 https://github.com/sw360/sw360portal/releases
 
+## sw360-19.0.0-M1
+This tag covers many corrections, bug fixes and features after the 18.1 release.
+Version 19.0.0 is also the first release without the Front-end integrated, but
+as a separate [sw360-frontend](https://github.com/eclipse-sw360/sw360-frontend)
+project.
+
+Major changes in the release includes:
+* Removal of Liferay and related libraries, OSGi framework
+* Unification of various backend packages from src and svd
+* Support for Java 21 and Apache Tomcat 11.0.0
+* Replace couchdb-lucene with couchdb-nouveau
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> afsahsyeda <afsah.syeda@siemens-healthineers.com>
+> Akshit Joshi <akshit.joshi@siemens-healthineers.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> Helio Chissini de Castro <helio.chissini.de.castro@cariad.technology>
+> hoangnt2 <hoang2.nguyenthai@toshiba.co.jp>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Nikesh Kumar <kumar.nikesh@siemens.com>
+> Rudra Chopra <prabhuchopra@gmail.com>
+> Sameed <sameed.ahmad@siemens-healthineers.com>
+> Smruti Prakash Sahoo <smruti.sahoo@siemens.com>
+> tuannn2 <tuan2.nguyennhu@toshiba.co.jp>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `c167bcca9` feat(rest): Endpoint to add comment on a clearing request
+* `cd97b6154` feat(rest): Create new endpoint for schedule CVE and schedule attachment deletion.
+* `00d70bcc5` feat(rest): get releases used by vendor
+* `31b720b9e` feat(rest) : Rest end point for generate source code bundle
+* `062a89290` feat(rest): saveUsages in project page
+* `9751a2e1a` feat(Project): Add new endpoint for project's license clearing tree view (New GUI)
+* `546d35b73` feat(Project): Import SPDX as dependency network
+* `a18b053f5` feat(rest): Create new endpoint to download component template in csv format.
+* `144ea5b81` feat(rest) : Move GenerateLicenseInfoFile rest end point to SW360reportcontroller
+* `61ec9ac39` feat(REST): Exclude release version from license info
+* `295f1cbff` feat(rest): fetch group list in project add and edit page.
+* `e9ec8d8a7` feat: Make Java 21 default
+* `cb99fc678` feat(ImportSBOM):Change naming convention of imported components
+* `441fa7d85` feat(Project): Create new endpoint to serve list view of dependency network (New GUI)
+* `7b4c534e3` feat(cloudant): use IBM SDK
+* `09586fad6` feat(ektorp): remove ektorp from search handlers
+* `af0262112` feat(lucene): nouveau integration
+* `a019b468b` feat(keycloak-spis): Added the custom keycloak SPIs
+* `3c453670d` feat(couchdb): Enable use of latest CouchDB with nouveau
+* `8fdd93c86` feat(rest): endpoint to update a vendor.
+* `bff430140` feat: Add CODEOWNERS to the repository
+* `90ad3ea1c` feat(rest): Add additional fields in get clearingrequest endpoints.
+* `771b965b2` feat(ComponentPortletandImportCDX): Validate VCS URL and sanitize GitHub Repo URLs during CDX import
+* `99d0c80ed` feat(api): postpone moderation request action
+* `af15a09e3` feat(rest): includeAllAttachments parameter in licenseInfo endpoint
+* `66cac90c6` feat(CycloneDX): Make methods compatible with cyclonedx upgrade and update jackson version
+* `9a15832c0` feat(rest): Endpoint to get comments of a Clearing Request.
+* `ffbf1b183` feat(project): endpoint for vulnerabilitySummary page.
+* `0d6908ab2` feat(project): Add necessary library dependencies required by rest code
+* `acb1e54ea` feat(vscode): Add base Eclipse java formatter config file
+* `a29d5b0c2` feat: Generate provenance and SBOMs on Docker images
+* `8b6aa42cf` feat(docs): Remove old asciidocs support
+* `fd0546244` feat: Update to Ubuntu 24.04 (Noble)
+* `8f971f765` feat(rest): new endpoint for releases of linked projects.
+* `5bd4cae83` feat(obligation): rest endpoint to update license obligations of the project.
+* `3c40f09f2` feat(License): Add API Listing LicenseType and Add pageble for licenses, obligations
+* `204ce2f02` feat: Add scorecard
+
+### Corrections
+* `9452b2b89` fix(cloudant): fix attachment creation
+* `5bdef6d51` fix(pom): fixed the java version in kc module pom.xml
+* `48e0f6c8c` fix(ImportCDX): VCS sanitization failing on characters like colon
+* `dc18109b8` fix(Project): Fix project handler test with dependency network feature
+* `5702dc595` fix(clearingState): making fossology report download configurable.
+* `3f10b6856` fix(build): add the missing excludeReleaseVersion
+* `69fcc6c9f` fix(servlet): complete migration javax to jakarta
+* `3cad1c4aa` fix(UI): Add lang attribute to ReadmeOSS.html for generated license info.
+* `77b801825` fix(keycloak-spi): Added the README.md
+* `e43c3422a` fix(nouveau): fix nouveau query result
+* `442ac94c7` fix(test): fix test cases with cloudant SDK
+* `41e3d4605` fix(nouveau): extend nouveau connector as cloudant
+* `cbcffd979` fix(cloudant): fix query builders
+* `ced70a0e4` fix(cloudant): fix views
+* `57f5b6908` fix(REST): Patch Release is causing the clearing state to be updated to NEW even if a Clearing is existing
+* `5c4810a56` fix(backend): fix dependency for backend core
+* `f0719b97a` fix(rest): Resolved null value returning for svm tracking status.
+* `fe05d9f29` fix(rest): Update search API to return 200 status with empty results array when no match found
+* `b0c11a1fb` fix(GenerateLicenseInfo): Generate License Info failing for releases having the same CLX
+* `d6f630021` fix(rest): Ensure visibility field is case-insensitive
+* `6a1408f50` fix(doc): fix OpenAPI doc for Search endpoint
+* `83796a935` fix(rest): add requestClosedOn field in get clearingRequest_by_id endpoint
+* `45a8137f3` fix: Update docker documentation to reflect current status
+* `9dc2d6835` fix(rest): Enable back authorization and resource server with up to dat springboot
+* `c493d83bf` fix(couchdb): Move setup data for single file and update compose to use as read only
+* `c15e36cd8` fix(docker): Use Tomcat with Ubuntu 24.04 (Noble)
+* `d655adc64` fix(rest): Add null check for linkedProject field if it is empty
+* `77bdbf7f6` fix(rest): Add null check for linkedProject field to prevent Internal Server Error on GET request to fetch the linked projects of a project
+* `5943127c6` fix(rest): Add code to update user details when creating a moderation request.
+* `9777923f8` fix(docker): Reinstate docker builds
+* `0265205b0` fix(docker): Update docker build to fit Ubuntu Noble and improved caching
+* `293e025cf` fix(rest): Added JWT token convert to fix the issue with authorities
+* `540f9baf1` fix(rest): Added the Oidc user info customizer and token customizer
+* `1fb7bcf97` fix(rest): Add null check for linkedProject field to prevent Internal Server Error on GET request to fetch the linked projects of a project
+* `3f6ae983b` fix(importCDX):Improve error message when PURL is invalid
+* `3dfbb5538` fix(rest): Fix internal server error with 500 status code for link project to projects endpoint
+* `f0e149422` fix(rest): Fixing pagination for endpoint '/packages'.
+* `0d88cacc7` fix(rest) : Non uniform link format in attachmentUsage end point
+* `fea2d4eda` fix(rest): Fixed the swagger issue
+* `01218278d` fix(backend) : Product clearing report generated has strange numbering issue fix
+* `da95be6e7` fix(rest): Added modifiedBy field in get package_by_id endpoint.
+* `82ad83e70` Revert "fix(rest): Fixed the swagger issue"
+* `cc38d07df` fix(rest): Fixed the swagger issue
+* `51fabdfc2` fix(rest):Added code to resolve the server error while fetching a summaryAdministraion endpoint.
+* `b262c4c82` fix(rest): Fixing the rest test cases
+* `308ce540b` fix(rest): Added a missed field in package endpoint for allDetails.
+* `8f0560c04` fix: Only publish test report on failures
+* `f48e6d27b` fix: Thrift cache location
+* `b69720c91` fix: Update thrift build to fix github caching
+* `89f47fe05` fix(test): Proper build tests now without jump folders
+* `4dd4f8aa7` fix: Remove wrong placed copyrights on commit template
+* `f8dcd79f2` fix(test): Disable rest test to avoid chicken and egg integration
+* `7ce112133` fix(github): restore pull_request_template.md
+
+### Infrastructure
+* `4e883a5a1` chore(deps): bump org.springframework:spring-context
+* `7dd44a5fd` chore: Add maven validation on build
+* `d086e9a71` chore(deps): bump org.keycloak:keycloak-core
+* `2d90a9a00` chore(deps): bump org.keycloak:keycloak-core
+* `bfd296052` chore(maven): deploy keycloak listeners
+* `c71b0d5c4` chore(maven): segregate war and jar deploy dirs
+* `d9b3edf25` chore: Add Tomcat 11 default for Docker
+* `872c74ef1` chore(nouveau): catch exception for nouveau query
+* `824504564` chore(docker): update compose with dockerhub image
+* `3fc2e0976` chore(couchdb-lucene): remove third-party/couchdb-lucene
+* `111a0fe88` chore(refactor): Refactored the models by adding Lombok
+* `e3dccf3ee` chore: Reduce couchdb log level on docker compose
+* `e3f3dab7e` chore: Update the license header checkfor CODEOWNERS
+* `af056ef15` chore: Properly set components servlet as war file
+* `27fddd182` refactor: Use the correct thrift image
+* `56b63f065` refactor: Remove dead code comments
+* `7b3fe9233` chore: CouchDB setup can't be read only
+* `442970d4c` chore: Add color coding for sw360 project
+* `30b6114f8` refactor(backend): Adjust component test call
+* `9a09353af` refactor(backend): Disable ComponentImportTestUtils
+* `a0369e0a3` refactor(backend): Allow test properties be configurable
+* `b7d9941dd` refactor(backend): Fix licenseinfo test
+* `2f24d0b3e` chore: Disable logging on disk for couchdb and configure authorization server
+* `bc759edb4` refactor(backend): Restore webapps install
+* `a9cff25ea` chore: Fix version dependencies
+* `a81fe91dc` refactor(backend): Remove invalid recursive add-build-configuration process
+* `a973a70f4` refactor(backend): Disable usage of Handlers by importer
+* `2019328a3` refactor(backend): Adjust dependencies for subprojects
+* `a5df30cbb` refactor(backend): Move svc-common to service-core
+* `2e9b67182` refactor(backend): Create licenses-core shared library
+* `d1f88af5c` refactor(backend): Move vulnerabilities shared classes to core
+* `eaeb4e0e8` refactor(backend): Unify source tree
+* `eec9f1557` chore(vscode): Increase memory requirements for language server
+* `9dbbaf958` chore: Update README_DOCKER with proper commands
+* `1bb1ce228` chore: Update couchdb user and password for scripts
+* `86be40d49` chore: Ignore vscode directory
+* `d1e1269b2` chore: Remove dead code
+* `e8d6398cc` chore(docker): Fix syntax warnings
+* `09517affc` ci(docker): Use correct thrift docker context
+* `f10c1b0bb` refactor(docker): Adjust CouchDB configurations
+* `714e16eac` ci: Minor quality control fixes
+* `406b2eec2` chore: Remove pom duplicates
+* `828c05a63` build(deps): bump urllib3 in /.github/actions/clean_up_package_registry
+* `612bce6b7` refactor: Remove liferay deploy dir
+* `0462eec98` refactor(project): Remove OSGI bundle plugin
+* `51af9238f` refactor(libraries): Remove OSGI bundle from importers
+* `d66d6f6db` refactor(libraries): Remove OSGI bundle from exporters
+* `a305f5f08` refactor(libraries): Remove OSGI bundle from CommonIO
+* `0507602ba` refactor(datahandler): Remove OSGI bundle
+* `063c294e1` refactor(project): Remove log4j-osgi-support
+* `8505587a3` chore: Remove unused buildnumber plugin
+* `1eb27eb2c` refactor: Remove liferay build references
+* `41e6951ea` chore: Remove unused spotless plugin
+* `e2719816b` chore: Remove unused flatten plugin
+* `2e04e949d` chore: Place enforcer plugin in correct place
+* `712f7c057` refactor: Versioning update
+* `474323658` chore: Update gitignore and ide settings
+* `8d493bcd3` build(deps): bump requests in /.github/actions/clean_up_package_registry
+* `f754535e4` chore: Ignore templates to check license
+* `02824ef71` chore(project): Minor clenaups
+* `8b68eff39` refactor(docker): Modernize docker without liferay
+* `447c89c68` refactor(project): Adjust dependencies for Java 17 and Liferay removal
+* `f7dc1d0f9` build(deps): bump certifi in /.github/actions/clean_up_package_registry
+* `f8b201838` build(deps): bump org.springframework:spring-web from 6.1.5 to 6.1.6
+* `83da48abc` chore(upgrade): skipped rest auth server test cases until its fixed
+* `d31c5bd60` chore(upgrade): Resolving src-licenseinfo module test cases.
+* `8a2688883` chore(upgrade): Added a patch for the java 17 related changes w.r.t couchdb-lucene
+* `aa9422126` chore(upgrade): Authorization upgrade
+* `a2a30f552` chore(upgrade): Upgrade to Java 17
+* `d8d8ef585` chore(upgrade): Remove liferay
+* `62829f44c` refactor(java): Disable some tests to easy migration
+* `0cfdeada8` ci(java): Update to Java 17 as default and enforce it
+
+
+## sw360-18.1.0-M1
+This tag includes important corrections and fixes following the 18.0 pre-release. It is also the final tag with Liferay, as SW360 will use the SW360-frontend project (https://github.com/eclipse-sw360/sw360-frontend) starting from the next release.
+
+### Migrations
+
+For existing installations, a data migration is required with PR 1963. Please go to the readme file in scripts/migrations to see more information:
+
+https://github.com/eclipse/sw360/blob/master/scripts/migrations/README.md
+
+Note: For running the migrations scripts, you will need python and the couchdb package. Please note that you will need to change manually in the python file: the DRYRUN variable and the couchdb URL (if that is not on localhost or requires password or both).
+
+### Credits
+
+The following github users have contributed to the source code since the last release (in alphabetical order):
+
+```
+> Afsah Syeda <afsah.syeda@siemens-healthineers.com>
+> Aftab, Farooq Fateh (ext) <farooq-fateh.aftab.ext@siemens-energy.com>
+> Anupam Ghosh <anupam.ghosh@siemens.com>
+> Akshit Joshi <akshit.joshi@siemens-healthineers.com>
+> Eldrin <eldrin.sanctis@siemens.com>
+> Gaurav Mishra <gmishx@gmail.com>
+> Helio Chissini de Castro <heliocastro@gmail.com>
+> Jens Viebig <jens.viebig@vitec.com>
+> hoangnt2 <hoang2.nguyenthai@toshiba.co.jp>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Nikesh kumar <kumar.nikesh@simens.com>
+> rudra-superrr <rudra.chopra@siemens.com>
+> sameed.ahmad <sameed.ahmad@siemens-healthineers.com>
+> tuannn2 <tuan2.nguyennhu@toshiba.co.jp>
+```
+
+Please note that also many other persons usually contribute to the project with reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `4bfabe486` feat(rest) : Remove mail-request parameter and read from config file
+* `96863d14c` feat(REST): Search package by purl and version
+* `684d90117` feat(REST): Create clearing request for a project and move the preferred clearing date limit field out of Liferay"
+* `fe044d00` feat(project): Added release field for licenseObligation get endpoint
+* `70837b27` feat(rest): filter attachment usages in project
+* `ea94202b` feat(license): Update Whitelist
+* `af155858` feat(CR): Update clearing request state from AWAITING RESPONSE to PENDING INPUT
+* `2bd2b2fd` feat(vscode): Add workspace java settings
+* `8ceba8fb` feat(docker): Add test build using docker
+* `944a7164` feat(rest): added pagination for vulnerability tracking status page.
+* `70391d07` feat(rest): add license obligations to a project.
+* `4f65386f` feat(obligation): endpoint to list license obligation table data
+* `5fcb3533` feat(rest) : endpoint to list license obligations from license database.
+* `240c73f3` feat(CR): Create a new Clearing Request state Sanity Check to perform sanity check before accepting a project
+* `4bc56326` Revert "feat(CR): Disable Clearing Request creation for the projects which have linked releases without SRC type attachment"
+* `71d3a470` Feat(User): Create new endpoints to Create/Revoke/List rest api token
+* `d4820efc` feat(Rest) : Download license clearing report end point.
+* `14fda713` feat(api): new endpoint /mySubmissions
+* `cec7f4b7` feat(docker): Improve output of check_image script.
+* `d7699485` feat(docker): Revamp docker build setup
+* `2ddf76f0` feat(user): Enable API user endpoint by default
+* `36a41cef` feat(Obligation): adding obligation type data in license obligation table.
+* `44219a39` feat(rest) : Pagination for vulnerability tracking status
+* `b925c0ab` Revert "feat(UI): enhanced date filter for open and closed clearing requests tab"
+* `a3038447` feat(UI): enhanced date filter for open and closed clearing requests tab
+* `9f9a1ffa1` feat(UI): Add an info button in the create CR page
+* `b98d346a4` feat(UI): Add clearing type column in closed clearing request tab
+* `b6aa50650` feat(Project): - Extract license from all releases in dependency network when download license information of a project - Generate source code bundle from all releases in dependency network when download Generate source code bundle for a project
+* `49f5486fa` feat(rest): endpoint to link sourceProject to list of projects.
+* `1ab14350b` feat(CR): Disable Clearing Request creation for the projects which have linked releases without SRC type attachment
+* `bcd600c26` feat(User): Add new endpoints to get/update requesting user profile
+* `3cb73c19f` feat(rest): Create new endpoint to unschedule all services.
+* `83a2b3a28` feat(license): Listing obligations by license
+* `8a9c407e8` feat(license): Fix Update License isChecked
+* `89a75f815` feat(project): Update ghactions workflows deps
+* `849e10a0c` feat(obligation): Add api listing obligations by ObligationLevel
+* `3ec2cb129` feat(rest) : Rest end point for releases by lucene search
+* `7ccba71d5` feat(project): Setup Sonatype publishing
+* `c0fb731c4` feat(license): Create API Export License
+* `141e24bab` feat(Release):Upload Source Code Attachment to Releases through a Scheduled Service
+* `c7c33c78f` feat(rest): adding pagination for listing vendors endpoint.
+* `c805ff90f` feat(rest) : Adding or Modifying fields to project summaryadminastration page
+* `6a89beabc` feat(Script): Delete MR's for a specific user
+* `adc862038` feat(license): Create new api update license
+
+### Corrections
+* `dfabecd2c` fix(importCDX) : Fix package's linked release updation when an SBOM is imported
+* `3de514387` fix(project): adding project owner field in project get endpoint.
+* `c31464972` fix(api): throw 409 if last moderator
+* `219792b1` fix(importCDX): Resolve incorrect package/release count in import summary
+* `6d9f3620` fix(rest): Create a new endpoint for dataBaseSanitation.
+* `ae997be2` fix(project): Update outdated Github actions
+* `cb02b200` fix(sw360): changing mkdocs version
+* `0c9523fb` fix(REST): Improve error message handling for CycloneDX sbom import using REST API
+* `df735e9b` fix(Release): Updating the license overview in the summary page
+* `e5ac9278` fix(SRCUploadService): Source upload should work for release versions having alphanumeric characters
+* `fa42d204` fix(api): provide typeMasks name as Optional type
+* `6e36abbb` fix(api): check project modifier before embedding
+* `3beff049` fix(Project): Fix bug Expand Next Level and Collapse All button are hidden when click on sort icon
+* `5112980f` fix(urlEncoding): url encoding.
+* `fe0a4408` fix(Release): Add embedded other licenses in release response
+* `d4a8be84` fix(importCDX): Packages without VCS in SBOM having VCS in SW360 are not getting linked to project
+* `8af9bd5e` fix(importCDX): Add check for existing comps and package using case-insensitive comparison of vcs and purl
+* `ee3ed068` fix(Liferay): Fix bug cannot access oauth client page when import lar file
+* `edc9320c` fix(rest) : attachment usage type fix in response
+* `49be7428` fix(importSBOM): Remove the invalid characters appearing in import summary message for invalid packages list
+* `5a726764` fix(rest): create endpoint for search by userName using lucene search.
+* `ff068133` fix(rest): Added releaseId in recentRelease and release mySubscription.
+* `87a14f7a` fix(Rest): Added status for mysubsciption in component.
+* `d28843c2` fix(docker): Fix broken binaries context inclusion
+* `16475d70` fix(rest) : create new endpoint for cleanup attachment.
+* `0950a2ca` fix(script): update modifiedBy/modifiedOn project fields.
+* `67696a9f` fix(department): Division by zero caused by bad default value for interval
+* `9703661d` fix(rest): Added primaryRole and secondaryDepartmentRoles fields for user endpoint.
+* `fba0d8e5` fix(rest): Added modifiedBy field in project search by id.
+* `178813e5f` fix(docker): Adjust local naming for docker images
+* `b55372562` fix(thrift): Add proper version to build
+* `34765dd80` fix(thrift): Follow link download step
+* `ef5cc0142` fix(database): Restore reading environment database vars
+* `8aaf95734` fix(UI) : Issue fix for vulnerability not displaying for project
+* `c63023c4d` fix(release): modify the externalId query parsing
+* `6a6cb33b5` fix(docker): We have been using wrong Java version
+* `625ffcfa1` fix(release): revert external id query parsing
+* `222879a9e` fix(rest): error handling when user dont have sufficient import permission
+* `d619c5121` fix(Table): Fix error of hiding attachment table content when clicking sort
+* `ef83441df` fix(moderator): show message when only moderator choose remove me option.
+* `590a2b3ad` fix(docker): Remove deletion that invalidate image
+* `2fe147f09` fix(rest): create new enpoint to check server connection.
+* `47d14b158` fix(script): Fix migration script not working with python3
+* `0d535c386` fix(config): Correct file number
+* `0f9d9b85a` fix(rest): create a new endpoint for fossology in admin tab.
+* `5b9f10921` fix(script): Fix incorrect numbering for migration scripts
+* `0f9d31974` fix(couchdb): Add config entry to disable couchdb cache
+* `451948a79` fix(javadoc): Remove invalid link reference
+* `05c2445fa` fix(lib): Add meta information to enable publish
+* `b5f6cb469` fix(importCDX): Update failed component creation error message
+* `6e1964a40` fix(rest-fossology): applied changes for upload endpoint
+* `5a83fe2c9` fix(RequestsPortlet): Unable to reopen CR, Open Components to display open releases, clearing progress to show percentage
+* `2fdd5f4c5` fix(Rest): Allowing search for releases using externalIds
+* `d9fce216f` Fix(package): Fix issues api for package - Cannot unlink orphan packages from the project - Cannot link a package to a release without any package - Handle message when package with same purl already exists
+* `02d84be81` fix (rest) : rest api created for component search by lucene search
+
+### Infrastructure
+* `e71c5e53f` Revert "build(deps): bump org.apache.commons:commons-compress"
+* `42ed65ee` chore(deps): Update json to version 20240303
+* `cd53eed2` refactor(deps): Update new codebase library
+* `8fca0929` chore(license): Ignore checks under templates
+* `73ea0cf3` chore(templates): Second batch of bug report template updates
+* `f375af4f` chore(templates): Update outdated bug/issue templates
+* `a28f3ce3` build(deps): bump idna in /.github/actions/clean_up_package_registry
+* `2d907549` build(deps): bump org.apache.commons:commons-compress
+* `4d87a2bb` build(deps): bump org.bitbucket.b_c:jose4j in /rest/resource-server
+* `7ee06367` build(deps): bump org.springframework.security:spring-security-core
+* `737a1320` ci(docker): Use external action to reduce maintenance
+* `d9341ee28` chore(package-portlet): package-portlet enabled for default installation
+* `ecb30a34d` Update build status
+* `7d3511146` build(deps): bump com.jayway.jsonpath:json-path from 2.8.0 to 2.9.0
+* `8b5428d92` docs(api): add OpenAPI docs for /vulnerabilities
+* `27dc3d8bb` docs(api): add OpenAPI docs for releases
+* `72a99c897` docs(project): response codes DELETE /projects
+* `1c3f70f8e` chore(javadoc): Fix javadoc entries as requirements to publish in sonatype
+
+
 ## sw360-18.0.0-M1
 This tag covers many corrections/bug after the 17.0 release and multiple new endpoints to support sw360 UI project.
 

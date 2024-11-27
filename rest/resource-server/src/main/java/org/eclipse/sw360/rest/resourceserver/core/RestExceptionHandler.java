@@ -29,6 +29,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 
@@ -67,7 +68,12 @@ public class RestExceptionHandler {
 
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<ErrorMessage> handleClientError(HttpClientErrorException e) {
-        return new ResponseEntity<>(new ErrorMessage(e, e.getStatusCode()), e.getStatusCode());
+        return new ResponseEntity<>(new ErrorMessage(e, HttpStatus.valueOf(e.getStatusCode().value())), HttpStatus.valueOf(e.getStatusCode().value()));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorMessage> handleNoHandlerFound(NoResourceFoundException e) {
+        return new ResponseEntity<>(new ErrorMessage(e, HttpStatus.NOT_FOUND), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler({OptimisticLockingFailureException.class, DataIntegrityViolationException.class})
@@ -77,7 +83,7 @@ public class RestExceptionHandler {
 
     @Data
     @RequiredArgsConstructor
-    private static class ErrorMessage {
+    public static class ErrorMessage {
 
         @JsonSerialize(using = JsonInstantSerializer.class)
         private Instant timestamp = Instant.now();

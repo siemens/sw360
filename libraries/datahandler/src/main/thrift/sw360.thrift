@@ -73,7 +73,8 @@ enum ClearingRequestState {
     CLOSED = 5,
     AWAITING_RESPONSE = 6,
     ON_HOLD = 7,
-    SANITY_CHECK = 8
+    SANITY_CHECK = 8,
+    PENDING_INPUT = 9
 }
 
 enum ClearingRequestPriority {
@@ -86,6 +87,14 @@ enum ClearingRequestPriority {
 enum ClearingRequestType {
     DEEP = 0,
     HIGH = 1
+}
+
+enum ClearingRequestSize{
+    VERY_SMALL = 0,
+    SMALL = 1,
+    MEDIUM = 2,
+    LARGE = 3,
+    VERY_LARGE = 4
 }
 
 enum Visibility {

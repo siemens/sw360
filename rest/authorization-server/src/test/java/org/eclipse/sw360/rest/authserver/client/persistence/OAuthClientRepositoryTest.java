@@ -9,6 +9,7 @@
  */
 package org.eclipse.sw360.rest.authserver.client.persistence;
 
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.rest.authserver.IntegrationTestBase;
 
 import org.junit.Before;
@@ -27,7 +28,7 @@ import static org.junit.Assert.assertTrue;
  * loading and overwriting in tests.
  *
  * Currently we are only testing the setup anyway, since we do not have custom
- * repo logic yet - beside the ektorp supported CRUD logic.
+ * repo logic yet.
  *
  * ATTENTION: This test should be executed manually when a couchdb is running.
  * Make sure to not have the OAuthClientRepository as Mockito mock in the
@@ -50,7 +51,7 @@ public class OAuthClientRepositoryTest extends IntegrationTestBase {
     }
 
     // @Test
-    public void testInsertNewClient() {
+    public void testInsertNewClient() throws SW360Exception {
         // given:
         String clientId = "foo";
         OAuthClientEntity client = new OAuthClientEntity();

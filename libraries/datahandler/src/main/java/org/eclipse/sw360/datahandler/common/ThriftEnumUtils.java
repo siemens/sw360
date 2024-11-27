@@ -342,6 +342,7 @@ public class ThriftEnumUtils {
             .put(ClearingRequestState.CLOSED, "Closed")
             .put(ClearingRequestState.AWAITING_RESPONSE, "Awaiting Response")
             .put(ClearingRequestState.ON_HOLD, "On Hold")
+            .put(ClearingRequestState.PENDING_INPUT,"Pending Input")
             .build();
 
     private static final ImmutableMap<ClearingReportStatus, String> MAP_CLEARING_REPORT_STATUS_STRING = ImmutableMap.<ClearingReportStatus, String>builder()
@@ -361,6 +362,15 @@ public class ThriftEnumUtils {
             ClearingRequestType.DEEP, "Deep CLX",
             ClearingRequestType.HIGH, "High ISR"
     );
+
+    private static final ImmutableMap<ClearingRequestSize, String> MAP_CLEARING_REQUEST_SIZE_STRING = ImmutableMap.of(
+            ClearingRequestSize.VERY_SMALL, "Very Small",
+            ClearingRequestSize.SMALL, "Small",
+            ClearingRequestSize.MEDIUM, "Medium",
+            ClearingRequestSize.LARGE, "Large",
+            ClearingRequestSize.VERY_LARGE, "Very Large"
+    );
+
 
     private static final ImmutableMap<UserAccess, String> MAP_USER_ACCESS_STRING = ImmutableMap.<UserAccess, String>builder()
             .put(UserAccess.READ, "Read")
@@ -455,6 +465,7 @@ public class ThriftEnumUtils {
             .put(PackageManager.class, MAP_PACKAGE_MANAGER_STRING)
             .put(CycloneDxComponentType.class, MAP_CYCLONE_DX_COMPONENT_TYPE_STRING)
             .put(ClearingRequestType.class, MAP_CLEARING_REQUEST_TYPE_STRING)
+            .put(ClearingRequestSize.class, MAP_CLEARING_REQUEST_SIZE_STRING)
             .build();
 
     public static String enumToString(TEnum value) {

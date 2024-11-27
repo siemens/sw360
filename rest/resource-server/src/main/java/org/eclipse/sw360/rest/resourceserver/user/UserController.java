@@ -11,7 +11,11 @@ package org.eclipse.sw360.rest.resourceserver.user;
 
 import com.google.common.collect.ImmutableSet;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.NonNull;
@@ -19,10 +23,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
-import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
@@ -47,7 +52,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import org.springframework.data.domain.Pageable;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -70,6 +75,7 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @RestController
 @SecurityRequirement(name = "tokenAuth")
+@SecurityRequirement(name = "basic")
 public class UserController implements RepresentationModelProcessor<RepositoryLinksResource> {
 
     protected final EntityLinks entityLinks;
@@ -118,13 +124,13 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             Map<String, Set<String>> filterMap = new HashMap<>();
             if (CommonUtils.isNotNullEmptyOrWhitespace(givenname)) {
                 Set<String> values = CommonUtils.splitToSet(givenname);
-                values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
                         .collect(Collectors.toSet());
                 filterMap.put(User._Fields.GIVENNAME.getFieldName(), values);
             }
             if (CommonUtils.isNotNullEmptyOrWhitespace(email)) {
                 Set<String> values = CommonUtils.splitToSet(email);
-                values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
                         .collect(Collectors.toSet());
                 filterMap.put(User._Fields.EMAIL.getFieldName(), values);
             }
@@ -138,7 +144,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             }
            if (CommonUtils.isNotNullEmptyOrWhitespace(lastname)) {
              Set<String> values = CommonUtils.splitToSet(lastname);
-              values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+              values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
                         .collect(Collectors.toSet());
                 filterMap.put(User._Fields.LASTNAME.getFieldName(), values);
             }
@@ -243,8 +249,8 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     }
 
     @Operation(
-            summary = "Get user's profile.",
-            description = "Get user's profile.",
+            summary = "Get current user's profile.",
+            description = "Get current user's profile.",
             tags = {"Users"}
     )
     @GetMapping(value = USERS_URL + "/profile")
@@ -261,6 +267,34 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     )
     @PatchMapping(value = USERS_URL + "/profile")
     public ResponseEntity<HalResource<User>> updateUserProfile(
+            @Parameter(description = "Updated user profile",
+                    schema = @Schema(example = """
+                            {
+                                "wantsMailNotification": true,
+                                "notificationPreferences": {
+                                    "releaseCONTRIBUTORS": true,
+                                    "componentCREATED_BY": false,
+                                    "releaseCREATED_BY": false,
+                                    "moderationREQUESTING_USER": false,
+                                    "projectPROJECT_OWNER": true,
+                                    "moderationMODERATORS": false,
+                                    "releaseSUBSCRIBERS": true,
+                                    "componentMODERATORS": true,
+                                    "projectMODERATORS": false,
+                                    "projectROLES": false,
+                                    "releaseROLES": true,
+                                    "componentROLES": true,
+                                    "projectLEAD_ARCHITECT": false,
+                                    "componentCOMPONENT_OWNER": true,
+                                    "projectSECURITY_RESPONSIBLES": true,
+                                    "clearingREQUESTING_USER": true,
+                                    "projectCONTRIBUTORS": true,
+                                    "componentSUBSCRIBERS": true,
+                                    "projectPROJECT_RESPONSIBLE": false,
+                                    "releaseMODERATORS": false
+                                }
+                            }
+                            """))
             @RequestBody Map<String, Object> userProfile
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -304,6 +338,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     )
     @RequestMapping(value = USERS_URL + "/tokens", method = RequestMethod.POST)
     public ResponseEntity<String> createUserRestApiToken(
+            @Parameter(description = "Token request", schema = @Schema(implementation = RestApiToken.class))
             @RequestBody Map<String, Object> requestBody
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -333,7 +368,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
 
         if (!userService.isTokenNameExisted(sw360User, tokenName)) {
-            return new ResponseEntity<>("Token not found: " + tokenName, HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("Token not found: " + StringEscapeUtils.escapeHtml(tokenName), HttpStatus.NOT_FOUND);
         }
 
         sw360User.getRestApiTokens().removeIf(t -> t.getName().equals(tokenName));
@@ -349,5 +384,44 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     private HalResource<User> createHalUser(User sw360User) {
         return new HalResource<>(sw360User);
+    }
+
+    @Operation(
+            summary = "Fetch group list of a user.",
+            description = "Fetch the list of group for a particular user.",
+            tags = {"Users"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User and its groups.",
+                    content = {
+                            @Content(mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            value = """
+                                    {
+                                        "primaryGrpList": ["DEPARTMENT"],
+                                        "secondaryGrpList": ["DEPARTMENT1","DEPARTMENT2"]
+                                    }
+                                    """
+                                    ))
+                    }
+            )
+    })
+    @RequestMapping(value = USERS_URL + "/groupList", method = RequestMethod.GET)
+    public ResponseEntity<Map<String, List<String>>> getGroupList() {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        List<String> primaryGrpList = new ArrayList<>();
+        List<String> secondaryGrpList = new ArrayList<>();
+        Map<String, List<String>> userGroupMap = new HashMap<>();
+        String mainDepartment = sw360User.getDepartment();
+        if (mainDepartment != null && !mainDepartment.isEmpty()) {
+            primaryGrpList.add(mainDepartment);
+        }
+        Map<String, Set<UserGroup>> secondaryDepartmentsAndRoles = sw360User.getSecondaryDepartmentsAndRoles();
+        if (secondaryDepartmentsAndRoles != null) {
+            secondaryGrpList.addAll(secondaryDepartmentsAndRoles.keySet());
+        }
+        userGroupMap.put("primaryGrpList", primaryGrpList);
+        userGroupMap.put("secondaryGrpList", secondaryGrpList);
+        return new ResponseEntity<>(userGroupMap, HttpStatus.OK);
     }
 }

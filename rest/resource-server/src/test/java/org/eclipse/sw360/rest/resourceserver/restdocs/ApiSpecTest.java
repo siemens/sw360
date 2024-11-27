@@ -13,8 +13,6 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,17 +46,12 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
     private String testUserPassword;
 
     @MockBean
-    private Sw360UserService userServiceMock;
-
-    @MockBean
     private Sw360ProjectService projectServiceMock;
 
     @Test
     public void should_document_headers() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-
         this.mockMvc.perform(RestDocumentationRequestBuilders.get("/api")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .header("Accept", MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -68,12 +61,11 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_error_bad_request() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(
                 post("/api/projects")
                         .contentType(MediaTypes.HAL_JSON)
                         .content("{")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isBadRequest())
                 .andDo(this.documentationHandler.document(
                         responseFields(
@@ -84,7 +76,6 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
-    @Ignore
     // SecurityContextHolder.getContext in test filter chain supports no mocking.
     // The authentication object is always null in the test class.
     // As result the test filter automatically authenticates the request
@@ -95,26 +86,26 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isUnauthorized())
                 .andDo(this.documentationHandler.document(
                         responseFields(
-                                fieldWithPath("error").description("The error code, e.g. invalid_token"),
-                                fieldWithPath("error_description").description("The description of invalid token"))));
+                                fieldWithPath("timestamp").description("The timestamp when the error occurred"),
+                                fieldWithPath("status").description("The HTTP status code, e.g. 400"),
+                                fieldWithPath("error").description("The HTTP error code, e.g. Bad Request"),
+                                fieldWithPath("message").description("The error message, e.g. JSON parse error: Unexpected end-of-input: expected close marker for Object"))));
     }
 
     @Test
     public void should_document_error_not_found() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(
                 post("/api/endpoint_not_found")
                         .contentType(MediaTypes.HAL_JSON)
                         .content("{}")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     public void should_document_error_method_not_allowed() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(RestDocumentationRequestBuilders.delete("/api")
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isMethodNotAllowed())
                 .andDo(this.documentationHandler.document(
                         responseFields(
@@ -126,12 +117,11 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_error_unsupported_media_type() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(
                 post("/api/projects")
                         .contentType(MediaType.APPLICATION_XML)
                         .content("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isUnsupportedMediaType())
                 .andDo(this.documentationHandler.document(
                         responseFields(
@@ -144,9 +134,8 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
     @Test
     public void should_document_error_internal_error() throws Exception {
         given(this.projectServiceMock.getProjectForUserById(anyString(), any())).willThrow(new RuntimeException(new TException("Internal error processing getProjectById")));
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(RestDocumentationRequestBuilders.get("/api/projects/12321")
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isInternalServerError())
                 .andDo(this.documentationHandler.document(
                         responseFields(
@@ -158,9 +147,8 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_index() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(get("/api")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -181,11 +169,13 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("sw360:changeLogs").description("The <<resources-changelog,Changelog resource>>"),
                                 linkWithRel("sw360:clearingRequests").description("The <<resources-clearingRequest,ClearingRequest resource>>"),
                                 linkWithRel("sw360:obligations").description("The <<resources-obligations,Obligation resource>>"),
+                                linkWithRel("sw360:databaseSanitation").description("The <<resources-databaseSanitation,DatabaseSanitation resource>>"),
                                 linkWithRel("sw360:moderationRequests").description("The <<resources-moderationRequest,ModerationRequest resource>>"),
                                 linkWithRel("sw360:fossology").description("The <<resources-fossology,Fossology resource>>"),
                                 linkWithRel("sw360:schedule").description("The <<resources-schedule,Schedule resource>>"),
                                 linkWithRel("sw360:ecc").description("The <<resources-ecc,Ecc resource>>"),
                                 linkWithRel("sw360:attachmentCleanUp").description("The <<resources-attachmentCleanUp,attachmentCleanUp resource>>"),
+                                linkWithRel("sw360:importExport").description("The <<resources-importExport,ImportExport resource>>"),
                                 linkWithRel("curies").description("The Curies for documentation"),
                                 linkWithRel("profile").description("The profiles of the REST resources")
                         ),

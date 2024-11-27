@@ -12,10 +12,8 @@ package org.eclipse.sw360.attachments.db;
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
-import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.Duration;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
-import org.eclipse.sw360.datahandler.couchdb.DatabaseConnector;
 import org.eclipse.sw360.datahandler.db.AttachmentContentRepository;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.Visibility;
@@ -169,7 +167,7 @@ public class RemoteAttachmentDownloaderTest {
         }
     }
 
-    private AttachmentContent saveRemoteAttachment(String remoteUrl) {
+    private AttachmentContent saveRemoteAttachment(String remoteUrl) throws SW360Exception {
         AttachmentContent attachmentContent = new AttachmentContent()
                 .setFilename("testfile")
                 .setContentType("text")

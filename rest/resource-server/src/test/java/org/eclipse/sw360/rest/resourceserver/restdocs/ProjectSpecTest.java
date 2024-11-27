@@ -15,6 +15,7 @@ import com.google.common.collect.Sets;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.thrift.ClearingRequestType;
 import org.eclipse.sw360.datahandler.thrift.CycloneDxComponentType;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.ObligationStatus;
@@ -22,33 +23,32 @@ import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
+import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
+import org.eclipse.sw360.datahandler.thrift.ClearingRequestPriority;
 import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.Visibility;
-import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
-import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
-import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
-import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
-import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
-import org.eclipse.sw360.datahandler.thrift.attachments.LicenseInfoUsage;
-import org.eclipse.sw360.datahandler.thrift.attachments.UsageData;
+import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
 import org.eclipse.sw360.datahandler.thrift.components.ECCStatus;
 import org.eclipse.sw360.datahandler.thrift.components.EccInformation;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseNode;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoFile;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
-import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.packages.PackageManager;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
@@ -92,6 +92,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -118,7 +119,7 @@ import static org.springframework.restdocs.payload.PayloadDocumentation.requestF
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
 import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
-import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -133,9 +134,6 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
-
-    @MockBean
-    private Sw360UserService userServiceMock;
 
     @MockBean
     private SW360PackageService packageServiceMock;
@@ -364,6 +362,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         projectList.add(project2);
 
         Map<String, ProjectReleaseRelationship> linkedReleases2 = new HashMap<>();
+        Map<String, ProjectReleaseRelationship> linkedReleases3 = new HashMap<>();
+        Map<String, ProjectReleaseRelationship> linkedReleases4 = new HashMap<>();
         Map<String, ProjectProjectRelationship> linkedProjects2 = new HashMap<>();
         Map<String, ProjectProjectRelationship> linkedProjects3 = new HashMap<>();
         Project project4 = new Project();
@@ -410,7 +410,6 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project7.setClearingState(ProjectClearingState.OPEN);
         project7.setSecurityResponsibles(new HashSet<>(Arrays.asList("securityresponsible1@sw360.org", "securityresponsible2@sw360.org")));
 
-        Map<String, ProjectReleaseRelationship> linkedReleases3 = new HashMap<>();
         Set<Attachment> attachmentSet = new HashSet<Attachment>();
         List<Obligation> obligationList = new ArrayList<>();
         Set<String> licenseIds2 = new HashSet<>();
@@ -445,9 +444,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project8.setId("123456733");
         project8.setName("oblProject");
         project8.setVersion("3");
-        project8.setLinkedObligationId("0001");
+        project8.setLinkedObligationId("009");
         linkedReleases3.put("376527651233", projectReleaseRelationship);
         project8.setReleaseIdToUsage(linkedReleases3);
+        List<String> title = Arrays.asList("obligation_title");
 
         Source ownerSrc3 = Source.releaseId("376527651233");
         Source usedBySrc3 = Source.projectId("123456733");
@@ -476,9 +476,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         osi.setStatus(ObligationStatus.OPEN);
         osi.setObligationType(obligation.getObligationType());
         Map<String, ObligationStatusInfo> obligationStatusMap = Map.of(obligation.getTitle(), osi);
-        
+        Map<String, ObligationStatusInfo> obligationStatusMapFromAdminSection = new HashMap<>();
+
         ObligationList obligationLists = new ObligationList();
-        obligationLists.setProjectId("123456733");
+        obligationLists.setProjectId(project8.getId());
         obligationLists.setId("009");
         obligationLists.setLinkedObligationStatus(obligationStatusMap);
 
@@ -490,6 +491,32 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         release5.setVersion("2.3.1");
         release5.setCreatedOn("2016-12-28");
 
+        Project project9 = new Project();
+        project9.setId("0000007");
+        project9.setName("attachUsages");
+        project9.setVersion("2");
+        project9.setCreatedBy(testUserId);
+        project9.setProjectType(ProjectType.PRODUCT);
+        project9.setState(ProjectState.ACTIVE);
+        project9.setClearingState(ProjectClearingState.OPEN);
+        linkedReleases4.put("00000071", projectReleaseRelationship);
+        project9.setReleaseIdToUsage(linkedReleases4);
+
+        Release release9 = new Release();
+        release9.setId("00000071");
+        release9.setName("docker");
+        release9.setCpeid("cpe:/a:Google:Angular:2.3.1:");
+        release9.setReleaseDate("2024-03-17");
+        release9.setVersion("2");
+        release9.setCreatedOn("2024-03-28");
+        release9.setAttachments(setOfAttachment);
+
+        List<AttachmentUsage> attachmentUsageNewList = new ArrayList<>();
+        List<AttachmentUsage> deselectedUsagesFromRequest = new ArrayList<>();
+        List<AttachmentUsage> selectedUsagesFromRequest = new ArrayList<>();
+        List<String> selectedUsages = Arrays.asList("00000071_sourcePackage_1234");
+
+        Set<String> releaseIds2 = new HashSet<>(Collections.singletonList("00000071"));
         Set<String> releaseIds = new HashSet<>(Collections.singletonList("3765276512"));
         Set<String> releaseIdsTransitive = new HashSet<>(Arrays.asList("3765276512", "5578999"));
 
@@ -537,8 +564,19 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         RequestSummary requestSummaryForCycloneDX = new RequestSummary();
         requestSummaryForCycloneDX.setMessage("{\"projectId\":\"" + cycloneDXProject.getId() + "\"}");
 
+        String projectName="project_name_version_createdOn.xlsx";
+
+        AddDocumentRequestSummary requestSummaryForCR = new AddDocumentRequestSummary();
+        requestSummaryForCR.setMessage("Clearing request created successfully");
+        requestSummaryForCR.setRequestStatus(AddDocumentRequestStatus.SUCCESS);
+        requestSummaryForCR.setId("CR-1");
+
+        given(this.projectServiceMock.createClearingRequest(any(),any(),any(),eq(project.getId()))).willReturn(requestSummaryForCR);
+        given(this.projectServiceMock.loadPreferredClearingDateLimit()).willReturn(Integer.valueOf(7));
+
         given(this.projectServiceMock.importSPDX(any(),any())).willReturn(requestSummaryForSPDX);
-        given(this.projectServiceMock.importCycloneDX(any(),any(),any())).willReturn(requestSummaryForCycloneDX);
+        given(this.projectServiceMock.importCycloneDX(any(),any(),any(),anyBoolean())).willReturn(requestSummaryForCycloneDX);
+        given(this.sw360ReportServiceMock.getDocumentName(any(), any())).willReturn(projectName);
         given(this.sw360ReportServiceMock.getProjectBuffer(any(),anyBoolean(),any())).willReturn(ByteBuffer.allocate(10000));
         given(this.projectServiceMock.getProjectsForUser(any(), any())).willReturn(projectList);
         given(this.projectServiceMock.getProjectForUserById(eq(project.getId()), any())).willReturn(project);
@@ -548,12 +586,23 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.projectServiceMock.getProjectForUserById(eq(project6.getId()), any())).willReturn(project6);
         given(this.projectServiceMock.getProjectForUserById(eq(project7.getId()), any())).willReturn(project7);
         given(this.projectServiceMock.getProjectForUserById(eq(project8.getId()), any())).willReturn(project8);
+        given(this.sw360ReportServiceMock.downloadSourceCodeBundle(any(), any(), any())).willReturn(ByteBuffer.allocate(10000));
+        given(this.sw360ReportServiceMock.getSourceCodeBundleName(any(), any())).willReturn("SourceCodeBundle-ProjectName");
         given(this.projectServiceMock.getLicenseInfoAttachmentUsage(eq(project8.getId()))).willReturn(licenseInfoUsages);
         given(this.projectServiceMock.getObligationData(eq(project8.getLinkedObligationId()), any())).willReturn(obligationLists);
+        given(this.projectServiceMock.setObligationsFromAdminSection(any(), any(), any(), any())).willReturn(obligationStatusMapFromAdminSection);
         given(this.projectServiceMock.setLicenseInfoWithObligations(eq(obligationStatusMap), eq(releaseIdToAcceptedCLI), any(), any())).willReturn(obligationStatusMap);
         given(this.projectServiceMock.getLicensesFromAttachmentUsage(eq(licenseInfoUsages), any())).willReturn(licensesFromAttachmentUsage);
         given(this.projectServiceMock.getLicenseObligationData(eq(licensesFromAttachmentUsage), any())).willReturn(obligationStatusMap);
-        given(this.projectServiceMock.updateLinkedObligations(any(), any(), eq(obligationStatusMap))).willReturn(RequestStatus.SUCCESS);
+        given(this.projectServiceMock.addLinkedObligations(any(), any(), eq(obligationStatusMap))).willReturn(RequestStatus.SUCCESS);
+        given(this.projectServiceMock.compareObligationStatusMap(any(), any(), any())).willReturn(obligationStatusMap);
+        given(this.projectServiceMock.patchLinkedObligations(any(), any(), any())).willReturn(RequestStatus.SUCCESS);
+        given(this.projectServiceMock.getProjectForUserById(eq(project9.getId()), any())).willReturn(project9);
+        given(this.projectServiceMock.getUsedAttachments(any(), any())).willReturn(attachmentUsageNewList);
+        given(this.projectServiceMock.validate(any(), any(), any(), any())).willReturn(true);
+        given(this.projectServiceMock.deselectedAttachmentUsagesFromRequest(any(), eq(selectedUsages), any(), any(), any())).willReturn(deselectedUsagesFromRequest);
+        given(this.projectServiceMock.selectedAttachmentUsagesFromRequest(any(), eq(selectedUsages), any(), any(), any())).willReturn(selectedUsagesFromRequest);
+        given(this.projectServiceMock.removeOrphanObligations(eq(obligationStatusMap), any(), eq(project8), any(), eq(obligationLists))).willReturn(RequestStatus.SUCCESS);
         given(this.projectServiceMock.getProjectForUserById(eq(projectForAtt.getId()), any())).willReturn(projectForAtt);
         given(this.projectServiceMock.getProjectForUserById(eq(SPDXProject.getId()), any())).willReturn(SPDXProject);
         given(this.projectServiceMock.getProjectForUserById(eq(cycloneDXProject.getId()), any())).willReturn(cycloneDXProject);
@@ -564,6 +613,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.projectServiceMock.searchProjectByGroup(any(), any())).willReturn(new ArrayList<Project>(projectList));
         given(this.projectServiceMock.refineSearch(any(), any())).willReturn(projectListByName);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), any(), eq(false))).willReturn(releaseIds);
+        given(this.projectServiceMock.getReleaseIds(eq(project9.getId()), any(), eq(true))).willReturn(releaseIds2);
         given(this.projectServiceMock.getReleaseIds(eq(project.getId()), any(), eq(true))).willReturn(releaseIdsTransitive);
         given(this.projectServiceMock.deleteProject(eq(project.getId()), any())).willReturn(RequestStatus.SUCCESS);
         given(this.projectServiceMock.updateProjectReleaseRelationship(any(), any(), any())).willReturn(projectReleaseRelationshipResponseBody);
@@ -685,6 +735,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                 new User("admin@sw360.org", "sw360").setId("123456789"));
         given(this.userServiceMock.getUserByEmail("jane@sw360.org")).willReturn(
                 new User("jane@sw360.org", "sw360").setId("209582812"));
+        given(this.userServiceMock.getUserByEmail("clearingTeam@sw360.org")).willReturn(
+                new User("clearingTeam@sw360.org", "sw360").setId("2012312"));
         OutputFormatInfo outputFormatInfo = new OutputFormatInfo();
         outputFormatInfo.setFileExtension("html");
         given(this.licenseInfoMockService.getOutputFormatInfoForGeneratorClass(any()))
@@ -692,7 +744,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         LicenseInfoFile licenseInfoFile = new LicenseInfoFile();
         licenseInfoFile.setGeneratedOutput(new byte[0]);
         given(this.licenseInfoMockService.getLicenseInfoFile(any(), any(), any(), any(),
-                any(),any(), any())).willReturn(licenseInfoFile);
+                any(),any(), any(), eq(false))).willReturn(licenseInfoFile);
+        given(this.licenseInfoMockService.getLicenseInfoFile(any(), any(), any(), any(),
+                any(),any(), any(), eq(true))).willReturn(licenseInfoFile);
 
         Source ownerSrc1 = Source.releaseId("9988776655");
         Source usedBySrc = Source.projectId(project.getId());
@@ -792,20 +846,20 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         given(this.vulnerabilityMockService.fillVulnerabilityMetadata(any(), any())).willReturn(vulIdToRelIdToRatings);
         given(this.vulnerabilityMockService.updateProjectVulnerabilityRating(any(), any())).willReturn(RequestStatus.SUCCESS);
         given(this.projectServiceMock.getReleasesFromProjectIds(any(), anyBoolean(), any(), any())).willReturn(Set.of(rel));
+        given(this.projectServiceMock.getLinkedReleasesOfSubProjects(any(), any())).willReturn(List.of(release, release2));
     }
 
     @Test
     public void should_document_get_projects() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
                                 parameterWithName("sort").description("Defines order of the projects")
@@ -831,9 +885,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_usedbyresource_for_project() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/usedBy/" + project.getId())
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -849,25 +902,24 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_obligations_from_license_db() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project8.getId() + "/licenseDbObligations")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("page", "0")
-                .param("page_entries", "5")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page")
                         ),
                         responseFields(
-                                subsectionWithPath("licenseObligations.obligation_title").description("Title of license obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.text").description("Text of license obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.licenseIds[]").description("List of licenseIds"),
-                                subsectionWithPath("licenseObligations.obligation_title.id").description("Id of the obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.releaseIdToAcceptedCLI").description("Releases having accepted attachments"),
-                                subsectionWithPath("licenseObligations.obligation_title.obligationType").description("Type of the obligation"),
+                                subsectionWithPath("obligations.obligation_title").description("Title of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.text").description("Text of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.licenseIds[]").description("List of licenseIds"),
+                                subsectionWithPath("obligations.obligation_title.id").description("Id of the obligation"),
+                                subsectionWithPath("obligations.obligation_title.releaseIdToAcceptedCLI").description("Releases having accepted attachments"),
+                                subsectionWithPath("obligations.obligation_title.obligationType").description("Type of the obligation"),
                                 fieldWithPath("page").description("Additional paging information"),
                                 fieldWithPath("page.size").description("Number of obligations per page"),
                                 fieldWithPath("page.totalElements").description("Total number of all license obligations"),
@@ -880,38 +932,56 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         MockHttpServletRequestBuilder requestBuilder = post("/api/projects/" + "123456733" + "/licenseObligation");
         List<String> licenseObligationIds = Arrays.asList("0001");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(licenseObligationIds))
-                .header("Authorization", "Bearer " + accessToken)).andExpect(status().isCreated());
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))).andExpect(status().isCreated());
+    }
+
+    @Test
+    public void should_document_update_license_obligations() throws Exception {
+        MockHttpServletRequestBuilder requestBuilder = patch("/api/projects/" + project8.getId() + "/updateLicenseObligation");
+        ObligationStatusInfo obligationStatusInfo = new ObligationStatusInfo();
+        obligationStatusInfo.setComment("updating comment");
+        obligationStatusInfo.setStatus(ObligationStatus.ESCALATED);
+        Map<String, ObligationStatusInfo> licOblMap = new HashMap<>();
+        licOblMap.put("obligation_title", obligationStatusInfo);
+
+        this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(licOblMap))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))).andExpect(status().isCreated());
     }
 
     @Test
     public void should_document_get_attachment_usage_for_project() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/attachmentUsage")
-                .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("transitive", "true")
+                .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
-                .andDo(this.documentationHandler.document(responseFields(
-                        subsectionWithPath("releaseIdToUsage").description("The relationship between linked releases of the project"),
-                        subsectionWithPath("linkedProjects").description("The linked projects"),
-                        subsectionWithPath("_embedded.sw360:release").description("An array of linked releases"),
-                        subsectionWithPath("_embedded.sw360:attachmentUsages").description("An array of project's attachment usages"))));
+                .andDo(this.documentationHandler.document(
+                        queryParameters(
+                                parameterWithName("transitive").description("Get the transitive releases")
+                        ),
+                        responseFields(
+                                subsectionWithPath("releaseIdToUsage").description("The relationship between linked releases of the project"),
+                                subsectionWithPath("linkedProjects").description("The linked projects"),
+                                subsectionWithPath("_embedded.sw360:release").description("An array of linked releases"),
+                                subsectionWithPath("_embedded.sw360:attachmentUsages").description("An array of project's attachment usages")
+                        )));
     }
 
     @Test
     public void should_document_get_projects_with_all_details() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("allDetails", "true")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("allDetails", "true")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("allDetails").description("Flag to get projects with all details. Possible values are `<true|false>`"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -923,6 +993,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("last").description("Link to last page")
                         ),
                         responseFields(
+                                subsectionWithPath("_embedded.sw360:projects.[]id").description("The id of the project"),
                                 subsectionWithPath("_embedded.sw360:projects.[]name").description("The name of the project"),
                                 subsectionWithPath("_embedded.sw360:projects.[]version").description("The project version"),
                                 subsectionWithPath("_embedded.sw360:projects.[]createdOn").description("The date the project was created"),
@@ -980,9 +1051,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId())
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -990,6 +1060,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("self").description("The <<resources-projects,Projects resource>>")
                         ),
                         responseFields(
+                                fieldWithPath("id").description("The id of the project"),
                                 fieldWithPath("name").description("The name of the project"),
                                 fieldWithPath("version").description("The project version"),
                                 fieldWithPath("createdOn").description("The date the project was created"),
@@ -1040,17 +1111,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_projects_by_type() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("type", project.getProjectType().toString())
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("type", project.getProjectType().toString())
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("type").description("Project types = `{CUSTOMER, INTERNAL, PRODUCT, SERVICE, INNER_SOURCE}`"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1082,27 +1152,58 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_license_obligations() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project8.getId() + "/licenseObligations")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("page", "0")
-                .param("page_entries", "5")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page")
                         ),
                         responseFields(
-                                subsectionWithPath("licenseObligations.obligation_title").description("Title of license obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.text").description("Text of license obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.releaseIdToAcceptedCLI").description("Release Ids having accepted attachments"),
-                                subsectionWithPath("licenseObligations.obligation_title.licenseIds[]").description("List of licenseIds"),
-                                subsectionWithPath("licenseObligations.obligation_title.comment").description("Comment on the obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.status").description("Status of the obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.id").description("Id of the obligation"),
-                                subsectionWithPath("licenseObligations.obligation_title.obligationType").description("Type of the obligation"),
+                                subsectionWithPath("obligations.obligation_title").description("Title of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.text").description("Text of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.releaseIdToAcceptedCLI").description("Release Ids having accepted attachments"),
+                                subsectionWithPath("obligations.obligation_title.licenseIds[]").description("List of licenseIds"),
+                                subsectionWithPath("obligations.obligation_title.comment").description("Comment on the obligation"),
+                                subsectionWithPath("obligations.obligation_title.status").description("Status of the obligation"),
+                                subsectionWithPath("obligations.obligation_title.id").description("Id of the obligation"),
+                                subsectionWithPath("obligations.obligation_title.obligationType").description("Type of the obligation"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of obligations per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all license obligations"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
+    }
+
+    @Test
+    public void should_document_get_project_page_obligations() throws Exception {
+        mockMvc.perform(get("/api/projects/" + project8.getId() + "/obligation")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .param("obligationLevel", "License")
+                        .param("page", "0")
+                        .param("page_entries", "5")
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        queryParameters(
+                                parameterWithName("obligationLevel").description("Possible values are: [LICENSE, PROJECT, COMPONENT or ORGANIZATION]"),
+                                parameterWithName("page").description("Page of projects"),
+                                parameterWithName("page_entries").description("Amount of projects per page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("obligations.obligation_title").description("Title of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.text").description("Text of license obligation"),
+                                subsectionWithPath("obligations.obligation_title.releaseIdToAcceptedCLI").description("Release Ids having accepted attachments"),
+                                subsectionWithPath("obligations.obligation_title.licenseIds[]").description("List of licenseIds"),
+                                subsectionWithPath("obligations.obligation_title.comment").description("Comment on the obligation"),
+                                subsectionWithPath("obligations.obligation_title.status").description("Status of the obligation"),
+                                subsectionWithPath("obligations.obligation_title.id").description("Id of the obligation"),
+                                subsectionWithPath("obligations.obligation_title.obligationType").description("Type of the obligation"),
                                 fieldWithPath("page").description("Additional paging information"),
                                 fieldWithPath("page.size").description("Number of obligations per page"),
                                 fieldWithPath("page.totalElements").description("Total number of all license obligations"),
@@ -1113,17 +1214,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_projects_by_group() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("group", project.getBusinessUnit())
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("group", project.getBusinessUnit())
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("group").description("The project group"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1151,17 +1251,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_projects_by_tag() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("tag", project.getTag())
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("tag", project.getTag())
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("tag").description("The project tag"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1189,17 +1288,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_projects_by_name() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("name", project.getName())
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("name", project.getName())
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("name").description("The name of the project"),
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects per page"),
@@ -1227,21 +1325,20 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_projects_by_lucene_search() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("name", project.getName())
-                .param("type", project.getProjectType().name())
-                .param("group", project.getBusinessUnit())
-                .param("tag", project.getTag())
-                .param("luceneSearch", "true")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("name", project.getName())
+                .queryParam("type", project.getProjectType().name())
+                .queryParam("group", project.getBusinessUnit())
+                .queryParam("tag", project.getTag())
+                .queryParam("luceneSearch", "true")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("name").description("The name of the project"),
                                 parameterWithName("type").description("The type of the project"),
                                 parameterWithName("group").description("The group of the project"),
@@ -1278,10 +1375,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         externalIdsQuery.put("project-ext", new HashSet<>(Arrays.asList("515432", "7657")));
         given(this.projectServiceMock.searchByExternalIds(eq(externalIdsQuery), any())).willReturn((new HashSet<>(projectList)));
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/searchByExternalIds?project-ext=515432&project-ext=7657&portal-id=13319-XX3")
                 .contentType(MediaTypes.HAL_JSON)
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         responseFields(
@@ -1296,17 +1392,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_license_clearing() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/licenseClearing")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("transitive", "true")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("transitive", "true")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases page"),
@@ -1325,17 +1420,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_linked_projects() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/linkedProjects")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("transitive", "false")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("transitive", "false")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects page"),
                                 parameterWithName("sort").description("Defines order of the projects"),
@@ -1359,16 +1453,15 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_linked_projects_transitive() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + "12345" + "/linkedProjects?transitive=true")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("page").description("Page of projects"),
                                 parameterWithName("page_entries").description("Amount of projects page"),
                                 parameterWithName("sort").description("Defines order of the projects"),
@@ -1392,17 +1485,16 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project_releases() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/releases")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("transitive", "false")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("transitive", "false")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases page"),
@@ -1426,19 +1518,18 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project_vulnerabilities() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/vulnerabilities")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("priority", "1 - critical")
-                .param("priority", "2 - major")
-                .param("projectRelevance", "IRRELEVANT")
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "externalId,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("priority", "1 - critical")
+                .queryParam("priority", "2 - major")
+                .queryParam("projectRelevance", "IRRELEVANT")
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "externalId,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("priority").description("The priority of vulnerability. For example: `1 - critical`, `2 - major`"),
                                 parameterWithName("projectRelevance").description("The relevance of project of the vulnerability, possible values are: " + Arrays.asList(VulnerabilityRatingForProject.values())),
                                 parameterWithName("page").description("Page of vulnerabilities"),
@@ -1469,16 +1560,52 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_project_vulnerability_summary() throws Exception {
+        mockMvc.perform(get("/api/projects/" + project.getId() + "/vulnerabilitySummary")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .param("page", "0")
+                        .param("page_entries", "5")
+                        .param("sort", "externalId,desc")
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        queryParameters(
+                                parameterWithName("page").description("Page of vulnerabilities"),
+                                parameterWithName("page_entries").description("Amount of vulnerability page"),
+                                parameterWithName("sort").description("Defines order of the vulnerability on the basis of externalId")
+                        ),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]priority").description("The priority of vulnerability"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]action").description("The action of vulnerability"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]projectRelevance").description("The relevance of project of the vulnerability, possible values are: " + Arrays.asList(VulnerabilityRatingForProject.values())),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]comment").description("Any message to added while updating project vulnerabilities"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]intReleaseId").description("The release id"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries.[]intReleaseName").description("The release name"),
+                                subsectionWithPath("_embedded.sw360:vulnerabilitySummaries").description("An array of <<resources-vulnerabilities, Vulnerability resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of vulnerability per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing vulnerability"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
+    }
+
+    @Test
     public void should_document_get_project_vulnerabilities_by_externalid() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/vulnerabilities")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("releaseId", "21055")
-                .param("externalId", "12345")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("releaseId", "21055")
+                .queryParam("externalId", "12345")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("releaseId").description("The release Id of vulnerability."),
                                 parameterWithName("externalId").description("The external Id of vulnerability.")
                         ),
@@ -1507,11 +1634,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         vulDtoMap.put("projectAction", "Lorem Ipsum");
         List<Map<String, String>> vulDtoMaps = new ArrayList<Map<String, String>>();
         vulDtoMaps.add(vulDtoMap);
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(patch("/api/projects/" + project.getId() + "/vulnerabilities")
                 .contentType(MediaType.APPLICATION_JSON_VALUE)
                 .content(this.objectMapper.writeValueAsString(vulDtoMaps))
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -1529,10 +1655,40 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_linked_project_releases() throws Exception {
+        mockMvc.perform(get("/api/projects/" + project.getId() + "/linkedProjects/releases")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .param("page", "0")
+                .param("page_entries", "5")
+                .param("sort", "name,desc")
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        queryParameters(
+                                parameterWithName("page").description("Page of releases"),
+                                parameterWithName("page_entries").description("Amount of releases page"),
+                                parameterWithName("sort").description("Defines order of the releases")
+                        ),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of releases per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing releases"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
+    }
+
+    @Test
     public void should_document_get_project_releases_transitive() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/releases?transitive=true")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -1547,16 +1703,15 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project_releases_ecc_information() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/releases/ecc?transitive=false")
-                .header("Authorization", "Bearer " + accessToken)
-                .param("page", "0")
-                .param("page_entries", "5")
-                .param("sort", "name,desc")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("page", "0")
+                .queryParam("page_entries", "5")
+                .queryParam("sort", "name,desc")
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("transitive").description("Get the transitive releases"),
                                 parameterWithName("page").description("Page of releases"),
                                 parameterWithName("page_entries").description("Amount of releases per page"),
@@ -1581,9 +1736,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project_attachment_info() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/attachments")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
@@ -1600,11 +1754,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         Attachment updateAttachment = new Attachment().setAttachmentType(AttachmentType.BINARY)
                 .setCreatedComment("Created Comment").setCheckStatus(CheckStatus.ACCEPTED)
                 .setCheckedComment("Checked Comment");
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc
                 .perform(patch("/api/projects/98745/attachment/1234").contentType(MediaTypes.HAL_JSON)
                         .content(this.objectMapper.writeValueAsString(updateAttachment))
-                        .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                 requestFields(
@@ -1631,12 +1784,52 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_project_attachment() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId() + "/attachments/" + attachment.getAttachmentContentId())
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept("application/*"))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document());
+    }
+
+    @Test
+    public void should_document_create_clearing_request() throws Exception {
+        Map<String, Object> cr = new HashMap<>();
+        cr.put("clearingType", ClearingRequestType.DEEP.toString());
+        cr.put("clearingTeam", "clearingTeam@sw360.org");
+        LocalDate requestedClearingDate = LocalDate.now().plusDays(7);
+        cr.put("requestedClearingDate", requestedClearingDate.toString());
+        cr.put("requestingUserComment", "New clearing");
+        cr.put("priority", "HIGH");
+        this.mockMvc.perform(post("/api/projects/" + project.getId() + "/clearingRequest")
+                .contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(cr))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                .andExpect(status().isCreated())
+                .andDo(this.documentationHandler.document(
+                        links(linkWithRel("self").description("The <<resources-projects,Projects resource>>")),
+                        requestFields(fieldWithPath("clearingTeam").description("Email of the clearing team. This is a mandatory field."),
+                                fieldWithPath("requestedClearingDate").description(
+                                        "Requested clearing date of the project. It should be in the format yyyy-MM-dd and requested after the "
+                                        + "configured clearing date limit. This is a mandatory field."),
+                                fieldWithPath("clearingType").description("Clearing type of the project. Possible values are: "
+                                        + Arrays.asList(ClearingRequestType.values()).toString() + ". This is a mandatory field."),
+                                fieldWithPath("requestingUserComment").description("Requesting user comment on the clearing of the project."),
+                                fieldWithPath("priority")
+                                        .description("Priority of the clearing request. Possible values are: "
+                                                + Arrays.asList(ClearingRequestPriority.values()).toString())
+                                ),
+                        responseFields(fieldWithPath("id").description("Clearing request id."),
+                                fieldWithPath("projectId").description("Project id associated with clearing request."),
+                                fieldWithPath("clearingState").description("Clearing state of the project."),
+                                fieldWithPath("clearingTeam").description("Clearing team of the project."),
+                                fieldWithPath("requestedClearingDate")
+                                        .description("Requested clearing date of the project."),
+                                fieldWithPath("clearingType").description("Clearing type of the project."),
+                                fieldWithPath("requestingUser").description("User requesting the clearing of the project."),
+                                fieldWithPath("requestingUserComment").description("Requesting user comment on the clearing of the project."),
+                                fieldWithPath("priority").description("Priority of the clearing request."),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                  )));
     }
 
     @Test
@@ -1659,11 +1852,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project.put("state", ProjectState.ACTIVE.toString());
         project.put("phaseOutSince", "2020-06-24");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(post("/api/projects")
                 .contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(project))
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("_embedded.createdBy.email", Matchers.is("admin@sw360.org")))
                 .andDo(this.documentationHandler.document(
@@ -1682,6 +1874,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("phaseOutSince").description("The project phase-out date")
                         ),
                         responseFields(
+                                fieldWithPath("id").description("The project id"),
                                 fieldWithPath("name").description("The name of the project"),
                                 fieldWithPath("version").description("The project version"),
                                 fieldWithPath("visibility").description("The project visibility, possible values are: " + Arrays.asList(Visibility.values())),
@@ -1719,11 +1912,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         projectReqs.put("state", ProjectState.ACTIVE.toString());
         projectReqs.put("phaseOutSince", "2020-06-24");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(post("/api/projects/duplicate/" + project.getId())
                 .contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(projectReqs))
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("_embedded.createdBy.email", Matchers.is("admin@sw360.org")))
                 .andDo(this.documentationHandler.document(
@@ -1742,6 +1934,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("phaseOutSince").description("The project phase-out date")
                         ),
                         responseFields(
+                                fieldWithPath("id").description("The project id"),
                                 fieldWithPath("name").description("The name of the project"),
                                 fieldWithPath("version").description("The project version"),
                                 fieldWithPath("visibility").description("The project visibility, possible values are: " + Arrays.asList(Visibility.values())),
@@ -1768,11 +1961,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         updateProject.setVersion("1.0");
         updateProject.setState(ProjectState.PHASE_OUT);
         updateProject.setPhaseOutSince("2020-06-24");
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc
                 .perform(patch("/api/projects/376576").contentType(MediaTypes.HAL_JSON)
                         .content(this.objectMapper.writeValueAsString(updateProject))
-                        .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                 links(linkWithRel("self").description("The <<resources-projects,Projects resource>>")),
@@ -1791,7 +1983,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                         fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
                         fieldWithPath("phaseOutSince").description("The project phase-out date"),
                         fieldWithPath("enableVulnerabilitiesDisplay").description("Displaying vulnerabilities flag.")),
-                responseFields(fieldWithPath("name").description("The name of the project"),
+                responseFields(
+                        fieldWithPath("id").description("The project id"),
+                        fieldWithPath("name").description("The name of the project"),
                         fieldWithPath("version").description("The project version"),
                         fieldWithPath("createdOn").description("The date the project was created"),
                         fieldWithPath("description").description("The project description"),
@@ -1857,15 +2051,29 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         MockHttpServletRequestBuilder requestBuilder = post("/api/projects/" + "1234567" + "/linkProjects");
         List<String> projectIds = Arrays.asList("345678");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(projectIds))
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isCreated())
                 .andDo(this.documentationHandler.document(
                         responseFields(
                                 fieldWithPath("Message regarding successfully linked project(s)").description("project linked to respective project ids").optional()
                         )));
+    }
+
+    @Test
+    public void should_document_save_usages() throws Exception {
+        MockHttpServletRequestBuilder requestBuilder = post("/api/projects/" + "0000007" + "/saveAttachmentUsages");
+        Map<String, List<String>> usages = Map.of(
+            "selected", new ArrayList<>(List.of("00000071_sourcePackage_1234")),
+            "deselected", new ArrayList<>(List.of()),
+            "selectedConcludedUsages", new ArrayList<>(List.of()),
+            "deselectedConcludedUsages", new ArrayList<>(List.of()));
+
+        this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
+                .content(this.objectMapper.writeValueAsString(usages))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                .andExpect(status().isCreated());
     }
 
     @Test
@@ -1914,11 +2122,10 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         ProjectReleaseRelationship updateProjectReleaseRelationship = new ProjectReleaseRelationship()
                 .setComment("Test Comment").setMainlineState(MainlineState.SPECIFIC)
                 .setReleaseRelation(ReleaseRelationship.STANDALONE);
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc
                 .perform(patch("/api/projects/376576/release/3765276512").contentType(MediaTypes.HAL_JSON)
                         .content(this.objectMapper.writeValueAsString(updateProjectReleaseRelationship))
-                        .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                 requestFields(
@@ -1936,32 +2143,68 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_download_license_info() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE&externalIds=portal-id,main-project-id")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .param("module", "licenseInfo")
+                .param("projectId", project.getId())
+                .param("generatorClassName", "XhtmlGenerator")
+                .param("variant", "DISCLOSURE")
+                .param("externalIds", "portal-id,main-project-id")
                 .accept("application/xhtml+xml"))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler
-                        .document(requestParameters(
+                        .document(queryParameters(
+                                parameterWithName("generatorClassName").description("Projects download format. Possible values are `<DocxGenerator|XhtmlGenerator|TextGenerator>`"),
+                                parameterWithName("variant").description("All the possible values for variants are `<REPORT|DISCLOSURE>`"),
+                                parameterWithName("externalIds").description("The external Ids of the project")
+                                )));
+    }
+    
+    @Test
+    public void should_document_get_download_license_info_without_release_version() throws Exception {
+        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE&excludeReleaseVersion=true")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .accept("application/xhtml+xml"))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler
+                        .document(queryParameters(
                                 parameterWithName("generatorClassName")
                                         .description("All possible values for output generator class names are "
                                                 + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
                                 parameterWithName("variant").description("All the possible values for variants are "
                                         + Arrays.asList(OutputFormatVariant.values())),
-                                parameterWithName("externalIds").description("The external Ids of the project")
+                                parameterWithName("excludeReleaseVersion").description("Exclude version of the components from the generated license info file. "
+                                		+ "Possible values are `<true|false>`")
                                 )));
     }
 
     @Test
+    public void should_document_get_download_license_info_with_all_attachemnts() throws Exception {
+        this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseinfo?generatorClassName=XhtmlGenerator&variant=DISCLOSURE&includeAllAttachments=true")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .accept("application/xhtml+xml"))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler
+                        .document(queryParameters(
+                                parameterWithName("generatorClassName")
+                                        .description("All possible values for output generator class names are "
+                                                + Arrays.asList("DocxGenerator", "XhtmlGenerator", "TextGenerator")),
+                                parameterWithName("variant").description("All the possible values for variants are "
+                                        + Arrays.asList(OutputFormatVariant.values())),
+                                parameterWithName("includeAllAttachments").description("Set this option to `true` to include all attachments from linked releases. "
+                                        + "Note that only one attachment per release will be parsed for "
+                                        + "license information, and if available, a CLX file will be preferred over an ISR file."))));
+    }
+
+    @Test
     public void should_document_get_projects_releases() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(get("/api/projects/releases")
-                 .header("Authorization", "Bearer " + accessToken)
-                 .param("clearingState", ClearingState.APPROVED.toString())
-                 .param("transitive", "false")
-                 .param("page", "0")
-                 .param("page_entries", "5")
-                 .param("sort", "name,desc")
+                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                 .queryParam("clearingState", ClearingState.APPROVED.toString())
+                 .queryParam("transitive", "false")
+                 .queryParam("page", "0")
+                 .queryParam("page_entries", "5")
+                 .queryParam("sort", "name,desc")
                  .content(this.objectMapper.writeValueAsString(List.of("376576","376570")))
                  .contentType(MediaTypes.HAL_JSON)
                  .accept(MediaTypes.HAL_JSON))
@@ -1972,7 +2215,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                      linkWithRel("first").description("Link to first page"),
                                      linkWithRel("last").description("Link to last page")
                                      ),
-                             requestParameters(
+                             queryParameters(
                                      parameterWithName("transitive").description("Get the transitive releases"),
                                      parameterWithName("clearingState").description("The clearing state of the release. Possible values are: "+Arrays.asList(ClearingState.values())),
                                      parameterWithName("page").description("Page of releases"),
@@ -2014,9 +2257,19 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_delete_project() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(delete("/api/projects/" + project.getId())
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void should_document_remove_orphaned_obligations() throws Exception {
+        List<String> orphanedObligationTitles = Arrays.asList("obligation_title");
+        mockMvc.perform(patch("/api/projects/" + project8.getId() + "/orphanObligation")
+                .content(this.objectMapper.writeValueAsString(orphanedObligationTitles))
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk());
     }
@@ -2024,10 +2277,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     private void add_patch_releases(MockHttpServletRequestBuilder requestBuilder) throws Exception {
         List<String> releaseIds = Arrays.asList("3765276512", "5578999", "3765276513");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(releaseIds))
-                .header("Authorization", "Bearer " + accessToken)).andExpect(status().isCreated());
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))).andExpect(status().isCreated());
     }
 
     private void link_unlink_packages(MockHttpServletRequestBuilder requestBuilder) throws Exception {
@@ -2037,10 +2289,9 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         packageIds.add("4444444467");
         packageIds.add("5555555576");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(packageIds))
-                .header("Authorization", "Bearer " + accessToken)).andExpect(status().isCreated());
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))).andExpect(status().isCreated());
     }
 
     private void add_patch_releases_with_project_release_relation(MockHttpServletRequestBuilder requestBuilder)
@@ -2053,32 +2304,30 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         ImmutableMap<String, ProjectReleaseRelationship> releaseIdToUsage = ImmutableMap
                 .<String, ProjectReleaseRelationship>builder().put("12345", projectReleaseRelationship1)
                 .put("54321", projectReleaseRelationship2).build();
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(requestBuilder.contentType(MediaTypes.HAL_JSON)
                 .content(this.objectMapper.writeValueAsString(releaseIdToUsage))
-                .header("Authorization", "Bearer " + accessToken)).andExpect(status().isCreated());
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))).andExpect(status().isCreated());
     }
 
     @Test
     public void should_document_get_my_projects() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/myprojects")
-                        .header("Authorization", "Bearer " + accessToken)
-                        .param("createdBy", "true")
-                        .param("moderator", "true")
-                        .param("contributor", "true")
-                        .param("projectOwner", "true")
-                        .param("leadArchitect", "true")
-                        .param("projectResponsible", "true")
-                        .param("securityResponsible", "true")
-                        .param("stateOpen", "true")
-                        .param("stateClosed", "true")
-                        .param("stateInProgress", "true")
-                        .param("allDetails", "true")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .queryParam("createdBy", "true")
+                        .queryParam("moderator", "true")
+                        .queryParam("contributor", "true")
+                        .queryParam("projectOwner", "true")
+                        .queryParam("leadArchitect", "true")
+                        .queryParam("projectResponsible", "true")
+                        .queryParam("securityResponsible", "true")
+                        .queryParam("stateOpen", "true")
+                        .queryParam("stateClosed", "true")
+                        .queryParam("stateInProgress", "true")
+                        .queryParam("allDetails", "true")
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("createdBy").description("Projects with current user as creator. Possible values are `<true|false>`"),
                                 parameterWithName("moderator").description("Projects with current user as moderator. Possible values are `<true|false>`"),
                                 parameterWithName("contributor").description("Projects with current user as contributor. Possible values are `<true|false>`"),
@@ -2106,20 +2355,18 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     @Test
     public void should_document_import_spdx() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file","file=@/bom.spdx.rdf".getBytes());
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.post("/api/projects/import/SBOM")
                 .content(file.getBytes())
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .queryParam("type", "SPDX");
         this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
     }
 
     @Test
     public void should_document_get_project_count() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(get("/api/projects/projectcount")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON)
                 .contentType(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
@@ -2132,9 +2379,8 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_get_license_clearing_information() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         this.mockMvc.perform(get("/api/projects/" + project.getId()+ "/licenseClearingCount")
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON)
                 .contentType(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
@@ -2147,13 +2393,13 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_create_summary_administration() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/projects/" + project.getId()+ "/summaryAdministration")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         responseFields(
+                                fieldWithPath("id").description("The project id"),
                                 fieldWithPath("name").description("The name of the project"),
                                 fieldWithPath("version").description("The project version"),
                                 fieldWithPath("createdOn").description("The date the project was created"),
@@ -2199,103 +2445,55 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
-    public void should_document_get_project_report() throws Exception{
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-        mockMvc.perform(get("/api/reports")
-                        .header("Authorization", "Bearer " + accessToken)
-                        .param("withlinkedreleases", "true")
-                        .param("mimetype", "xlsx")
-                        .param("mailrequest", "true")
-                        .param("module", "projects")
-                        .accept(MediaTypes.HAL_JSON))
+    public void should_document_get_project_report() throws Exception {
+        mockMvc.perform(get("/api/reports").
+                header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .queryParam("withlinkedreleases", "true")
+                .queryParam("mimetype", "xlsx")
+                .queryParam("module", "projects")
+                .queryParam("excludeReleaseVersion", "false")
+                .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
-                                parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
-                                parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`")
-                        ),responseFields(
-                                subsectionWithPath("response").description("The response message displayed").optional()
-                                )
-                        ));
-    }
-
-    @Test
-    public void should_document_get_project_report_without_mail_req() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-        mockMvc.perform(get("/api/reports")
-                        .header("Authorization", "Bearer " + accessToken)
-                        .param("withlinkedreleases", "true")
-                        .param("mimetype", "xlsx")
-                        .param("mailrequest", "false")
-                        .param("module", "projects")
-                        .accept("application/xhtml+xml"))
-                .andExpect(status().isOk())
-                .andDo(this.documentationHandler.document(
-                        requestParameters(
-                                parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
-                                parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
-                                parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
-                                parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`")
-                        )));
+                                parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`"),
+                                parameterWithName("excludeReleaseVersion").description("Exclude version of the components from the generated license info file. "
+                                        + "Possible values are `<true|false>`")
+                        )
+                ));
     }
 
     @Test
     public void should_document_get_project_licenseclearing_spreadsheet() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         mockMvc.perform(get("/api/reports")
-                        .header("Authorization", "Bearer " + accessToken)
-                        .param("withlinkedreleases", "true")
-                        .param("mimetype", "xlsx")
-                        .param("mailrequest", "true")
-                        .param("module", "projects")
-                        .param("projectId", project.getId())
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .queryParam("withlinkedreleases", "true")
+                        .queryParam("mimetype", "xlsx")
+                        .queryParam("module", "projects")
+                        .queryParam("projectId", project.getId())
+                        .queryParam("excludeReleaseVersion", "false")
                         .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        requestParameters(
+                        queryParameters(
                                 parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
                                 parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
-                                parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
                                 parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`"),
-                                parameterWithName("projectId").description("Id of a project")
-                        ),responseFields(
-                                subsectionWithPath("response").description("The response message displayed").optional()
-                                )
-                        ));
-    }
-
-    @Test
-    public void should_document_get_project_licenseclearing_spreadsheet_without_mail_req() throws Exception{
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
-        mockMvc.perform(get("/api/reports")
-                        .header("Authorization", "Bearer " + accessToken)
-                        .param("withlinkedreleases", "true")
-                        .param("mimetype", "xlsx")
-                        .param("mailrequest", "false")
-                        .param("module", "projects")
-                        .param("projectId", project.getId())
-                        .accept("application/xhtml+xml"))
-                .andExpect(status().isOk())
-                .andDo(this.documentationHandler.document(
-                        requestParameters(
-                                parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
-                                parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
-                                parameterWithName("mailrequest").description("Downloading project report requirted mail link. Possible values are `<true|false>`"),
-                                parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`"),
-                                parameterWithName("projectId").description("Id of a project")
+                                parameterWithName("projectId").description("Id of a project"),
+                                parameterWithName("excludeReleaseVersion").description("Exclude version of the components from the generated license info file. "
+                                        + "Possible values are `<true|false>`")
                         )));
     }
 
     @Test
     public void should_document_import_cyclonedx() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file","file=@/sampleBOM.xml".getBytes());
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.post("/api/projects/import/SBOM")
                 .content(file.getBytes())
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .header("Authorization", "Bearer " + accessToken)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .queryParam("type", "CycloneDX");
         this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
     }
@@ -2303,25 +2501,24 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
     @Test
     public void should_document_import_cyclonedx_on_project() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file","file=@/sampleBOM.xml".getBytes());
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.post("/api/projects/"+project.getId()+"/import/SBOM")
                 .content(file.getBytes())
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .header("Authorization", "Bearer " + accessToken);
+                .queryParam("doNotReplacePackageAndRelease", "false")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword));
         this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
     }
 
     @Test
     public void should_document_get_project_with_dependencies_network() throws Exception {
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
             mockMvc.perform(get("/api/projects/network/" + project.getId())
-                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                             .accept(MediaTypes.HAL_JSON))
                     .andExpect(status().isInternalServerError());
         } else {
             mockMvc.perform(get("/api/projects/network/" + project.getId())
-                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                             .accept(MediaTypes.HAL_JSON))
                     .andExpect(status().isOk())
                     .andDo(this.documentationHandler.document(
@@ -2416,18 +2613,17 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         project.put("state", ProjectState.ACTIVE.toString());
         project.put("phaseOutSince", "2020-06-24");
 
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
-            this.mockMvc.perform(post("/api/projects/network/")
+            this.mockMvc.perform(post("/api/projects/network")
                             .contentType(MediaTypes.HAL_JSON)
                             .content(this.objectMapper.writeValueAsString(project))
-                            .header("Authorization", "Bearer " + accessToken))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                     .andExpect(status().isInternalServerError());
         } else {
-            this.mockMvc.perform(post("/api/projects/network/")
+            this.mockMvc.perform(post("/api/projects/network")
                             .contentType(MediaTypes.HAL_JSON)
                             .content(this.objectMapper.writeValueAsString(project))
-                            .header("Authorization", "Bearer " + accessToken))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("_embedded.createdBy.email", Matchers.is("admin@sw360.org")))
                     .andDo(this.documentationHandler.document(
@@ -2474,18 +2670,17 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         updateProject.setVersion("1.0");
         updateProject.setState(ProjectState.PHASE_OUT);
         updateProject.setPhaseOutSince("2020-06-24");
-        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
         if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
             this.mockMvc
                     .perform(patch("/api/projects/network/376576").contentType(MediaTypes.HAL_JSON)
                             .content(this.objectMapper.writeValueAsString(updateProject))
-                            .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                     .andExpect(status().isInternalServerError());
         } else {
             this.mockMvc
                     .perform(patch("/api/projects/network/376576").contentType(MediaTypes.HAL_JSON)
                             .content(this.objectMapper.writeValueAsString(updateProject))
-                            .header("Authorization", "Bearer " + accessToken).accept(MediaTypes.HAL_JSON))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                     .andExpect(status().isOk())
                     .andDo(this.documentationHandler.document(
                             links(linkWithRel("self").description("The <<resources-projects,Projects resource>>")),
@@ -2559,6 +2754,396 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                     subsectionWithPath("_embedded.sw360:projectDTOs").description("An array of <<resources-projects, Projects resources>>"),
                                     subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
                                     subsectionWithPath("_embedded.sw360:attachments").description("An array of all project attachments and link to their <<resources-attachment-get,Attachment resource>>"))));
+        }
+    }
+
+    @Test
+    public void should_document_get_list_view_of_dependencies_network() throws Exception {
+        Map<String, String> subProjectView = new HashMap<>();
+        subProjectView.put("isAccessible", "true");
+        subProjectView.put("clearingState", "In Progress");
+        subProjectView.put("type", "Product");
+        subProjectView.put("relation", "Is a subproject");
+        subProjectView.put("isRelease", "false");
+        subProjectView.put("projectState", "Unknown");
+        subProjectView.put("projectOrigin", "Project3 (v0.1)");
+        subProjectView.put("id", "61f4d4781d0a40df9c92d9c79e08030a");
+
+        Map<String, String> rootReleaseView = new HashMap<>();
+        rootReleaseView.put("isAccessible", "true");
+        rootReleaseView.put("clearingState", "Report available");
+        rootReleaseView.put("mainLicenses", "Apache-2.0");
+        rootReleaseView.put("type", "OSS");
+        rootReleaseView.put("projectMainlineState", "Open");
+        rootReleaseView.put("relation", "Contained");
+        rootReleaseView.put("isRelease", "true");
+        rootReleaseView.put("releaseMainlineState", "Open");
+        rootReleaseView.put("projectOrigin", "");
+        rootReleaseView.put("name", "Release1 (2.0)");
+        rootReleaseView.put("releaseOrigin", "");
+        rootReleaseView.put("comment", "Comment");
+        rootReleaseView.put("id", "d8407b28b8c34c71913b324870e38bdc");
+
+        Map<String, String> leafReleaseView = new HashMap<>();
+        leafReleaseView.put("isAccessible", "true");
+        leafReleaseView.put("clearingState", "Report available");
+        leafReleaseView.put("mainLicenses", "Apache-2.0");
+        leafReleaseView.put("type", "OSS");
+        leafReleaseView.put("projectMainlineState", "Open");
+        leafReleaseView.put("relation", "Contained");
+        leafReleaseView.put("isRelease", "true");
+        leafReleaseView.put("releaseMainlineState", "Open");
+        leafReleaseView.put("projectOrigin", "");
+        leafReleaseView.put("name", "Release2 (2.0)");
+        leafReleaseView.put("releaseOrigin", "Release1 (2.0)");
+        leafReleaseView.put("comment", "Comment");
+        leafReleaseView.put("id", "f8407a28b8434c71913b32a870e38bdc");
+
+
+        given(this.projectServiceMock.serveDependencyNetworkListView(eq(project.getId()), any()))
+                .willReturn(List.of(subProjectView, rootReleaseView, leafReleaseView));
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            mockMvc.perform(get("/api/projects/network/" + project.getId() + "/listView")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON)
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            mockMvc.perform(get("/api/projects/network/" + project.getId() + "/listView")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON)
+                            .accept(MediaTypes.HAL_JSON))
+                            .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    public void should_document_get_linked_releases_in_dependency_network_of_project() throws Exception {
+        ReleaseNode subRelease = new ReleaseNode();
+        subRelease.setReleaseId("98765");
+        subRelease.setReleaseName("Component2");
+        subRelease.setReleaseVersion("v2");
+        subRelease.setComponentId("888888");
+        subRelease.setReleaseRelationship(CONTAINED.toString());
+        subRelease.setMainlineState(OPEN.toString());
+        subRelease.setComment("Comment");
+
+        ReleaseNode release = new ReleaseNode();
+        release.setReleaseId("12345");
+        release.setReleaseName("Component1");
+        release.setReleaseVersion("v1");
+        release.setComponentId("777777777");
+        release.setReleaseRelationship(CONTAINED.toString());
+        release.setMainlineState(OPEN.toString());
+        release.setComment("Comment");
+        release.setReleaseLink(List.of(subRelease));
+
+        given(this.projectServiceMock.getLinkedReleasesInDependencyNetworkOfProject(any(), any())).willReturn(List.of(release));
+
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            mockMvc.perform(get("/api/projects/network/888888/linkedReleases")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            mockMvc.perform(get("/api/projects/network/888888/linkedReleases")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    public void should_document_get_linked_resources_of_project_in_dependency_network() throws Exception {
+        ReleaseLink releaseLink = new ReleaseLink();
+        releaseLink.setId("d86a45f8288243fd8395052f1f25b50c");
+        releaseLink.setVendor("");
+        releaseLink.setName("release1");
+        releaseLink.setVersion("v1");
+        releaseLink.setLongName("release1 v1");
+        releaseLink.setReleaseRelationship(CONTAINED);
+        releaseLink.setMainlineState(MAINLINE);
+        releaseLink.setHasSubreleases(true);
+        releaseLink.setClearingState(ClearingState.NEW_CLEARING);
+        releaseLink.setAttachments(List.of(attachment));
+        releaseLink.setComponentType(ComponentType.OSS);
+        releaseLink.setComment("Comment 1");
+        releaseLink.setLayer(0);
+        releaseLink.setIndex(0);
+        releaseLink.setProjectId(project.getId());
+        releaseLink.setReleaseMainLineState(OPEN);
+
+        ProjectLink subProject = new ProjectLink();
+        subProject.setId(project.getId());
+        subProject.setName(project.getName());
+        subProject.setRelation(ProjectRelationship.UNKNOWN);
+        subProject.setVersion(project.getVersion());
+        subProject.setProjectType(project.getProjectType());
+        subProject.setState(project.getState());
+        subProject.setClearingState(project.getClearingState());
+        subProject.setSubprojects(Collections.emptyList());
+        subProject.setEnableSvm(true);
+
+        ProjectLink requestedProject = new ProjectLink();
+        requestedProject.setId("00d7fa23c80e46cc85e4194c3f78a7f2");
+        requestedProject.setName("Subproject");
+        requestedProject.setRelation(ProjectRelationship.CONTAINED);
+        requestedProject.setVersion("v1.1");
+        requestedProject.setProjectType(ProjectType.PRODUCT);
+        requestedProject.setState(ProjectState.ACTIVE);
+        requestedProject.setClearingState(ProjectClearingState.OPEN);
+        requestedProject.setSubprojects(Collections.singletonList(subProject));
+        requestedProject.setLinkedReleases(Collections.singletonList(releaseLink));
+        requestedProject.setEnableSvm(true);
+
+        given(this.projectServiceMock.serveLinkedResourcesOfProjectInDependencyNetwork(eq(project.getId()), eq(false), any())).willReturn(requestedProject);
+
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            this.mockMvc
+                    .perform(get("/api/projects/network/"+project.getId()+"/linkedResources")
+                            .param("transitive", "false")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            this.mockMvc
+                    .perform(
+                            get("/api/projects/network/"+project.getId()+ "/linkedResources")
+                                    .param("transitive", "false")
+                                    .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isOk())
+                    .andDo(this.documentationHandler.document(
+                            queryParameters(
+                                    parameterWithName("transitive").description("This allow to get all transitive linked releases in network")
+                            ),
+                            responseFields(
+                                    fieldWithPath("id").description("The id of the project"),
+                                    fieldWithPath("name").description("The name of the project"),
+                                    fieldWithPath("relation").description("The relationship of the project"),
+                                    fieldWithPath("version").description("The version of the project"),
+                                    fieldWithPath("projectType").description("The project type, possible values are: "
+                                            + Arrays.asList(ProjectType.values())),
+                                    fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
+                                    fieldWithPath("clearingState").description("The clearing state of project, possible values are:" + Arrays.asList(ClearingState.values())),
+                                    fieldWithPath("enableSvm").description("Security vulnerability monitoring flag"),
+                                    subsectionWithPath("linkedReleases").description("List of linked releases in dependency network"),
+                                    subsectionWithPath("subprojects").description("List of sub projects of requested project")
+                            )
+                    ));
+        }
+    }
+
+    @Test
+    public void should_document_get_linked_releases_in_dependency_network_by_index_path() throws Exception {
+        ReleaseLink releaseLink = new ReleaseLink();
+        releaseLink.setId("d86a45f8288243fd8395052f1f25b50c");
+        releaseLink.setVendor("");
+        releaseLink.setName("release1");
+        releaseLink.setVersion("v1");
+        releaseLink.setLongName("release1 v1");
+        releaseLink.setReleaseRelationship(CONTAINED);
+        releaseLink.setMainlineState(MAINLINE);
+        releaseLink.setHasSubreleases(true);
+        releaseLink.setClearingState(ClearingState.NEW_CLEARING);
+        releaseLink.setAttachments(List.of(attachment));
+        releaseLink.setComponentType(ComponentType.OSS);
+        releaseLink.setComment("Comment 1");
+        releaseLink.setLayer(0);
+        releaseLink.setIndex(0);
+        releaseLink.setProjectId(project.getId());
+        releaseLink.setReleaseMainLineState(OPEN);
+
+        given(this.projectServiceMock.serveLinkedReleasesInDependencyNetworkByIndexPath(eq(project.getId()), any(), any())).willReturn(List.of(releaseLink));
+
+
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            this.mockMvc
+                    .perform(get("/api/projects/network/" + project.getId() + "/releases?path=0->1")
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            this.mockMvc
+                    .perform(
+                            get("/api/projects/network/" + project.getId() + "/releases?path=0")
+                                    .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                                    .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isOk())
+                    .andDo(this.documentationHandler.document(
+                            queryParameters(
+                                    parameterWithName("path").description("Index path of to get indirect release" +
+                                            " in dependency network, each index is separated by -> character, e,g: 0->2")
+                            ),
+                            links(
+                                    linkWithRel("curies").description("Curies are used for online documentation")
+                            ),
+                            responseFields(
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].id").description("Release's id"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].name").description("Release's name"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].version").description("Release's version"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].longName").description("Release's long name"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].releaseRelationship").description("Release's relationship"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].mainlineState").description("Release's mainline state"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].hasSubreleases").description("Is release have release or not"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].clearingState").description("Release's clearing state"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].attachments").description("Release's attachments"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].componentType").description("Release's type"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].comment").description("Release's comment"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].accessible").description("Is release accessible"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].index").description("Index of release"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].projectId").description("Project's id that release is linked to"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].releaseMainLineState").description("Release's mainline state"),
+                                    subsectionWithPath("_embedded.sw360:releaseLinks.[].vendor").description("Release's vendor"),
+                                    subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                            )
+                    ));
+        }
+    }
+
+    @Test
+    public void should_document_get_resource_source_bundle() throws Exception {
+        mockMvc.perform(get("/api/reports").header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .param("module", "licenseResourceBundle").param("projectId", project.getId())
+                .param("isAllAttachmentSelected", "true").accept(MediaTypes.HAL_JSON)).andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(queryParameters(
+                        parameterWithName("projectId").description("Project id"),
+                        parameterWithName("isAllAttachmentSelected").description(
+                                "All attachment selected to download source code bundle. Possible values are `<true|false>`"),
+                        parameterWithName("module").description(
+                                "module represent the type oa document. Possible values are `<licenseResourceBundle>`"))));
+    }
+
+    @Test
+    public void should_document_get_linked_releases_of_linked_projects() throws Exception {
+        mockMvc.perform(get("/api/projects/888888/subProjects/releases")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                        )));
+    }
+
+    @Test
+    public void should_document_compare_dependency_network_with_default_releases_relationship() throws Exception {
+        ReleaseNode subRelease = new ReleaseNode();
+        subRelease.setReleaseId("98765");
+        subRelease.setReleaseName("Component2");
+        subRelease.setReleaseVersion("v2");
+        subRelease.setComponentId("888888");
+        subRelease.setReleaseRelationship(CONTAINED.toString());
+        subRelease.setMainlineState(OPEN.toString());
+        subRelease.setComment("Comment");
+        subRelease.setReleaseLink(Collections.emptyList());
+
+        ReleaseNode release = new ReleaseNode();
+        release.setReleaseId("12345");
+        release.setReleaseName("Component1");
+        release.setReleaseVersion("v1");
+        release.setComponentId("777777777");
+        release.setReleaseRelationship(CONTAINED.toString());
+        release.setMainlineState(OPEN.toString());
+        release.setComment("Comment");
+        release.setReleaseLink(List.of(subRelease));
+
+        Map<String, Object> comparedChild = (Map<String, Object>) objectMapper.convertValue(subRelease, Map.class);
+        comparedChild.put("isDiff", true);
+        comparedChild.put("releaseLink", Collections.emptyList());
+        Map<String, Object> comparedRoot = (Map<String, Object>) objectMapper.convertValue(release, Map.class);
+        comparedRoot.put("isDiff", false);
+        comparedRoot.put("releaseLink", List.of(comparedChild));
+
+        String jsonData = this.objectMapper.writeValueAsString(List.of(release));
+        given(projectServiceMock.compareWithDefaultNetwork(any(), any())).willReturn(List.of(comparedRoot));
+
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            mockMvc.perform(post("/api/projects/network/compareDefaultNetwork")
+                            .contentType(MediaTypes.HAL_JSON)
+                            .accept(MediaTypes.HAL_JSON_VALUE)
+                            .content(jsonData)
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            mockMvc.perform(post("/api/projects/network/compareDefaultNetwork")
+                            .contentType(MediaTypes.HAL_JSON)
+                            .accept(MediaTypes.HAL_JSON_VALUE)
+                            .content(jsonData)
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    public void should_document_duplicate_project_with_dependency_network() throws Exception {
+        ReleaseNode release = new ReleaseNode();
+        release.setReleaseId("3765276512");
+        release.setReleaseRelationship(CONTAINED.toString());
+        release.setMainlineState(OPEN.toString());
+        release.setComment("Test Comment");
+        release.setReleaseLink(new ArrayList<>());
+        release.setCreateBy("admin@sw360.org");
+        release.setCreateOn("2024-07-04");
+
+        Map<String, Object> newProject = new HashMap<>();
+        newProject.put("name", "Test Project");
+        newProject.put("description", "This is the description of my Test Project");
+        newProject.put("version", "1.0");
+        newProject.put("dependencyNetwork", List.of(release));
+
+        when(this.projectServiceMock.createProject(any(), any())).
+                thenReturn(
+                        new Project("Test Project")
+                                .setId("1234567890")
+                                .setDescription("This is the description of my Test Project")
+                                .setProjectType(ProjectType.PRODUCT)
+                                .setVersion("1.0")
+                                .setCreatedBy("admin@sw360.org")
+                                .setPhaseOutSince("2020-06-25")
+                                .setState(ProjectState.ACTIVE)
+                                .setReleaseRelationNetwork("[{\"comment\":\"Test Comment\",\"releaseLink\":[],\"createBy\":\"admin@sw360.org\",\"createOn\":\"2024-07-04\",\"mainlineState\":\"OPEN\",\"releaseId\":\"3765276512\",\"releaseRelationship\":\"CONTAINED\"}]")
+                                .setVendor((new Vendor("Test", "Test short", "http://testvendoraddress.com").setId("987567468")))
+                                .setCreatedOn(new SimpleDateFormat("yyyy-MM-dd").format(new Date())));
+        if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
+            this.mockMvc
+                    .perform(post("/api/projects/network/duplicate/376576").contentType(MediaTypes.HAL_JSON)
+                            .content(this.objectMapper.writeValueAsString(newProject))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isInternalServerError());
+        } else {
+            this.mockMvc
+                    .perform(post("/api/projects/network/duplicate/376576").contentType(MediaTypes.HAL_JSON)
+                            .content(this.objectMapper.writeValueAsString(newProject))
+                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                            .accept(MediaTypes.HAL_JSON))
+                    .andExpect(status().isCreated())
+                    .andDo(this.documentationHandler.document(
+                            requestFields(
+                                    fieldWithPath("name").description("The name of the project"),
+                                    fieldWithPath("version").description("The version of new project"),
+                                    fieldWithPath("description").description("The description of new project"),
+                                    subsectionWithPath("dependencyNetwork").description("Dependency network")
+                            ),
+                            responseFields(
+                                    fieldWithPath("name").description("The name of the project"),
+                                    fieldWithPath("version").description("The project version"),
+                                    fieldWithPath("visibility").description("The project visibility, possible values are: " + Arrays.asList(Visibility.values())),
+                                    fieldWithPath("createdOn").description("The date the project was created"),
+                                    fieldWithPath("description").description("The project description"),
+                                    fieldWithPath("projectType").description("The project type, possible values are: " + Arrays.asList(ProjectType.values())),
+                                    fieldWithPath("securityResponsibles").description("An array of users responsible for security of the project."),
+                                    fieldWithPath("enableSvm").description("Security vulnerability monitoring flag"),
+                                    fieldWithPath("considerReleasesFromExternalList").description("Consider list of releases from existing external list"),
+                                    fieldWithPath("enableVulnerabilitiesDisplay").description("Displaying vulnerabilities flag."),
+                                    fieldWithPath("state").description("The project active status, possible values are: " + Arrays.asList(ProjectState.values())),
+                                    fieldWithPath("phaseOutSince").description("The project phase-out date"),
+                                    subsectionWithPath("dependencyNetwork").description("Dependency network"),
+                                    subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                    subsectionWithPath("_embedded.sw360:vendors").description("An array of all component vendors with full name and link to their <<resources-vendor-get,Vendor resource>>"),
+                                    subsectionWithPath("_embedded.createdBy").description("The user who created this project")
+                            )));
         }
     }
 }

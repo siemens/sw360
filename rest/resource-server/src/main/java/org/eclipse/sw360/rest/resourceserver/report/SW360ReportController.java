@@ -12,8 +12,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +22,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
@@ -43,16 +44,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @RestController
 @SecurityRequirement(name = "tokenAuth")
+@SecurityRequirement(name = "basic")
 public class SW360ReportController implements RepresentationModelProcessor<RepositoryLinksResource> {
     private static final String COMPONENTS = "components";
-
     private static final String PROJECTS = "projects";
-
     private static final String LICENSES = "licenses";
-
     public static final String REPORTS_URL = "/reports";
-
+    private static final String LICENSE_INFO = "licenseInfo";
     private static final String CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final String LICENSES_RESOURCE_BUNDLE = "licenseResourceBundle";
+    private static final String ZIP_CONTENT_TYPE = "application/zip";
+    private ByteBuffer defaultByteBufferVal = null;
 
     @NonNull
     private final RestControllerHelper restControllerHelper;
@@ -79,12 +81,12 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
             @RequestParam(value = "withlinkedreleases", required = false, defaultValue = "false") boolean withLinkedReleases,
             @Parameter(description = "Report download format.", schema = @Schema(allowableValues = {"xls", "xlsx"}))
             @RequestParam(value = "mimetype", required = false, defaultValue = "xlsx") String mimeType,
-            @Parameter(description = "Downloading project report required mail link.")
-            @RequestParam(value = "mailrequest", required = false, defaultValue = "false") boolean mailRequest,
             @Parameter(description = "Project id.")
             @RequestParam(value = "projectId", required = false) String projectId,
-            @Parameter(description = "Module name.", schema = @Schema(allowableValues = {PROJECTS, COMPONENTS}))
+            @Parameter(description = "Module name.", schema = @Schema(allowableValues = {PROJECTS, COMPONENTS, LICENSES, LICENSES_RESOURCE_BUNDLE}))
             @RequestParam(value = "module", required = true) String module,
+            @Parameter(description = "Exclude release version from the license info file")
+            @RequestParam(value = "excludeReleaseVersion", required = false, defaultValue = "false") boolean excludeReleaseVersion,
             HttpServletRequest request,
             HttpServletResponse response
     ) throws TException {
@@ -93,17 +95,25 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
         try {
             if (validateMimeType(mimeType)) {
                 switch (module) {
-                    case PROJECTS:
-                        getProjectReports(withLinkedReleases, mailRequest, response, request, sw360User, module, projectId);
-                        break;
-                    case COMPONENTS:
-                        getComponentsReports(withLinkedReleases, mailRequest, response, request, sw360User, module);
-                        break;
-                    case LICENSES:
-                        getLicensesReports(response, sw360User, module);
-                        break;
-                    default:
-                        break;
+                case PROJECTS:
+                    getProjectReports(withLinkedReleases, SW360Constants.MAIL_REQUEST_FOR_PROJECT_REPORT, response,
+                            request, sw360User, module, projectId, excludeReleaseVersion);
+                    break;
+                case COMPONENTS:
+                    getComponentsReports(withLinkedReleases, SW360Constants.MAIL_REQUEST_FOR_COMPONENT_REPORT, response,
+                            request, sw360User, module, excludeReleaseVersion);
+                    break;
+                case LICENSES:
+                    getLicensesReports(request, response, sw360User, module, excludeReleaseVersion);
+                    break;
+                case LICENSE_INFO:
+                        getLicensesInfoReports(request, response, sw360User, module, projectId, excludeReleaseVersion);
+                    break;
+                case LICENSES_RESOURCE_BUNDLE:
+                    getLicenseResourceBundleReports(projectId, request, response, sw360User, module, excludeReleaseVersion);
+                    break;
+                default:
+                    break;
                 }
             } else {
                 throw new TException("Error : Mimetype either should be : xls/xlsx");
@@ -114,15 +124,15 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
     }
 
     private void getProjectReports(boolean withLinkedReleases, boolean mailRequest, HttpServletResponse response,
-            HttpServletRequest request, User sw360User, String module, String projectId) throws TException {
+            HttpServletRequest request, User sw360User, String module, String projectId, boolean excludeReleaseVersion) throws TException {
         try {
             if (mailRequest) {
                 sw360ReportService.getUploadedProjectPath(sw360User, withLinkedReleases,getBaseUrl(request), projectId);
                 JsonObject responseJson = new JsonObject();
-                responseJson.addProperty("response", "Project report download link will get send to the end user.");
+                responseJson.addProperty("response", "The downloaded report link will be send to the end user.");
                 response.getWriter().write(responseJson.toString());
             } else {
-                downloadExcelReport(withLinkedReleases, response, sw360User, module, projectId);
+                downloadExcelReport(withLinkedReleases, request, response, sw360User, module, projectId, excludeReleaseVersion, defaultByteBufferVal);
             }
         } catch (Exception e) {
             throw new TException(e.getMessage());
@@ -130,7 +140,7 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
     }
 
     private void getComponentsReports(boolean withLinkedReleases, boolean mailRequest, HttpServletResponse response,
-            HttpServletRequest request, User sw360User, String module) throws TException {
+            HttpServletRequest request, User sw360User, String module, boolean excludeReleaseVersion) throws TException {
         try {
             if (mailRequest) {
                 sw360ReportService.getUploadedComponentPath(sw360User, withLinkedReleases, getBaseUrl(request));
@@ -138,52 +148,87 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
                 responseJson.addProperty("response", "Component report download link will get send to the end user.");
                 response.getWriter().write(responseJson.toString());
             } else {
-                downloadExcelReport(withLinkedReleases, response, sw360User, module, null);
+                downloadExcelReport(withLinkedReleases, request, response, sw360User, module, null, excludeReleaseVersion, defaultByteBufferVal);
             }
         } catch (Exception e) {
             throw new TException(e.getMessage());
         }
     }
 
-    private void getLicensesReports(HttpServletResponse response, User sw360User, String module) throws TException {
+    private void getLicensesReports(HttpServletRequest request, HttpServletResponse response,
+                                    User sw360User, String module, boolean excludeReleaseVersion) throws TException {
         try {
-            downloadExcelReport(false, response, sw360User, module, null);
+            downloadExcelReport(false, request, response, sw360User, module, null, excludeReleaseVersion, defaultByteBufferVal);
         } catch (Exception e) {
             throw new TException(e.getMessage());
         }
     }
 
-    private void downloadExcelReport(boolean withLinkedReleases, HttpServletResponse response, User user, String module, String projectId)
+    private void getLicensesInfoReports(HttpServletRequest request, HttpServletResponse response, User sw360User,
+                                        String module, String projectId, boolean excludeReleaseVersion) throws TException {
+        try {
+            downloadExcelReport(false, request, response, sw360User, module, projectId, excludeReleaseVersion, defaultByteBufferVal);
+        }catch (Exception e) {
+            throw new TException(e.getMessage());
+        }
+    }
+
+    private void downloadExcelReport(boolean withLinkedReleases, HttpServletRequest request,
+                                     HttpServletResponse response, User user, String module,
+                                     String projectId, boolean excludeReleaseVersion, ByteBuffer buffer)
             throws TException {
         try {
-            ByteBuffer buffer = null;
+            ByteBuffer buff = null;
             switch (module) {
                 case PROJECTS:
-                    buffer = sw360ReportService.getProjectBuffer(user, withLinkedReleases, projectId);
+                    buff = sw360ReportService.getProjectBuffer(user, withLinkedReleases, projectId);
                     break;
                 case COMPONENTS:
-                    buffer = sw360ReportService.getComponentBuffer(user, withLinkedReleases);
+                    buff = sw360ReportService.getComponentBuffer(user, withLinkedReleases);
                     break;
                 case LICENSES:
-                    buffer = sw360ReportService.getLicenseBuffer();
+                    buff = sw360ReportService.getLicenseBuffer();
+                    break;
+                case LICENSES_RESOURCE_BUNDLE:
+                    buff = buffer;
+                    break;
+                case LICENSE_INFO:
+                    final String generatorClassName = request.getParameter("generatorClassName");
+                    final String variant = request.getParameter("variant");
+                    final String template = request.getParameter("template");
+                    final String externalIds = request.getParameter("externalIds");
+                    buff = sw360ReportService.getLicenseInfoBuffer(user, projectId, generatorClassName, variant, template, externalIds, excludeReleaseVersion);
                     break;
                 default:
                     break;
             }
-            if (null == buffer) {
+            if (null == buff) {
                 throw new TException("No data available for the user " + user.getEmail());
             }
             response.setContentType(CONTENT_TYPE);
             String fileName;
-            if(module.equals(LICENSES)) {
+            if (module.equals(LICENSES)) {
                 fileName = String.format("licenses-%s.xlsx", SW360Utils.getCreatedOn());
-            } else if(module.equals(PROJECTS)) {
+            } else if (module.equals(LICENSES_RESOURCE_BUNDLE)) {
+                response.setContentType(ZIP_CONTENT_TYPE);
+                fileName = sw360ReportService.getSourceCodeBundleName(projectId, user);
+            } else if (module.equals(PROJECTS)) {
                 fileName = sw360ReportService.getDocumentName(user, projectId);
-            }else {
+            } else {
                 fileName = sw360ReportService.getDocumentName(user, null);
             }
             response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", fileName));
-            copyDataStreamToResponse(response, buffer);
+            copyDataStreamToResponse(response, buff);
+        } catch (Exception e) {
+            throw new TException(e.getMessage());
+        }
+    }
+
+    private void getLicenseResourceBundleReports(String projectId, HttpServletRequest request,
+                                                 HttpServletResponse response, User sw360User, String module, boolean excludeReleaseVersion) throws TException {
+        try {
+            ByteBuffer buffer = sw360ReportService.downloadSourceCodeBundle(projectId, request, sw360User);
+            downloadExcelReport(false, request, response, sw360User, module, projectId, excludeReleaseVersion, buffer);
         } catch (Exception e) {
             throw new TException(e.getMessage());
         }
@@ -210,17 +255,16 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
     )
     @GetMapping(value = REPORTS_URL + "/download")
     public void downloadExcel(
+            HttpServletRequest request,
             HttpServletResponse response,
-            @Parameter(description = "Module name.", schema = @Schema(allowableValues = {PROJECTS, COMPONENTS}))
+            @Parameter(description = "Module name.", schema = @Schema(allowableValues = {PROJECTS, COMPONENTS, LICENSES}))
             @RequestParam(value = "module", required = true) String module,
             @Parameter(description = "Token to download report.")
             @RequestParam(value = "token", required = true) String token,
             @Parameter(description = "Extended by releases.")
             @RequestParam(value = "extendedByReleases", required = false, defaultValue = "false") boolean extendedByReleases
     ) throws TException {
-        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        User user = restControllerHelper.getUserByEmail(sw360User.getEmail());
-        String fileConstant = module+"-%s.xlsx";
+        final User user = restControllerHelper.getUserByEmail(request.getParameter("user"));
         try {
             ByteBuffer buffer = null;
             switch (module) {
@@ -239,9 +283,18 @@ public class SW360ReportController implements RepresentationModelProcessor<Repos
             if (null == buffer) {
                 throw new TException("No data available for the user " + user.getEmail());
             }
-            String filename = String.format(fileConstant, SW360Utils.getCreatedOn());
+            String fileName;
+            if(module.equals(LICENSES)) {
+                fileName = String.format("licenses-%s.xlsx", SW360Utils.getCreatedOn());
+            } else if(module.equals(PROJECTS)) {
+                fileName = sw360ReportService.getDocumentName(user, request.getParameter("projectId"));
+            } else if(module.equals(LICENSE_INFO)) {
+                fileName = sw360ReportService.getGenericLicInfoFileName(request, user);
+            } else {
+                fileName = sw360ReportService.getDocumentName(user, null);
+            }
             response.setContentType(CONTENT_TYPE);
-            response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
+            response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", fileName));
             copyDataStreamToResponse(response, buffer);
         } catch (Exception e) {
             throw new TException(e.getMessage());

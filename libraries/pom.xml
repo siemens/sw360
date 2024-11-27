@@ -16,7 +16,7 @@
     <parent>
         <artifactId>sw360</artifactId>
         <groupId>org.eclipse.sw360</groupId>
-        <version>${revision}</version>
+        <version>19.0.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -28,7 +28,7 @@
         <module>commonIO</module>
         <module>importers</module>
         <module>exporters</module>
-        <module>log4j-osgi-support</module>
+        <module>nouveau-handler</module>
     </modules>
 
     <build>

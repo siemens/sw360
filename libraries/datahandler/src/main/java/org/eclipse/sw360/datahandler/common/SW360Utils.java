@@ -26,7 +26,7 @@ import com.google.common.collect.Sets;
 
 import com.google.gson.Gson;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectProjectRelationshipMixin;
-import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
@@ -61,7 +61,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -270,6 +272,17 @@ public class SW360Utils {
                 return difference >= greaterThanDays;
             }
             return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    public static boolean isValidDate(String currRequestedClearingDate, String newRequestedClearingDate, DateTimeFormatter format) {
+        try {
+            LocalDate currLocalDate = LocalDate.parse(currRequestedClearingDate, format);
+            LocalDate requestedLocalDate = LocalDate.parse(newRequestedClearingDate, format);
+
+            return requestedLocalDate.isAfter(currLocalDate);
         } catch (DateTimeParseException e) {
             return false;
         }
@@ -512,7 +525,7 @@ public class SW360Utils {
         }
         return Collections.emptyList();
     }
-    
+
     public static List<ReleaseLink> getLinkedReleaseRelations(Release release, ThriftClients thriftClients, Logger log) {
         if (release != null && release.getReleaseIdToRelationship() != null) {
             try {
@@ -536,7 +549,7 @@ public class SW360Utils {
         }
         return Collections.emptyList();
     }
-    
+
     public static Predicate<String> startsWith(final String prefix) {
         return new Predicate<String>() {
             @Override
@@ -684,7 +697,7 @@ public class SW360Utils {
         }
         return releaseNamesMap;
     }
-    
+
     public static <T> Map<String, T> putProjectNamesInMap(Map<String, T> map, List<Project> projects) {
         if(map == null || projects == null) {
             return Collections.emptyMap();
@@ -732,6 +745,36 @@ public class SW360Utils {
         return clearingSummary.getNewRelease() + clearingSummary.getReportAvailable() + clearingSummary.getUnderClearing()
                 + clearingSummary.getSentToClearingTool()+ clearingSummary.getApproved();
     }
+
+    public static int getOpenReleaseCount(ReleaseClearingStateSummary clearingSummary) {
+        return getTotalReleaseCount(clearingSummary) - (clearingSummary.getApproved() + clearingSummary.getReportAvailable());
+    }
+
+    public static String convertEpochTimeToDate(long timestamp) {
+        LocalDate date = Instant.ofEpochMilli(timestamp).atZone(ZoneId.of("UTC")).toLocalDate();
+        return date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+    }
+
+    public static ClearingRequestSize determineCRSize(int totalReleaseCount) {
+        if (totalReleaseCount <= CLEARING_REQUEST_SIZE_MAP.get(ClearingRequestSize.VERY_SMALL)) {
+            return ClearingRequestSize.VERY_SMALL;
+        } else if (totalReleaseCount <= CLEARING_REQUEST_SIZE_MAP.get(ClearingRequestSize.SMALL)) {
+            return ClearingRequestSize.SMALL;
+        } else if (totalReleaseCount <= CLEARING_REQUEST_SIZE_MAP.get(ClearingRequestSize.MEDIUM)) {
+            return ClearingRequestSize.MEDIUM;
+        } else if (totalReleaseCount <= CLEARING_REQUEST_SIZE_MAP.get(ClearingRequestSize.LARGE)) {
+            return ClearingRequestSize.LARGE;
+        } else {
+            return ClearingRequestSize.VERY_LARGE;
+        }
+    }
+
+    public static final HashMap<ClearingRequestSize, Integer> CLEARING_REQUEST_SIZE_MAP = new HashMap<>() {{
+        put(ClearingRequestSize.VERY_SMALL, 20);
+        put(ClearingRequestSize.SMALL, 50);
+        put(ClearingRequestSize.MEDIUM, 75);
+        put(ClearingRequestSize.LARGE, 150);
+    }};
 
     /**
      * Assumes that the process exists.
@@ -932,7 +975,7 @@ public class SW360Utils {
             values.add("\"releaseId\":\"" + releaseId + "\"");
             values.add("\"releaseId\": \"" + releaseId + "\"");
         }
-        values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
+        values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery).collect(Collectors.toSet());
         filterMap.put(Project._Fields.RELEASE_RELATION_NETWORK.getFieldName(), values);
         return filterMap;
     }
