@@ -1757,6 +1757,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             log.error("Error in getting the projectList from backend ", e);
         }
         request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
+        request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? YES : NO);
         for (Project._Fields filteredField : projectFilteredFields) {
             String parameter = request.getParameter(filteredField.toString());
             request.setAttribute(filteredField.getFieldName(), nullToEmpty(parameter));
@@ -1908,6 +1909,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
                 PortletUtils.setCustomFieldsDisplay(request, user, project);
                 addProjectBreadcrumb(request, response, project);
                 request.setAttribute(IS_USER_ADMIN, PermissionUtils.isUserAtLeast(UserGroup.SW360_ADMIN, user) ? YES : NO);
+                request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? YES : NO);
                 request.setAttribute(IS_PROJECT_MEMBER, SW360Utils.isUserAllowedToEditClosedProject(project, user));
                 String dateLimit = CommonUtils.nullToEmptyString(ModerationPortletUtils.loadPreferredClearingDateLimit(request, UserCacheHolder.getUserFromRequest(request)));
                 request.setAttribute(CUSTOM_FIELD_PREFERRED_CLEARING_DATE_LIMIT, dateLimit);
@@ -3222,6 +3224,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
         if (CommonUtils.isNotNullEmptyOrWhitespace(projectId)) {
             final User user = UserCacheHolder.getUserFromRequest(request);
             final ProjectService.Iface client = thriftClients.makeProjectClient();
+            request.setAttribute(IS_SECURITY_USER, PermissionUtils.isSecurityUser(user) ? YES : NO);
             Project project;
             try {
                 project = client.getProjectById(projectId, user);

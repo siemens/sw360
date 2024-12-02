@@ -35,6 +35,7 @@
     </core_rt:if>
     <jsp:useBean id="numberOfCheckedOrUncheckedVulnerabilities" type="java.lang.Long" scope="request"/>
     <jsp:useBean id="componentVisibilityRestriction" class="java.lang.Boolean" scope="request"/>
+    <jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
  </c:catch>
 
 <%@include file="/html/utils/includes/logError.jspf" %>

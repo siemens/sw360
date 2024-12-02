@@ -36,6 +36,7 @@
 <jsp:useBean id="state" class="java.lang.String" scope="request"/>
 <jsp:useBean id="exactMatchCheckBox" class="java.lang.String" scope="request"/>
 <jsp:useBean id="isSbomImportExportAccessUser" type="java.lang.Boolean" scope="request"/>
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 
 <core_rt:set var="stateAutoC" value='<%=PortalConstants.STATE%>'/>
 <core_rt:set var="projectTypeAutoC" value='<%=PortalConstants.PROJECT_TYPE%>'/>
@@ -167,11 +168,19 @@
                 <div class="col-auto">
                     <div class="btn-toolbar" role="toolbar">
                         <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-primary" onclick="window.location.href='<%=addProjectURL%>'"><liferay-ui:message key="add.project" /></button>
-                            <button type="button" class="btn btn-secondary" data-action="import-spdx-bom" style="display:none;"><liferay-ui:message key="import.spdx.bom" /></button>
-                            <%-- commented by Anupam, to block cyclonedx
+                            <button type="button" class="btn btn-primary" onclick="window.location.href='<%=addProjectURL%>'"
+                            <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                disabled="disabled"
+                            </core_rt:if>
+                            >
+                                <liferay-ui:message key="add.project" />
+                            </button>
                             <core_rt:if test = "${isSbomImportExportAccessUser}">
-                            <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"
+                            <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                disabled="disabled"
+                            </core_rt:if>
+                            >
                                 <liferay-ui:message key="import.sbom" />
                                 <clay:icon symbol="caret-bottom" />
                             </button>
@@ -180,7 +189,6 @@
                                 <a class="dropdown-item import" href="#" data-type="cycloneDx"><liferay-ui:message key="cyclonedx" /></a>
                             </div>
                             </core_rt:if>
-                            --%>
                         </div>
                         <div id="btnExportGroup" class="btn-group" role="group">
                             <button id="btnExport" type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -332,20 +340,24 @@
             // create and render datatable
             function createProjectsTable() {
                 var projectsTable;
+                let columns = [
+                {title: "<liferay-ui:message key="project.name" />", data: "name", render: {display: renderProjectNameLink}},
+                {title: "<liferay-ui:message key="description" />", data: "desc", render: {display: renderDescription}},
+                {title: "<liferay-ui:message key="project.responsible" />", data: "resp", render: {display: renderProjectResponsible}},
+                {title: "<liferay-ui:message key="state" />", data: "state", render: {display: renderStateBoxes} },
+                {title: "<span title=\"<liferay-ui:message key="release.clearing.state" />\"><liferay-ui:message key="license.clearing" /></span>", data: "clearing" }
+                ];
+
+                if (${isSecurityUser != 'Yes'}) {
+                   columns.push({title: "<liferay-ui:message key="actions" />", data: "id", render: {display: renderProjectActions}, className: "four actions" });
+                }
 
                 projectsTable = datatables.create('#projectsTable', {
                     // the following two parameters must not be removed, otherwise it won't work anymore (probably due to datatable plugins)
                     bServerSide: true,
                     sAjaxSource: '<%=loadProjectsURL%>',
 
-                    columns: [
-                        {title: "<liferay-ui:message key="project.name" />", data: "name", render: {display: renderProjectNameLink}},
-                        {title: "<liferay-ui:message key="description" />", data: "desc", render: {display: renderDescription}},
-                        {title: "<liferay-ui:message key="project.responsible" />", data: "resp", render: {display: renderProjectResponsible}},
-                        {title: "<liferay-ui:message key="state" />", data: "state", render: {display: renderStateBoxes} },
-                        {title: "<span title=\"<liferay-ui:message key="release.clearing.state" />\"><liferay-ui:message key="license.clearing" /></span>", data: "clearing" },
-                        {title: "<liferay-ui:message key="actions" />", data: "id", render: {display: renderProjectActions}, className: "four actions" }
-                    ],
+                    columns: columns,
                     fnDrawCallback: function (oSettings) {
                         loadClearingStateSummaries();
                     },
@@ -354,7 +366,7 @@
                         loadingRecords: "<liferay-ui:message key="loading" />"
                     },
                     initComplete: datatables.showPageContainer
-                }, [0, 1, 2, 3, 4], 5);
+                }, [0, 1, 2, 3, 4], [columns.length - 1]);
 
                 return projectsTable;
             }
@@ -388,7 +400,7 @@
                         'data-clearing-request-id': row.crId,
                         'data-project-name': row.name,
                     }).append('<title><liferay-ui:message key="view.clearing.request" /></title>');
-                } else if (row.isCrDisabledForProjectBU || row.cState === 'CLOSED' || row.visbility === 'PRIVATE') {
+                } else if (row.isCrDisabledForProjectBU || row.cState === 'CLOSED' || row.visbility === 'PRIVATE' || ${isSecurityUser == 'Yes'}) {
                     $clearingRequestAction = $('<svg>', {
                         'class': 'disabledClearingRequest lexicon-icon disabled',
                     }).append('<title><liferay-ui:message key="c.r.is.disabled.for.project.with.specific.bu.or.closed.or.private.project" /></title>');
@@ -414,7 +426,6 @@
                         '<svg class="lexicon-icon"><title><liferay-ui:message key="edit" /></title><use href="/o/org.eclipse.sw360.liferay-theme/images/clay/icons.svg#pencil"/></svg>'
                     );
                 }
-
                 $actions.append($editAction, $clearingRequestAction, $copyAction, $deleteAction);
                 return $actions[0].outerHTML;
             }

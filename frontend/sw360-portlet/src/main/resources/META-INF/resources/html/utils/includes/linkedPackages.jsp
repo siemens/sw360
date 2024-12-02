@@ -20,6 +20,7 @@
 <%@ page import="org.eclipse.sw360.portal.common.PortalConstants"%>
 
 <core_rt:set var="portletName" value="<%=themeDisplay.getPortletDisplay().getPortletName() %>"/>
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 
 <liferay-portlet:renderURL var="friendlyPackageURL" portletName="sw360_portlet_packages">
     <portlet:param name="<%=PortalConstants.PAGENAME%>" value="<%=PortalConstants.FRIENDLY_URL_PLACEHOLDER_PAGENAME%>"/>
@@ -109,18 +110,22 @@ AUI().use('liferay-portlet-url', function () {
                     {title: "<liferay-ui:message key='release.name.with.version' />", data : "relName", defaultContent: "<liferay-ui:message key='no.linked.release' />", render: {display: renderReleaseNameLink}, width: "20%"},
                     {title: "<liferay-ui:message key='release.clearing.state' />", data : "relCS", defaultContent: "<liferay-ui:message key='not.applicable' />", render: {display: renderReleaseCS}, className: 'noSearch filter', width: "10%" },
                     {title: "<liferay-ui:message key='licenses' />", data: "lics", defaultContent: "", render: {display: renderLicenseLink}, width: "15%" },
-                    {title: "<liferay-ui:message key='package.manager' />", data: "pkgMgr", className: 'noSearch filter', width: "7%"},
-                    {title: "<liferay-ui:message key='actions' />", data: 'DT_RowId', render: {display: renderPackageActions}, orderable: false, className: 'one action noSearch', width: "2%"}
-                ],
+                    {title: "<liferay-ui:message key='package.manager' />", data: "pkgMgr", className: 'noSearch filter', width: "7%"}
+                ];
+                if (${isSecurityUser != 'Yes'}) {
+                   columns.push({title: "<liferay-ui:message key='actions' />", data: 'DT_RowId', render: {display: renderPackageActions}, orderable: false, className: 'one action noSearch', width: "2%"});
+                }
                 printColumns = [0, 1, 2, 3, 4, 5];
             } else {
                 var columns = [
                     {title: "<liferay-ui:message key='vendor' />", data : "vendor", defaultContent: "", width: "20%" },
                     {title: "<liferay-ui:message key='package.name.with.version' />", data : "name", render: {display: renderPackageNameLink}, width: "40%" },
                     {title: "<liferay-ui:message key='licenses' />", data: "lics", defaultContent: "", render: {display: renderLicenseLink}, width: "20%" },
-                    {title: "<liferay-ui:message key='package.manager' />", data: "pkgMgr", className: 'noSearch filter', width: "15%"},
-                    {title: "<liferay-ui:message key='actions' />", data: 'DT_RowId', render: {display: renderPackageActions}, orderable: false, className: 'two actions noSearch', width: "5%"}
-                ],
+                    {title: "<liferay-ui:message key='package.manager' />", data: "pkgMgr", className: 'noSearch filter', width: "15%"}
+                ];
+                if (${isSecurityUser != 'Yes'}) {
+                    columns.push({title: "<liferay-ui:message key='actions' />", data: 'DT_RowId', render: {display: renderPackageActions}, orderable: false, className: 'two actions noSearch', width: "5%"});
+                }
                 printColumns = [0, 1, 2, 3];
             }
             linkedPackagesTable = datatables.create('#linkedPackagesTable', {

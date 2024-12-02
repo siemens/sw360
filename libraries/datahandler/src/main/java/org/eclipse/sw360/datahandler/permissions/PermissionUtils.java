@@ -60,6 +60,10 @@ public class PermissionUtils {
         return isInGroup(user, UserGroup.SW360_ADMIN) || isInGroup(user, UserGroup.ADMIN);
     }
 
+    public static boolean isSecurityUser(User user) {
+        return isInGroup(user, UserGroup.SECURITY_USER);
+    }
+
     public static boolean isAdminBySecondaryRoles(Set<UserGroup> roles) {
         return roles.contains(UserGroup.SW360_ADMIN) || roles.contains(UserGroup.ADMIN);
     }
@@ -107,7 +111,7 @@ public class PermissionUtils {
     public static boolean isUserAtLeast(UserGroup group, User user) {
         switch (group) {
             case USER:
-                return isNormalUser(user) || isAdmin(user) || isClearingAdmin(user) || isEccAdmin(user) || isSecurityAdmin(user);
+                return isNormalUser(user) || isAdmin(user) || isClearingAdmin(user) || isEccAdmin(user) || isSecurityAdmin(user) || isSecurityUser(user);
             case CLEARING_ADMIN:
                 return isClearingAdmin(user) || isAdmin(user);
             case CLEARING_EXPERT:
@@ -120,6 +124,8 @@ public class PermissionUtils {
                 return isAdmin(user);
             case ADMIN:
                 return isAdmin(user);
+            case SECURITY_USER:
+                return isSecurityUser(user);
             default:
                 throw new IllegalArgumentException("Unknown group: " + group);
         }

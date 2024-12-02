@@ -416,6 +416,7 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
         final Selector buAndModorator_visibility_Selector = eq("visbility", "BUISNESSUNIT_AND_MODERATORS");
         final Selector userBuSelector = eq("businessUnit", userBU);
         boolean isAdmin = PermissionUtils.isAdmin(user);
+        boolean isSecurityUser = PermissionUtils.isSecurityUser(user);
         boolean isClearingAdmin = PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user);
         Selector isUserBelongToBuAndModerator = null;
 
@@ -441,8 +442,11 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
 
         Selector finalSelector = null;
         if (PermissionUtils.IS_ADMIN_PRIVATE_ACCESS_ENABLED && isAdmin) {
-                finalSelector = typeSelector;
-        } else {
+            finalSelector = typeSelector;
+        } else if (isSecurityUser) {
+            finalSelector = typeSelector;
+        }
+        else {
             if (isClearingAdmin) {
                 finalSelector = and(typeSelector, or(getAllPrivateProjects, everyone_visibility_Selector,
                         isUserBelongToMeAndModerator, buAndModorator_visibility_Selector));

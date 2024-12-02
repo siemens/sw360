@@ -42,26 +42,31 @@
 			<div id="detailTab" class="list-group" data-initial-tab="${selectedTab}" role="tablist">
 			<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Summary'}">active</core_rt:if>" href="#tab-Summary" data-toggle="list" role="tab"><liferay-ui:message key="summary" /></a>
 			<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Administration'}">active</core_rt:if>" href="#tab-Administration" data-toggle="list" role="tab"><liferay-ui:message key="administration" /></a>
-            <core_rt:if test="${not isFlexibleProjectReleaseRelationshipEnabled}">
-			    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-licenseClearing'}">active</core_rt:if>" href="#tab-licenseClearing" data-toggle="list" role="tab"><liferay-ui:message key="license.clearing" /></a>
-			</core_rt:if>
-            <core_rt:if test="${isFlexibleProjectReleaseRelationshipEnabled}">
-                <a id="dependencyNetwork" class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-dependencyNetwork'}">active</core_rt:if>" href="#tab-dependencyNetwork" data-toggle="list" role="tab"><liferay-ui:message key="license.clearing" /></a>
+            <core_rt:if test="${isSecurityUser != 'Yes'}">
+                <core_rt:if test="${not isFlexibleProjectReleaseRelationshipEnabled}">
+			        <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-licenseClearing'}">active</core_rt:if>" href="#tab-licenseClearing" data-toggle="list" role="tab"><liferay-ui:message key="license.clearing" /></a>
+			    </core_rt:if>
+                <core_rt:if test="${isFlexibleProjectReleaseRelationshipEnabled}">
+                    <a id="dependencyNetwork" class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-dependencyNetwork'}">active</core_rt:if>" href="#tab-dependencyNetwork" data-toggle="list" role="tab"><liferay-ui:message key="license.clearing" /></a>
+                </core_rt:if>
             </core_rt:if>
             <core_rt:if test="${isPackagePortletEnabled}">
-			    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-linkedPackages'}">active</core_rt:if>" href="#tab-linkedPackages" data-toggle="list" role="tab"><liferay-ui:message key="linked.packages" /></a>
-			</core_rt:if>
-			<core_rt:if test="${isProjectObligationsEnabled}">
-			<a id="obligationCountBadge" class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Obligations'}">active</core_rt:if>" href="#tab-Obligations" data-toggle="list" role="tab"><liferay-ui:message key="obligations" />
-			</a>
-			</core_rt:if>
-<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ECC'}">active</core_rt:if>" href="#tab-ECC" data-toggle="list" role="tab"><liferay-ui:message key="ecc" /></a>
-<core_rt:if test="${isSvmEnabled == true}">
-<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-VulnerabilityTrackingsStatus'}">active</core_rt:if>" href="#tab-VulnerabilityTrackingsStatus" data-toggle="list" role="tab"><liferay-ui:message key="vulnerability.tracking.status" /></a>
-</core_rt:if>
-			<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Attachments'}">active</core_rt:if>" href="#tab-Attachments" data-toggle="list" role="tab"><liferay-ui:message key="attachments" /></a>
-			<core_rt:if test="${inProjectDetailsContext}">
-				<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-attachmentUsages'}">active</core_rt:if>" href="#tab-attachmentUsages" data-toggle="list" role="tab"><liferay-ui:message key="attachment.usages" /></a>
+                <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-linkedPackages'}">active</core_rt:if>" href="#tab-linkedPackages" data-toggle="list" role="tab"><liferay-ui:message key="linked.packages" /></a>
+            </core_rt:if>
+            <core_rt:if test="${isSecurityUser != 'Yes'}">
+                <core_rt:if test="${isProjectObligationsEnabled}">
+                    <a id="obligationCountBadge" class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Obligations'}">active</core_rt:if>" href="#tab-Obligations" data-toggle="list" role="tab"><liferay-ui:message key="obligations" /></a>
+                </core_rt:if>
+                <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ECC'}">active</core_rt:if>" href="#tab-ECC" data-toggle="list" role="tab"><liferay-ui:message key="ecc" /></a>
+            </core_rt:if>
+            <core_rt:if test="${isSvmEnabled == true}">
+                <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-VulnerabilityTrackingsStatus'}">active</core_rt:if>" href="#tab-VulnerabilityTrackingsStatus" data-toggle="list" role="tab"><liferay-ui:message key="vulnerability.tracking.status" /></a>
+            </core_rt:if>
+            <core_rt:if test="${isSecurityUser != 'Yes'}">
+			    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Attachments'}">active</core_rt:if>" href="#tab-Attachments" data-toggle="list" role="tab"><liferay-ui:message key="attachments" /></a>
+			    <core_rt:if test="${inProjectDetailsContext}">
+				    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-attachmentUsages'}">active</core_rt:if>" href="#tab-attachmentUsages" data-toggle="list" role="tab"><liferay-ui:message key="attachment.usages" /></a>
+			    </core_rt:if>
 			</core_rt:if>
 			<core_rt:if test="${inProjectDetailsContext}">
 				<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Vulnerabilities'}">active</core_rt:if>" href="#tab-Vulnerabilities" data-toggle="list" role="tab">
@@ -83,7 +88,9 @@
 						</span>
 				</a>
 			</core_rt:if>
-			<a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ChangeLogs'}">active</core_rt:if>" href="#tab-ChangeLogs" data-toggle="list" role="tab"><liferay-ui:message key="change.log" /></a>
+			<core_rt:if test="${isSecurityUser != 'Yes'}">
+			    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ChangeLogs'}">active</core_rt:if>" href="#tab-ChangeLogs" data-toggle="list" role="tab"><liferay-ui:message key="change.log" /></a>
+			</core_rt:if>
 		    </div>
 	    </div>
 	    <div class="col">
@@ -93,6 +100,9 @@
 						<div class="btn-toolbar" role="toolbar">
 							<div class="btn-group" role="group">
 								<button type="button" class="btn btn-primary" onclick="window.location.href='<%=editProjectURL%>' + window.location.hash"
+								    <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                    	disabled="disabled"
+                                    </core_rt:if>
 									<core_rt:if test = "${(project.clearingState eq 'CLOSED') && (isUserAdmin != 'Yes') && (not isProjectMember)}">
 										disabled="disabled"
 									</core_rt:if>
@@ -101,12 +111,22 @@
 								</button>
 							</div>
 							<div class="btn-group" role="group">
-							    <button type="button" class="btn btn-secondary" id="linkToProjectButton"><liferay-ui:message key="link.to.projects" /></button>
+							    <button type="button" class="btn btn-secondary" id="linkToProjectButton"
+							    <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                    disabled="disabled"
+                                </core_rt:if>
+							    >
+							        <liferay-ui:message key="link.to.projects" />
+							    </button>
 							</div>
 							<div class="btn-group" role="group">
-							    <%-- <core_rt:if test = "${isSbomImportExportAccessUser and (project.clearingState ne 'CLOSED') and writeAccessUser}">
-							    <div class="btn-group" style="margin-right: auto; visibility: hidden;">
-							        <button type="button" class="btn btn-light border dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							    <core_rt:if test = "${isSbomImportExportAccessUser and (project.clearingState ne 'CLOSED') and writeAccessUser}">
+							    <div class="btn-group" style="margin-right: auto;">
+							        <button type="button" class="btn btn-light border dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"
+							        <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                        disabled="disabled"
+                                    </core_rt:if>
+							        >
 							            <liferay-ui:message key="import.sbom" />
 							            <clay:icon symbol="caret-bottom" />
 							        </button>
@@ -127,7 +147,7 @@
 							            </a>
 							        </div>
 							    </div>
-							    </core_rt:if> --%>
+							    </core_rt:if>
 							</div>
                             <core_rt:if test="${not isFlexibleProjectReleaseRelationshipEnabled}">
                                 <div class="list-group-companion" data-belong-to="tab-licenseClearing">
@@ -172,6 +192,9 @@
                                     <core_rt:if test='${not isCrDisabledForProjectBU}'>
                                     <div class="btn-group" role="group" id="clearingRequest">
                                         <button id="createClearingRequestBtn" type="button" class="btn btn-secondary <core_rt:if test="${not empty project.clearingRequestId}">d-none</core_rt:if>"
+                                            <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                                disabled="disabled"
+                                            </core_rt:if>
                                             <core_rt:if test = "${(project.clearingState eq 'CLOSED') || !writeAccessUser}">
                                                 disabled="disabled"
                                             </core_rt:if>
@@ -229,6 +252,9 @@
                                     <core_rt:if test='${not isCrDisabledForProjectBU}'>
                                     <div class="btn-group" role="group" id="clearingRequest">
                                         <button id="createClearingRequestBtn" type="button" class="btn btn-secondary <core_rt:if test="${not empty project.clearingRequestId}">d-none</core_rt:if>"
+                                            <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                                disabled="disabled"
+                                            </core_rt:if>
                                             <core_rt:if test = "${(project.clearingState eq 'CLOSED') || !writeAccessUser}">
                                                 disabled="disabled"
                                             </core_rt:if>

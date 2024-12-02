@@ -32,11 +32,15 @@
                 <div id="detailTab" class="list-group" data-initial-tab="${selectedTab}" role="tablist">
                     <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Summary'}">active</core_rt:if>" href="#tab-Summary" data-toggle="list" role="tab"><liferay-ui:message key="summary" /></a>
                     <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Releases'}">active</core_rt:if>" href="#tab-Releases" data-toggle="list" role="tab"><liferay-ui:message key="release.overview" /></a>
-                    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Attachments'}">active</core_rt:if>" href="#tab-Attachments" data-toggle="list" role="tab"><liferay-ui:message key="attachments" /></a>
+                    <core_rt:if test="${isSecurityUser != 'Yes'}">
+                        <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-Attachments'}">active</core_rt:if>" href="#tab-Attachments" data-toggle="list" role="tab"><liferay-ui:message key="attachments" /></a>
+                    </core_rt:if>
                     <core_rt:if test="${inComponentDetailsContext}">
                         <%@include file="/html/utils/includes/vulnerabilityTab.jspf" %>
                     </core_rt:if>
-                    <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ChangeLogs'}">active</core_rt:if>" href="#tab-ChangeLogs" data-toggle="list" role="tab"><liferay-ui:message key="change.log" /></a>
+                    <core_rt:if test="${isSecurityUser != 'Yes'}">
+                        <a class="list-group-item list-group-item-action <core_rt:if test="${selectedTab == 'tab-ChangeLogs'}">active</core_rt:if>" href="#tab-ChangeLogs" data-toggle="list" role="tab"><liferay-ui:message key="change.log" /></a>
+                    </core_rt:if>
                 </div>
             </div>
             <div class="col">
@@ -45,14 +49,20 @@
                     <core_rt:if test="${inComponentDetailsContext}">
                         <div class="btn-toolbar" role="toolbar">
                             <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-primary" onclick="window.location.href='<%=editComponentURL%>' + window.location.hash"><liferay-ui:message key="edit.component" /></button>
+                                <button type="button" class="btn btn-primary" onclick="window.location.href='<%=editComponentURL%>' + window.location.hash"
+                                <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+                                    disabled="disabled"
+                                </core_rt:if>
+                                >
+                                    <liferay-ui:message key="edit.component" />
+                                </button>
                             </div>
-                            <core_rt:if test="${isUserAllowedToMerge}">
+                            <core_rt:if test="${isUserAllowedToMerge} && ${isSecurityUser != 'Yes'}" >
                                 <div class="btn-group" role="group">
                                     <button type="button" data-component-id="${component.id}" id="mergeButton" class="btn btn-secondary"><liferay-ui:message key="merge" /></button>
                                 </div>
                             </core_rt:if>
-                            <core_rt:if test="${isUserAllowedToMerge && (not empty component.releases || not empty component.attachments)}">
+                            <core_rt:if test="${isUserAllowedToMerge && (not empty component.releases || not empty component.attachments)} && ${isSecurityUser != 'Yes'}">
                                 <div class="btn-group" role="group">
                                     <button type="button" data-component-id="${component.id}" id="splitButton" class="btn btn-secondary"><liferay-ui:message key="split" /></button>
                                 </div>

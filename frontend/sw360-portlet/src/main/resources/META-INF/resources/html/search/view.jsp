@@ -26,6 +26,7 @@
 <jsp:useBean id="searchtext" type="java.lang.String" scope="request"/>
 <jsp:useBean id="documents" type="java.util.List<org.eclipse.sw360.datahandler.thrift.search.SearchResult>" scope="request"/>
 <jsp:useBean id="typeMask" type="java.util.List<java.lang.String>" scope="request"/>
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 
 <div class="container">
 	<div class="row">
@@ -36,13 +37,13 @@
                         <liferay-ui:message key="keyword.search" />
                     </div>
                     <div class="card-body">
-                        <form action="${edit}" method="post">
+                        <form id="searchForm" action="${edit}" method="post">
                             <div class="form-group">
                                 <input type="text" class="form-control form-control-sm" id="keywordsearchinput" name="<portlet:namespace/><%=KEY_SEARCH_TEXT%>" value="${searchtext}" />
                             </div>
                             <h4><liferay-ui:message key="restrict.to.type" /> <span class="info" title="<liferay-ui:message key="no.type.restriction.is.the.same.as.looking.for.all.types.even.on.types.that.are.not.in.the.list" />"><clay:icon symbol="info-circle-open"/></span></h4>
                             <div class="form-check">
-                                <input id="keyword-search-projects" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_PROJECT%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"   <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_PROJECT)%>">   checked="" </core_rt:if> >
+                                <input id="keyword-search-projects" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_PROJECT%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>" <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_PROJECT)%>"> checked="" </core_rt:if> <core_rt:if test="${isSecurityUser == 'Yes'}"> checked="" </core_rt:if>>
                                 <label for="keyword-search-projects" class="form-check-label"><sw360:icon title="projects" icon="project" className="type-icon type-icon-project"/> <liferay-ui:message key="projects" /></label>
                             </div>
                             <div class="form-check">
@@ -50,12 +51,13 @@
                                 <label for="keyword-search-components" class="form-check-label"><sw360:icon title="components" icon="component" className="type-icon type-icon-component"/> <liferay-ui:message key="components" /></label>
                             </div>
                             <div class="form-check">
+                               <input id="keyword-search-releases" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_RELEASE%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"   <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_RELEASE)%>">   checked="" </core_rt:if> >
+                               <label for="keyword-search-releases" class="form-check-label"><sw360:icon title="releases" icon="release" className="type-icon type-icon-release"/> <liferay-ui:message key="releases" /></label>
+                            </div>
+                            <core_rt:if test="${isSecurityUser != 'Yes'}">
+                            <div class="form-check">
                                 <input id="keyword-search-licenses" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_LICENSE%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"   <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_LICENSE)%>">   checked="" </core_rt:if> >
                                 <label for="keyword-search-licenses" class="form-check-label"><sw360:icon title="licenses" icon="license" className="type-icon type-icon-license"/> <liferay-ui:message key="licenses" /></label>
-                            </div>
-                            <div class="form-check">
-                                <input id="keyword-search-releases" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_RELEASE%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"   <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_RELEASE)%>">   checked="" </core_rt:if> >
-                                <label for="keyword-search-releases" class="form-check-label"><sw360:icon title="releases" icon="release" className="type-icon type-icon-release"/> <liferay-ui:message key="releases" /></label>
                             </div>
                             <div class="form-check">
                                 <input id="keyword-search-packages" type="checkbox" class="form-check-input" value="<%=SW360Constants.TYPE_PACKAGE%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"   <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_PACKAGE)%>">   checked="" </core_rt:if> >
@@ -77,6 +79,7 @@
                                 <input id="keyword-search-document" type="checkbox"  class="form-check-input" value="<%=SW360Constants.TYPE_DOCUMENT%>" name="<portlet:namespace/><%=PortalConstants.TYPE_MASK%>"  <core_rt:if test="<%=typeMask.contains(SW360Constants.TYPE_DOCUMENT)%>"> checked="" </core_rt:if>  <core_rt:if test="${(empty typeMask) and (empty searchtext)}"> checked="" </core_rt:if>>
                                 <label for="keyword-search-document" class="form-check-label"><liferay-ui:message key="entire.document" /></label>
                             </div>
+                            </core_rt:if>
                             <div class="form-group">
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button class="btn btn-secondary" type="button" data-action="toggle"><liferay-ui:message key="toggle" /></button>
@@ -105,7 +108,7 @@
                             <col />
                         </colgroup>
                     </table>
-                    <core_rt:if test="${(empty documents)}">
+                    <core_rt:if test="${(empty documents)} && ${isSecurityUser != 'Yes'}">
                        <div class="alert alert-warning mt-7 w-50 alert-dismissible">
                           <button type="button" class="close" data-dismiss="alert">&times;</button>
                           <liferay-ui:message key="note.if.unchecked.entire.document.then.search.will.be.restricted.to" />
@@ -134,6 +137,18 @@
     require(['jquery', 'modules/autocomplete', 'modules/dialog', 'bridges/datatables', 'utils/render'], function($, autocomplete, dialog, datatables, render) {
 
         createSearchTable();
+
+        document.getElementById('searchForm').addEventListener('submit', function(event) {
+            var isSecurityUser = '<%=isSecurityUser%>';
+            if (isSecurityUser === 'Yes') {
+                var checkboxes = this.querySelectorAll('input[type="checkbox"]');
+                var checkedOne = Array.prototype.slice.call(checkboxes).some(x => x.checked);
+                if (!checkedOne) {
+                    event.preventDefault();
+                    alert('Please check atleast one checkbox.');
+                }
+            }
+        });
 
         $('#keyword-search button[data-action="deselect"]').on("click", function() {
             $('#keyword-search .form-check-input').prop("checked", false);

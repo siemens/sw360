@@ -65,13 +65,20 @@
     <%@include file="/html/projects/includes/projects/clearingRequest.jspf" %>
 </core_rt:if>
 
+<jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
 <jsp:useBean id="projectList" type="java.util.List<org.eclipse.sw360.datahandler.thrift.projects.ProjectLink>"
              scope="request"/>
 
 <div class="tab-content" id="pills-clearingStatusTab">
     <div class="tab-pane fade show active" id="pills-treeView" role="tabpanel" aria-labelledby="pills-tree-tab">
     <div class="btn-group mx-1" role="group">
-        <button type="button" class="btn btn-sm btn-outline-dark" id="addLicenseToRelease"><liferay-ui:message key="add.license.info.to.release" /></button>
+        <button type="button" class="btn btn-sm btn-outline-dark" id="addLicenseToRelease"
+        <core_rt:if test = "${(isSecurityUser == 'Yes')}">
+            disabled="disabled"
+        </core_rt:if>
+        >
+            <liferay-ui:message key="add.license.info.to.release" />
+        </button>
     </div>
     <core_rt:if test="${writeAccessUser and isPackagePortletEnabled and project.getPackageIdsSize() > 0}">
         <div class="btn-group mx-1" role="group">

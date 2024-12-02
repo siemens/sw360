@@ -8,6 +8,21 @@
   ~ SPDX-License-Identifier: EPL-2.0
 --%>
 <%@ page import="org.eclipse.sw360.portal.common.PortalConstants" %>
+<%@ page import="org.eclipse.sw360.portal.users.UserUtils" %>
+<%@ page import="com.liferay.portal.kernel.util.WebKeys" %>
+<%@ page import="org.eclipse.sw360.datahandler.thrift.users.UserGroup" %>
+<%@ page import="com.liferay.portal.kernel.model.User" %>
+
+<%
+    User liferayUser = (User) request.getAttribute(WebKeys.USER);
+    UserGroup group = UserUtils.getUserGroupFromLiferayUser(liferayUser);
+    String isSecurityUser = UserUtils.getRoleConstantFromUserGroup(group);
+    if (isSecurityUser == "Security User") {
+        // Display an error message and stop the execution of the current page
+        out.println("<div class='alert alert-danger'>User does not have required permission to view this page.</div>");
+        return;
+    }
+%>
 
 <%@ include file="/html/init.jsp" %>
 <%-- the following is needed by liferay to display error messages--%>

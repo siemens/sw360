@@ -260,6 +260,8 @@ public class UserUtils {
                 return UserGroup.ECC_ADMIN;
             } else if (roleNames.contains(PortalConstants.ROLENAME_SECURITY_ADMIN)) {
                 return UserGroup.SECURITY_ADMIN;
+            } else if (roleNames.contains(PortalConstants.ROLENAME_SECURITY_USER)) {
+                return UserGroup.SECURITY_USER;
             }
 
         } catch (SystemException e) {
@@ -298,6 +300,8 @@ public class UserUtils {
                 return PortalConstants.ROLENAME_SECURITY_ADMIN;
             case USER:
                 return RoleConstants.USER;
+            case SECURITY_USER:
+               return PortalConstants.ROLENAME_SECURITY_USER;
         }
         return RoleConstants.USER;
     }

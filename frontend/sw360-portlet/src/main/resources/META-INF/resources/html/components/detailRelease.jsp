@@ -35,6 +35,7 @@
     <jsp:useBean id="allUsingProjectsCount" type="java.lang.Integer" scope="request"/>
     <jsp:useBean id="isUserAllowedToMerge" type="java.lang.Boolean" scope="request"/>
     <jsp:useBean id="isUserAtLeastClearingAdmin" type="java.lang.Boolean" scope="request"/>
+    <jsp:useBean id="isSecurityUser" class="java.lang.String" scope="request" />
     <core_rt:set var="cotsMode" value="<%=component.componentType == ComponentType.COTS%>"/>
     <jsp:useBean id="vulnerabilityVerificationEditable" type="java.lang.Boolean" scope="request"/>
     <jsp:useBean id="isSpdxDocument" type="java.lang.Boolean" scope="request" />

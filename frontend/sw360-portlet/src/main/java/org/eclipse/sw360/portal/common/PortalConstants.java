@@ -66,6 +66,7 @@ public class PortalConstants {
     public static final String ROLENAME_ECC_ADMIN = "ECC Admin";
     public static final String ROLENAME_SECURITY_ADMIN = "Security Admin";
     public static final String ROLENAME_SW360_ADMIN = "SW360 Admin";
+    public static final String ROLENAME_SECURITY_USER = "Security User";
 
     //! Key for Exact Match CheckBox
     public static final String EXACT_MATCH_CHECKBOX = "exactMatchCheckBox";
@@ -106,6 +107,7 @@ public class PortalConstants {
     public static final String IS_USER_AT_LEAST_ECC_ADMIN = "isUserAtLeastECCAdmin";
     public static final String IS_USER_ADMIN = "isUserAdmin";
     public static final String IS_CLEARING_EXPERT = "isClearingExpert";
+    public static final String IS_SECURITY_USER = "isSecurityUser";
     public static final String IS_PROJECT_MEMBER = "isProjectMember";
     public static final String IS_ERROR_IN_UPDATE_OR_CREATE = "isErrorInUpdateOrCreate";
 

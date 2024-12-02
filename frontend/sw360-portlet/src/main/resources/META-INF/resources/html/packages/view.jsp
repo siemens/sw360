@@ -23,6 +23,21 @@
 <%@ taglib prefix="tags" tagdir="/WEB-INF/tags" %>
 <%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 
+<%@ page import="org.eclipse.sw360.portal.users.UserUtils" %>
+<%@ page import="com.liferay.portal.kernel.util.WebKeys" %>
+<%@ page import="org.eclipse.sw360.datahandler.thrift.users.UserGroup" %>
+<%@ page import="com.liferay.portal.kernel.model.User" %>
+
+<%
+    User liferayUser = (User) request.getAttribute(WebKeys.USER);
+    UserGroup group = UserUtils.getUserGroupFromLiferayUser(liferayUser);
+    String isSecurityUser = UserUtils.getRoleConstantFromUserGroup(group);
+    if (isSecurityUser == "Security User") {
+        out.println("<div class='alert alert-danger'>User does not have required permission to view this page.</div>");
+        return;
+    }
+%>
+
 <portlet:defineObjects/>
 <liferay-theme:defineObjects/>
 
