@@ -105,6 +105,7 @@ import org.springframework.security.authentication.AuthenticationServiceExceptio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
@@ -1435,6 +1436,13 @@ public class RestControllerHelper<T> {
         for (String licenseId : licenseIds) {
             HalResource<License> licenseHalResource = addEmbeddedLicense(licenseId);
             halRelease.addEmbeddedResource("sw360:otherLicenses", licenseHalResource);
+        }
+    }
+
+    public void isSecurityUser(User user) {
+        if (user.getUserGroup().name().equals("SECURITY_USER")) {
+            throw new HttpClientErrorException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "User is not allowed to access this resource.");
         }
     }
 }

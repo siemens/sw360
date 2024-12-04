@@ -44,6 +44,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import org.springframework.data.domain.Pageable;
@@ -107,6 +108,8 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             @RequestParam(value = "department", required = false) String department,
             @RequestParam(value = "usergroup", required = false) UserGroup usergroup
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
         PaginationResult<User> paginationResult = null;
         List<User> sw360Users = new ArrayList<>();
         boolean isSearchByName = givenname != null && !givenname.isEmpty();

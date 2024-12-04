@@ -13,6 +13,7 @@ package org.eclipse.sw360.rest.resourceserver.integration;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
@@ -59,6 +60,7 @@ public class ProjectTest extends TestIntegrationBase {
         user.setId("123456789");
         user.setEmail("admin@sw360.org");
         user.setFullname("John Doe");
+        user.setUserGroup(UserGroup.ADMIN);
 
         given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(user);
     }

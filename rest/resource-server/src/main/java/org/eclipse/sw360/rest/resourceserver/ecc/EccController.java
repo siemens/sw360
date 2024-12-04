@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.client.HttpClientErrorException;
 
 @BasePathAwareController
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
@@ -61,6 +62,7 @@ public class EccController implements RepresentationModelProcessor<RepositoryLin
     public ResponseEntity<CollectionModel<?>> getEccDetails(HttpServletRequest request, Pageable pageable)
             throws TException, URISyntaxException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
         List<Release> releases = new ArrayList<>();
         try {
             releases = releaseService.getReleasesForUser(user);

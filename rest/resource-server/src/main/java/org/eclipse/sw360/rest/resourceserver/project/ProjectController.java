@@ -125,6 +125,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
@@ -414,6 +415,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     ) throws TException {
 
 		final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
 		Project sw360Project = projectService.getProjectForUserById(id, sw360User);
 
 		final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
@@ -933,6 +935,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
 
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         List<Release> releases = new ArrayList<>();
         final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
         for (final String releaseId : releaseIds) {
@@ -1223,6 +1226,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException, IOException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         List<ProjectLink> mappedProjectLinks = new ArrayList<>();
 
@@ -1326,6 +1330,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final CollectionModel<EntityModel<Attachment>> resources = attachmentService.getResourcesFromList(sw360Project.getAttachments());
         return new ResponseEntity<>(resources, HttpStatus.OK);
@@ -1374,6 +1379,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         final Project project = projectService.getProjectForUserById(projectId, sw360User);
         this.attachmentService.downloadAttachmentWithContext(project, attachmentId, response, sw360User);
     }
@@ -1392,6 +1398,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         final Project project = projectService.getProjectForUserById(projectId, sw360User);
         final String filename = "Clearing-Reports-" + project.getName() + ".zip";
 
@@ -1523,6 +1530,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             throws URISyntaxException, TException {
 
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         boolean transitive = true;
         final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
@@ -2135,6 +2143,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     		@Parameter(description = "Project ID", example = "376521")
             @PathVariable("id") String id) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
 
         Project proj = projectService.getClearingInfo(sw360Project, sw360User);
@@ -2161,6 +2170,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @Parameter(description = "Project ID.") @PathVariable("id") String id)
             throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
    	    final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
    	    if (CommonUtils.isNullOrEmptyMap(sw360Project.getReleaseIdToUsage())) {
             return new ResponseEntity<String>("No release linked to the project", HttpStatus.NO_CONTENT);

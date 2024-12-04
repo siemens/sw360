@@ -26,6 +26,7 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.ModerationPatch;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService;
@@ -193,6 +194,7 @@ public class ModerationRequestSpecTest extends TestRestDocsSpecBase {
         user.setId("123456789");
         user.setEmail(testUserId);
         user.setFullname("John Doe");
+        user.setUserGroup(UserGroup.ADMIN);
 
         given(this.releaseServiceMock.getReleaseForUserById(eq(moderationRequest.getDocumentId()), any())).willReturn(releaseAdditions);
         given(this.userServiceMock.getUserByEmail(moderationRequest.getRequestingUser())).willReturn(new User("test.admin@sw360.org", "DEPT").setId("12345"));

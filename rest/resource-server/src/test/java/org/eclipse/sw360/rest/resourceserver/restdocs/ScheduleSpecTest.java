@@ -22,6 +22,7 @@ import java.io.IOException;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.schedule.Sw360ScheduleService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;

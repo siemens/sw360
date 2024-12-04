@@ -622,6 +622,7 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         final Release sw360Release = releaseService.getReleaseForUserById(id, sw360User);
         final CollectionModel<EntityModel<Attachment>> resources = attachmentService.getAttachmentResourcesFromList(sw360Release.getAttachments());
         return new ResponseEntity<>(resources, HttpStatus.OK);
@@ -648,6 +649,7 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException, IOException {
         final User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
         final Release release = releaseService.getReleaseForUserById(releaseId, user);
         final Set<Attachment> attachments = release.getAttachments();
         attachmentService.downloadAttachmentBundleWithContext(release, attachments, user, response);
@@ -736,6 +738,7 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(sw360User);
         Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
         attachmentService.downloadAttachmentWithContext(release, attachmentId, response, sw360User);
     }
@@ -792,6 +795,7 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             @PathVariable("id") String releaseId
     ) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
         Release release = releaseService.getReleaseForUserById(releaseId, user);
         Map<String, Object> responseMap = new HashMap<>();
         ExternalToolProcess fossologyProcess = releaseService.getExternalToolProcess(release);
@@ -862,8 +866,9 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             @Parameter(description = "Upload description to FOSSology")
             @RequestParam(value = "uploadDescription", required = false) String uploadDescription
     ) throws TException, IOException {
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
         releaseService.checkFossologyConnection();
-
         ReentrantLock lock = mapOfLocks.get(releaseId);
         Map<String, String> responseMap = new HashMap<>();
         HttpStatus status = null;
@@ -873,7 +878,6 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
                         "Max 10 FOSSology Process can be triggered simultaneously. Please try after sometime.");
                 status = HttpStatus.TOO_MANY_REQUESTS;
             } else {
-                User user = restControllerHelper.getSw360UserFromAuthentication();
                 releaseService.executeFossologyProcess(user, attachmentService, mapOfLocks, releaseId,
                         markFossologyProcessOutdated, uploadDescription);
                 responseMap.put("message", "FOSSology Process for Release Id : " + releaseId + " has been triggered.");
@@ -948,8 +952,9 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             @Parameter(description = "The ID of the release.")
             @PathVariable("id") String releaseId
     ) throws TException {
-        releaseService.checkFossologyConnection();
         User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.isSecurityUser(user);
+        releaseService.checkFossologyConnection();
         Map<String, String> responseMap = new HashMap<>();
         String errorMsg = "Could not trigger report generation for this release";
         HttpStatus status = null;
