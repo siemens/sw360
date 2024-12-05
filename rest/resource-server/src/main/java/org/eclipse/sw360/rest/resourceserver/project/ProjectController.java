@@ -67,12 +67,7 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseClearingStateSummary;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseNode;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoFile;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
-import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo;
@@ -2120,6 +2115,26 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             JsonObject resultJson = new JsonObject();
             resultJson.addProperty("status", "success");
             resultJson.addProperty("count", projectService.getMyAccessibleProjectCounts(sw360User));
+            response.getWriter().write(resultJson.toString());
+        } catch (IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
+    }
+
+    @Operation(
+            description = "Get the default license info header text.",
+            tags = {"Projects"}
+    )
+    @RequestMapping(value = PROJECTS_URL + "/licenseInfoHeader", method = RequestMethod.GET)
+    public void getLicenseInfoheaderText(HttpServletResponse response) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        try {
+            response.setContentType("application/json; charset=UTF-8");
+            response.setCharacterEncoding("UTF-8");
+            String text = projectService.getLicenseInfoHeaderText();
+            String plainText = text.replaceAll("\\s+", " ").trim();
+            JsonObject resultJson = new JsonObject();
+            resultJson.addProperty("licenseInfoHeaderText", plainText);
             response.getWriter().write(resultJson.toString());
         } catch (IOException e) {
             throw new SW360Exception(e.getMessage());

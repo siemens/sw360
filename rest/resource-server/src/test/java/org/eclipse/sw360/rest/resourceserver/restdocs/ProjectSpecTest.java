@@ -536,6 +536,7 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
         RequestSummary requestSummaryForCycloneDX = new RequestSummary();
         requestSummaryForCycloneDX.setMessage("{\"projectId\":\"" + cycloneDXProject.getId() + "\"}");
 
+        given(this.projectServiceMock.getLicenseInfoHeaderText()).willReturn("Default License Info Header Text");
         given(this.projectServiceMock.importSPDX(any(),any())).willReturn(requestSummaryForSPDX);
         given(this.projectServiceMock.importCycloneDX(any(),any(),any())).willReturn(requestSummaryForCycloneDX);
         given(this.sw360ReportServiceMock.getProjectBuffer(any(),anyBoolean(),any())).willReturn(ByteBuffer.allocate(10000));
@@ -2114,6 +2115,20 @@ public class ProjectSpecTest extends TestRestDocsSpecBase {
                                fieldWithPath("status").description("status of the API. Possible values are `<success|failure>`").optional(),
                                fieldWithPath("count").description("Count of projects for a user.").optional()
                        )));
+    }
+
+    @Test
+    public void should_document_get_license_info_header() throws Exception {
+        String accessToken = TestHelper.getAccessToken(mockMvc, testUserId, testUserPassword);
+        this.mockMvc.perform(get("/api/projects/licenseInfoHeader")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .accept(MediaTypes.HAL_JSON)
+                        .contentType(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        responseFields(
+                                fieldWithPath("licenseInfoHeaderText").description("default license info header text").optional()
+                        )));
     }
 
     @Test
