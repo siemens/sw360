@@ -50,6 +50,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
@@ -57,6 +58,7 @@ import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -477,5 +479,54 @@ public class ModerationRequestController implements RepresentationModelProcessor
 
         setAddition.apply(addition);
         setDeletion.apply(deletion);
+    }
+    
+    @PreAuthorize("hasAuthority('WRITE')")
+    @Operation(
+        summary = "Validate Moderation Request",
+        description = "This endpoint validates a moderation request and ensures a comment is provided if required.",
+        tags = {"Moderation Requests"})
+    @RequestMapping(value = MODERATION_REQUEST_URL + "/validate", method = RequestMethod.POST)
+    public ResponseEntity<?> validateModerationRequest(
+            @RequestParam String entityType,
+            @RequestParam String entityId,
+            @RequestParam(required = false) String comment,
+            HttpServletRequest request) {
+        try {
+            User user = restControllerHelper.getSw360UserFromAuthentication();
+            Object entity = getEntityByTypeAndId(entityType, entityId, user);
+            if (entity == null) {
+                return new ResponseEntity<>("Entity not found for the given ID.", HttpStatus.NOT_FOUND);
+            }
+
+            boolean isWriteActionAllowed = restControllerHelper.isWriteActionAllowed(entity, user);
+
+            if (!isWriteActionAllowed && (comment == null || comment.isEmpty())) {
+                return new ResponseEntity<>("Moderation request requires a comment when write access is not allowed.",
+                        HttpStatus.ACCEPTED);
+            }
+            return new ResponseEntity<>("Validation successful. Moderation request can proceed.", HttpStatus.OK);
+        } catch (ResourceNotFoundException ex) {
+            return new ResponseEntity<>("Entity not found for the given ID.", HttpStatus.NOT_FOUND);
+        } catch (Exception ex) {
+            return new ResponseEntity<>("An error occurred while processing the request: " + ex.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Helper method to fetch entity by type and ID.
+     */
+    private Object getEntityByTypeAndId(String entityType, String entityId, User user) throws TException {
+        switch (entityType.toLowerCase()) {
+            case "project":
+                return projectService.getProjectForUserById(entityId, user);
+            case "component":
+                return componentService.getComponentForUserById(entityId, user);
+            case "release":
+                return releaseService.getReleaseForUserById(entityId, user);
+            default:
+                throw new IllegalArgumentException("Invalid entity type: " + entityType);
+        }
     }
 }
