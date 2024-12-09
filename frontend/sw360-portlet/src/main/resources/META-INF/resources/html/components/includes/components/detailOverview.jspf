@@ -57,15 +57,19 @@
                                     <liferay-ui:message key="edit.component" />
                                 </button>
                             </div>
-                            <core_rt:if test="${isUserAllowedToMerge} && ${isSecurityUser != 'Yes'}" >
+                            <core_rt:if test="${isUserAllowedToMerge}" >
+                              <core_rt:if test= "${isSecurityUser != 'Yes'}" >
                                 <div class="btn-group" role="group">
                                     <button type="button" data-component-id="${component.id}" id="mergeButton" class="btn btn-secondary"><liferay-ui:message key="merge" /></button>
                                 </div>
+                              </core_rt:if>
                             </core_rt:if>
-                            <core_rt:if test="${isUserAllowedToMerge && (not empty component.releases || not empty component.attachments)} && ${isSecurityUser != 'Yes'}">
+                            <core_rt:if test="${isUserAllowedToMerge && (not empty component.releases || not empty component.attachments)}">
+                              <core_rt:if test= "${isSecurityUser != 'Yes'}" >
                                 <div class="btn-group" role="group">
                                     <button type="button" data-component-id="${component.id}" id="splitButton" class="btn btn-secondary"><liferay-ui:message key="split" /></button>
                                 </div>
+                              </core_rt:if>
                             </core_rt:if>
                             <div class="btn-group" role="group">
                                 <sw360:DisplaySubscribeButton email="<%=themeDisplay.getUser().getEmailAddress()%>" object="${component}"

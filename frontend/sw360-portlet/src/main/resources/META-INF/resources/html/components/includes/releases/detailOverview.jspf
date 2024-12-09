@@ -112,10 +112,12 @@
                                     <liferay-ui:message key="link.to.project" />
                                 </button>
                             </div>
-                            <core_rt:if test="${isUserAllowedToMerge} && ${isSecurityUser != 'Yes'}">
+                            <core_rt:if test="${isUserAllowedToMerge}">
+                              <core_rt:if test= "${isSecurityUser != 'Yes'}" >
                                 <div class="btn-group" role="group">
                                     <button type="button" data-release-id="${release.id}" id="mergeButton" class="btn btn-secondary"><liferay-ui:message key="merge" /></button>
                                 </div>
+                              </core_rt:if>
                             </core_rt:if>
                             <div class="btn-group" role="group">
                                 <sw360:DisplaySubscribeButton email="<%=themeDisplay.getUser().getEmailAddress()%>" object="${release}"
