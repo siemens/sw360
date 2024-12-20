@@ -31,7 +31,6 @@ import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.datahandler.thrift.ImportBomRequestPreparation;
 import org.eclipse.sw360.datahandler.thrift.RestrictedResource;
-import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.VerificationStateInfo;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
@@ -61,6 +60,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
@@ -72,9 +72,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -154,7 +154,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
         List<Component> allComponents = new ArrayList<>();
         String queryString = request.getQueryString();
-        Map<String, String> params = parseQueryString(queryString);
+        MultiValueMap<String, String> params = parseQueryString(queryString);
 
         Map<String, Set<String>> filterMap = new HashMap<>();
         if (luceneSearch) {
@@ -171,7 +171,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             allComponents.addAll(componentService.refineSearch(filterMap, sw360User));
         } else {
             if (name != null && !name.isEmpty()) {
-                allComponents.addAll(componentService.searchComponentByName(params.get("name").replace("%20", " ")));
+                allComponents.addAll(componentService.searchComponentByName(name.replace("%20", " ")));
             } else {
                 allComponents.addAll(componentService.getComponentsForUser(sw360User));
             }
@@ -225,17 +225,20 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
         return resources;
     }
 
-    private Map<String, String> parseQueryString(String queryString) {
-        Map<String, String> parameters = new HashMap<>();
+    private @NotNull MultiValueMap<String, String> parseQueryString(String queryString) {
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
 
         if (queryString != null && !queryString.isEmpty()) {
             String[] params = queryString.split("&");
             for (String param : params) {
-                String[] keyValue = param.split("=");
-                if (keyValue.length == 2) {
+                String[] keyValue = param.split("=", 2);
+                if (keyValue.length >= 1) {
                     String key = keyValue[0];
-                    String value = keyValue[1];
-                    parameters.put(key, value);
+                    String value = "";
+                    if (!(keyValue.length == 1)) {
+                        value = keyValue[1];
+                    }
+                    parameters.add(key, value);
                 }
             }
         }
@@ -336,18 +339,48 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
     @Operation(
             summary = "Get components by external ID.",
-            description = "Get components by external ID.",
+            description = "Get components by entering the key-value pair of externalIDs." +
+                          "Ex. package-url=org.apache.commons:commons-lang3:3.9" +
+                          "Ex. component-id-key=component-id-value",
             tags = {"Components"}
     )
     @RequestMapping(value = COMPONENTS_URL + "/searchByExternalIds", method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel<EntityModel<Component>>> searchByExternalIds(
-            @Parameter(
-                    description = "The external IDs of the components to be retrieved.",
-                    example = "component-id-key=1831A3&component-id-key=c77321"
-            )
+    public ResponseEntity<?> searchByExternalIds(
+            @Parameter(description = "lucene search parameter to filter the components.")
+            @RequestParam(value = "luceneSearch", required = false) boolean luceneSearch,
+            @Parameter(description = "externalIdsMultiMap parameter will be having external ids.")
             @RequestParam MultiValueMap<String, String> externalIdsMultiMap
     ) throws TException {
-        return restControllerHelper.searchByExternalIds(externalIdsMultiMap, componentService, null);
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        List<Component> allComponents = new ArrayList<>();
+
+        Map<String, Set<String>> filterMap = new HashMap<>();
+        if (luceneSearch) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdsMultiMap.getFirst("package-url"))) {
+                Set<String> values = new HashSet<>();
+                List<String> packageUrls = externalIdsMultiMap.get("package-url");
+                if (packageUrls != null) {
+                    values.addAll(packageUrls);
+                }
+                values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+                filterMap.put(Component._Fields.EXTERNAL_IDS.getFieldName(), values);
+            }
+            allComponents.addAll(componentService.refineSearch(filterMap, sw360User));
+
+            List<EntityModel> resourceList = new ArrayList<>();
+
+            allComponents.forEach(sw360bject -> {
+                Component embeddedResource = restControllerHelper.convertToEmbeddedComponent(sw360bject);
+                EntityModel<Component> componentResource = EntityModel.of(embeddedResource);
+                resourceList.add(componentResource);
+            });
+
+            CollectionModel<EntityModel> resources = CollectionModel.of(resourceList);
+            return new ResponseEntity<>(resources, HttpStatus.OK);
+        } else {
+            return restControllerHelper.searchByExternalIds(externalIdsMultiMap, componentService, null);
+        }
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
