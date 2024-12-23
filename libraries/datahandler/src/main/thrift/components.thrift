@@ -551,6 +551,12 @@ service ComponentService {
     list<Component> refineSearchAccessibleComponents(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);
 
     /**
+     * search releases in database that match subQueryRestrictions
+     * They are only the releases which are visible to user.
+     **/
+    list<Release> refineSearchAccessibleReleases(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);
+
+    /**
      * search components with the accessibility in database that match subQueryRestrictions
      **/
     list<Component> refineSearchWithAccessibility(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);

@@ -379,12 +379,42 @@ public class ReleaseController implements RepresentationModelProcessor<Repositor
             }
     )
     @GetMapping(value = RELEASES_URL + "/searchByExternalIds")
-    public ResponseEntity<Release> searchByExternalIds(
-            HttpServletRequest request
+    public ResponseEntity<?> searchByExternalIds(
+            @Parameter(description = "lucenesearch parameter to filter the releases.")
+            @RequestParam(value = "luceneSearch", required = false) boolean luceneSearch,
+            @Parameter(description = "externalIdsMultiMap parameter will be having external ids.")
+            @RequestParam MultiValueMap<String, String> externalIdsMultiMap
     ) throws TException {
-        String queryString = request.getQueryString();
-        MultiValueMap<String, String> externalIdsMultiMap = parseQueryString(queryString);
-        return restControllerHelper.searchByExternalIds(externalIdsMultiMap, releaseService, null);
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        List<Release> allReleases = new ArrayList<>();
+
+        Map<String, Set<String>> filterMap = new HashMap<>();
+        if (luceneSearch) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(externalIdsMultiMap.getFirst("package-url"))) {
+                Set<String> values = new HashSet<>();
+                List<String> packageUrls = externalIdsMultiMap.get("package-url");
+                if (packageUrls != null) {
+                    values.addAll(packageUrls);
+                }
+                values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+                filterMap.put(Release._Fields.EXTERNAL_IDS.getFieldName(), values);
+            }
+            allReleases.addAll(releaseService.refineFilterSearch(filterMap, sw360User));
+
+            List<EntityModel> resourceList = new ArrayList<>();
+
+            allReleases.forEach(sw360bject -> {
+                Release embeddedResource = restControllerHelper.convertToEmbeddedReleaseForPurlSearch(sw360bject);
+                EntityModel<Release> releaseResource = EntityModel.of(embeddedResource);
+                resourceList.add(releaseResource);
+            });
+
+            CollectionModel<EntityModel> resources = CollectionModel.of(resourceList);
+            return new ResponseEntity<>(resources, HttpStatus.OK);
+        } else {
+            return restControllerHelper.searchByExternalIds(externalIdsMultiMap, releaseService, null);
+        }
     }
 
     /**

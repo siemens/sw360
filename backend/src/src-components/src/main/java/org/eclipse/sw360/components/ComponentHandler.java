@@ -146,6 +146,11 @@ public class ComponentHandler implements ComponentService.Iface {
     }
 
     @Override
+    public List<Release> refineSearchAccessibleReleases(String text, Map<String,Set<String>> subQueryRestrictions, User user) throws TException {
+        return releaseSearchHandler.searchAccessibleReleasesByPurl(text, subQueryRestrictions, user);
+    }
+
+    @Override
     public List<Component> getMyComponents(User user) throws TException {
         assertUser(user);
 

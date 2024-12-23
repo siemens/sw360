@@ -730,4 +730,9 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.searchAccessibleReleases(searchText, sw360User);
     }
+
+    public List<Release> refineFilterSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.refineSearchAccessibleReleases(null, filterMap, sw360User);
+    }
 }
