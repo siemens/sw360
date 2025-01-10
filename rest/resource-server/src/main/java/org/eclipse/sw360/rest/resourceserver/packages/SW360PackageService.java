@@ -166,4 +166,9 @@ public class SW360PackageService {
         PackageService.Iface sw360PackageClient = getThriftPackageClient();
         return sw360PackageClient.getTotalPackagesCount();
     }
+
+    public List<Package> refineFilterSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
+        PackageService.Iface sw360ComponentClient = getThriftPackageClient();
+        return sw360ComponentClient.refineSearchAccessiblePackages(filterMap, sw360User);
+    }
 }
