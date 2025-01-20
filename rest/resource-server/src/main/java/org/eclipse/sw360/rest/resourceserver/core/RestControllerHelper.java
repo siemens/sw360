@@ -821,6 +821,7 @@ public class RestControllerHelper<T> {
         embeddedComponent.setVisbility(component.getVisbility());
         embeddedComponent.setMainLicenseIds(component.getMainLicenseIds());
         embeddedComponent.setVcs(component.getVcs());
+        embeddedComponent.setExternalIds(component.getExternalIds());
         if (CommonUtils.isNotNullEmptyOrWhitespace(component.getDefaultVendorId())) {
             Vendor defaultVendor = vendorService.getVendorById(component.getDefaultVendorId());
             embeddedComponent.setDefaultVendor(defaultVendor);
