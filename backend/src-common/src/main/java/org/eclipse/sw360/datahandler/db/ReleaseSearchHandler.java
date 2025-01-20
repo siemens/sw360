@@ -12,15 +12,21 @@ package org.eclipse.sw360.datahandler.db;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneSearchView;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
+import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.ektorp.http.HttpClient;
 
 import com.cloudant.client.api.CloudantClient;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector.prepareWildcardQuery;
+import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 
 /**
  * Lucene search for the Release class
@@ -32,13 +38,25 @@ public class ReleaseSearchHandler {
     private static final LuceneSearchView luceneSearchView
             = new LuceneSearchView("lucene", "releases",
             "function(doc) {" +
-                    "  if(doc.type == 'release') { " +
-                    "      var ret = new Document();" +
-                    "      ret.add(doc.name);  " +
-                    "      ret.add(doc.version);  " +
-                    "      ret.add(doc._id);  " +
-                    "      return ret;" +
-                    "  }" +
+                    "    var ret = new Document();" +
+                    "    if(!doc.type) return ret;" +
+                    "    if(doc.type != 'release') return ret;" +
+                    "    function idx(obj) {" +
+                    "        for (var key in obj) {" +
+                    "            switch (typeof obj[key]) {" +
+                    "                case 'object':" +
+                    "                    idx(obj[key]);" +
+                    "                    break;" +
+                    "                case 'function':" +
+                    "                    break;" +
+                    "                default:" +
+                    "                    ret.add(obj[key]);" +
+                    "                    break;" +
+                    "            }" +
+                    "        }" +
+                    "    };" +
+                    "    idx(doc);" +
+                    "    return ret;" +
                     "}");
 
     private final LuceneAwareDatabaseConnector connector;
@@ -50,5 +68,21 @@ public class ReleaseSearchHandler {
 
     public List<Release> search(String searchText) {
         return connector.searchView(Release.class, luceneSearchView, prepareWildcardQuery(searchText));
+    }
+
+    public List<Release> searchAccessibleReleasesByPurl(String text, final Map<String, Set<String>> subQueryRestrictions, User user) {
+        List<Release> releaseList = new ArrayList<>();
+        try {
+            List<Release> resultReleaseList = connector.searchViewWithRestrictions(Release.class, luceneSearchView, text, subQueryRestrictions);
+            for (Release release : resultReleaseList) {
+                if (makePermission(release, user).isActionAllowed(RequestedAction.READ)) {
+                    releaseList.add(release);
+                }
+            }
+        } catch (Exception e) {
+            // Handle the exception (e.g., log the error)
+            System.err.println("Error during search: " + e.getMessage());
+        }
+        return releaseList;
     }
 }

@@ -853,6 +853,16 @@ public class RestControllerHelper<T> {
         return embeddedRelease;
     }
 
+    public Release convertToEmbeddedReleaseForPurlSearch(Release release) {
+        Release embeddedRelease = new Release();
+        embeddedRelease.setId(release.getId());
+        embeddedRelease.setName(release.getName());
+        embeddedRelease.setVersion(release.getVersion());
+        embeddedRelease.setExternalIds(release.getExternalIds());
+        embeddedRelease.setType(null);
+        return embeddedRelease;
+    }
+
     public Package convertToEmbeddedPackage(Package pkg) {
         Package embeddedPackage = new Package();
         embeddedPackage.setId(pkg.getId());
