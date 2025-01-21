@@ -13,15 +13,10 @@ package org.eclipse.sw360.rest.resourceserver.packages;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
-
+import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -33,6 +28,7 @@ import org.apache.commons.lang3.EnumUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
@@ -225,14 +221,12 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "packageManager", required = false) String packageManager,
             @Parameter(description = "Get all details of the package.")
             @RequestParam(value = "allDetails", required = false) boolean allDetails,
-            @Parameter(description = "If true, packages will be fetched by name exactly matching the search input.")
-            @RequestParam(value = "exactMatch", required = false) boolean isExactMatch,
+            @Parameter(description = "lucenesearch parameter to filter the packages.")
+            @RequestParam(value = "luceneSearch", required = false) boolean luceneSearch,
             HttpServletRequest request
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         restControllerHelper.isSecurityUser(sw360User);
-        String queryString = request.getQueryString();
-        Map<String, String> params = parseQueryString(queryString);
         boolean isSearchByName = CommonUtils.isNotNullEmptyOrWhitespace(name);
         boolean isSearchByPackageManager = CommonUtils.isNotNullEmptyOrWhitespace(packageManager);
         boolean isSearchByVersion = CommonUtils.isNotNullEmptyOrWhitespace(version);
@@ -241,7 +235,7 @@ public class PackageController implements RepresentationModelProcessor<Repositor
         List<Package> sw360Packages = new ArrayList<>();
 
         if (isSearchByName) {
-            sw360Packages.addAll(packageService.searchPackageByName(params.get("name")));
+            sw360Packages.addAll(packageService.searchPackageByName(name));
         } else if (isSearchByPackageManager) {
             packageManager = packageManager.toUpperCase();
 
@@ -251,32 +245,24 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             }
             sw360Packages.addAll(packageService.searchByPackageManager(packageManager));
         } else if (isSearchByVersion) {
-            sw360Packages.addAll(packageService.searchPackageByVersion(params.get("version")));
+            sw360Packages.addAll(packageService.searchPackageByVersion(version));
+        } else if (isSearchByPurl && luceneSearch) {
+            Map<String, Set<String>> filterMap = new HashMap<>();
+                if (CommonUtils.isNotNullEmptyOrWhitespace(purl)) {
+                    Set<String> values = new HashSet<>();
+                    values.add(purl);
+                    values = values.stream().map(LuceneAwareDatabaseConnector::prepareWildcardQuery)
+                            .collect(Collectors.toSet());
+                    filterMap.put(Package._Fields.PURL.getFieldName(), values);
+                }
+            sw360Packages.addAll(packageService.refineFilterSearch(filterMap, sw360User));
         } else if (isSearchByPurl) {
-            sw360Packages.addAll(packageService.searchPackageByPurl(params.get("purl")));
+            sw360Packages.addAll(packageService.searchPackageByPurl(purl));
         } else {
             sw360Packages.addAll(packageService.getPackagesForUser());
             isNoFilter = true;
         }
-        return getPackageResponse(version, purl, packageManager, pageable, allDetails, request, sw360User, sw360Packages, isNoFilter);
-    }
-
-    private Map<String, String> parseQueryString(String queryString) {
-        Map<String, String> parameters = new HashMap<>();
-
-        if (queryString != null && !queryString.isEmpty()) {
-            String[] params = queryString.split("&");
-            for (String param : params) {
-                String[] keyValue = param.split("=");
-                if (keyValue.length == 2) {
-                    String key = keyValue[0];
-                    String value = keyValue[1];
-                    parameters.put(key, value);
-                }
-            }
-        }
-
-        return parameters;
+        return getPackageResponse(version, purl, packageManager, pageable, allDetails, request, sw360User, sw360Packages, isNoFilter, luceneSearch);
     }
 
     private Package convertToPackage(Map<String, Object> requestBody) {
@@ -310,7 +296,7 @@ public class PackageController implements RepresentationModelProcessor<Repositor
     @NotNull
     private ResponseEntity<CollectionModel<EntityModel<Package>>> getPackageResponse(String version, String purl, String packageManager, Pageable pageable,
             boolean allDetails, HttpServletRequest request, User sw360User, List<Package> sw360Packages,
-            boolean isNoFilter)
+            boolean isNoFilter, boolean luceneSearch)
             throws ResourceClassNotFoundException, PaginationParameterException, URISyntaxException, TException {
         Map<String, Package> mapOfPackages = new HashMap<>();
 
@@ -344,10 +330,15 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             packageResources.add(embeddedPackageResource);
         };
 
-        paginationResult.getResources().stream()
-        .filter(pkg -> packageManager == null || packageManager.equals(pkg.getPackageManager().toString()))
-        .filter(pkg -> version == null || version.isEmpty() || version.equals(pkg.getVersion()))
-        .filter(pkg -> purl == null || purl.isEmpty() || purl.equals(pkg.getPurl())).forEach(consumer);
+        if(luceneSearch) {
+            paginationResult.getResources().forEach(consumer);
+        } else {
+            // Filter the packages based on the search criteria (packageManager, version, purl
+            paginationResult.getResources().stream()
+                    .filter(pkg -> packageManager == null || packageManager.equals(pkg.getPackageManager().toString()))
+                    .filter(pkg -> version == null || version.isEmpty() || version.equals(pkg.getVersion()))
+                    .filter(pkg -> purl == null || purl.isEmpty() || purl.equals(pkg.getPurl())).forEach(consumer);
+        }
 
         CollectionModel<EntityModel<Package>> resources;
         if (packageResources.isEmpty()) {

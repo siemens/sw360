@@ -12,17 +12,20 @@ package org.eclipse.sw360.datahandler.db;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.couchdb.lucene.LuceneSearchView;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.ektorp.http.HttpClient;
 
 import com.cloudant.client.api.CloudantClient;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.eclipse.sw360.datahandler.couchdb.lucene.LuceneAwareDatabaseConnector.prepareWildcardQuery;
+import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 
 public class PackageSearchHandler {
 
@@ -95,4 +98,13 @@ public class PackageSearchHandler {
         return connector.searchView(Package.class, luceneSearchView, prepareWildcardQuery(searchText));
     }
 
+    public List<Package> searchAccessiblePackagesByPurl(final Map<String, Set<String>> subQueryRestrictions, User user) {
+        List<Package> packageList = new ArrayList<>();
+        try {
+            packageList = connector.searchViewWithRestrictions(Package.class, luceneSearchView, null, subQueryRestrictions);
+        } catch (Exception e) {
+            System.err.println("Error during search: " + e.getMessage());
+        }
+        return packageList;
+    }
 }
