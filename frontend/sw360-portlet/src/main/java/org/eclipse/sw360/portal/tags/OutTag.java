@@ -53,6 +53,8 @@ public class OutTag extends OutSupport {
 
             if (jsQuoting) {
                 candidate = StringEscapeUtils.escapeJavaScript(candidate);
+                // Replace all backslashes that are not escaped with two backslashes
+                candidate = candidate.replaceAll("(?<!\\\\)\\\\(?!\\\\)", "\\\\\\\\");
             }
 
             if (stripNewlines) {

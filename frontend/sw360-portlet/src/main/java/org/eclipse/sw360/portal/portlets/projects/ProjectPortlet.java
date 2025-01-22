@@ -2829,6 +2829,7 @@ public class ProjectPortlet extends FossologyAwarePortlet {
             rootNode.fieldNames().forEachRemaining(topic -> {
                 JsonNode osiNode = rootNode.get(topic);
                 ObligationStatusInfo newOsi = OBJECT_MAPPER.convertValue(osiNode, ObligationStatusInfo.class);
+                newOsi.setComment(newOsi.getComment().replaceAll("\\\\", ""));
 
                 if (newOsi.getReleaseIdToAcceptedCLISize() < 1 && isDeleteAllOrphanObligations
                         && (newOsi.getObligationLevel() == null
