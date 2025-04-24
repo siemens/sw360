@@ -45,16 +45,16 @@ get_all_releases_func = '''function(doc){
         }
     }'''
 
-print 'Retrieve all vendors...'
+print('Retrieve all vendors...')
 vendors = db.query(get_all_vendors_func)
-print 'Retrieve all releases with vendors...'
+print('Retrieve all releases with vendors...')
 releases = db.query(get_all_releases_func)
 
 vendorsById = []
 for vendor in vendors:
     vendorsById.append(vendor.id)
 
-print 'got all vendors now, now comparing ...'
+print('got all vendors now, now comparing ...')
 
 for release in releases:
     docRelease = release.value
@@ -62,10 +62,10 @@ for release in releases:
 
     if releaseVendorId and not releaseVendorId in vendorsById:
         if DRY_RUN:
-            print 'WARN: not saving release ' + docRelease[RELEASENAME] + ' with vendor: ' + releaseVendorId + ' - DRY_RUN'
+            print('WARN: not saving release ' + docRelease[RELEASENAME] + ' with vendor: ' + releaseVendorId + ' - DRY_RUN')
         else:
             docRelease[VENDORID] = None
             db.save(docRelease)
-            print 'INFO: saving release ' + docRelease[RELEASENAME] + ' without vendor: ' + releaseVendorId + '.'
+            print('INFO: saving release ' + docRelease[RELEASENAME] + ' without vendor: ' + releaseVendorId + '.')
     else:
-        print 'INFO: release ' + docRelease[RELEASENAME] + ' found vendorId ' + releaseVendorId + '.'
+        print('INFO: release ' + docRelease[RELEASENAME] + ' found vendorId ' + releaseVendorId + '.')

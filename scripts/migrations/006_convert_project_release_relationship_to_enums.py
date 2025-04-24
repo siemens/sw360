@@ -58,7 +58,7 @@ moderations_with_project_deletions_fun = '''function(doc){
 }'''
 
 def convert_to_project_release_relation(relation, context_log_message):
-    if isinstance(relation, basestring):
+    if isinstance(relation, str):
         release_relation = 'UNKNOWN'
         lowercase_rel = relation.lower()
         if lowercase_rel == 'contained' or lowercase_rel == 'contains':
@@ -66,7 +66,7 @@ def convert_to_project_release_relation(relation, context_log_message):
         elif lowercase_rel == 'refers' or lowercase_rel == 'referred':
             release_relation = 'REFERRED'
         elif lowercase_rel != '':
-            print (u'WARN: %s. relation "%s" is not recognizable and has been converted to UNKNOWN' % (context_log_message, relation)).encode('utf-8')
+            print(('WARN: %s. relation "%s" is not recognizable and has been converted to UNKNOWN' % (context_log_message, relation)).encode('utf-8'))
         mainline_state = 'OPEN'
         prr = {'releaseRelation': release_relation, 'mainlineState': mainline_state}
         return prr
@@ -79,69 +79,69 @@ def convert_release_id_to_usage_dict(relations, context_log_message):
         oldval = relations[release_id]
         newval = convert_to_project_release_relation(oldval, context_log_message)
         if oldval != newval:
-            print (u'INFO: %s. releaseId:%s, old value:"%s", new value: "%s"' % (context_log_message, release_id, oldval, newval)).encode('utf-8')
+            print(('INFO: %s. releaseId:%s, old value:"%s", new value: "%s"' % (context_log_message, release_id, oldval, newval)).encode('utf-8'))
             relations[release_id] = newval
             changed = True
 
     return changed
 
 def convert_project_release_usages():
-    print 'Converting project release usages'
+    print('Converting project release usages')
     projects_with_linked_releases = db.query(projects_with_linked_releases_fun)
     for project_row in projects_with_linked_releases:
         project = project_row.value
-        context_log_message = (u'project "%s" [id:%s, responsible:%s]' % (
+        context_log_message = ('project "%s" [id:%s, responsible:%s]' % (
             project[PRJ_NAME], project[ID], project[PRJ_RESPONSIBLE] or '<not set>'))
         changed = convert_release_id_to_usage_dict(project[RELEASE_USAGE], context_log_message)
         if changed:
             if DRY_RUN:
-                print 'INFO: not saving - DRY_RUN'
+                print('INFO: not saving - DRY_RUN')
             else:
                 db.save(project)
-                print 'INFO: saved project'
+                print('INFO: saved project')
 
-    print 'Done with projects.'
+    print('Done with projects.')
 
 convert_project_release_usages()
 
 # --------------------------------
 def convert_moderation_project_additions():
-    print 'Converting moderation project additions release usage'
+    print('Converting moderation project additions release usage')
     moderations_with_project_additions = db.query(moderations_with_project_additions_fun)
     for moderation_row in moderations_with_project_additions:
         moderation = moderation_row.value
         project_additions = moderation[PROJECT_ADDITIONS]
-        context_log_message = (u'moderation request with addtions for "%s" [id:%s, requestor:%s]' % (
+        context_log_message = ('moderation request with addtions for "%s" [id:%s, requestor:%s]' % (
             moderation[DOCUMENT_NAME], moderation[ID], moderation[REQUESTING_USER])).encode('utf-8')
         changed = convert_release_id_to_usage_dict(project_additions[RELEASE_USAGE], context_log_message)
         if changed:
             if DRY_RUN:
-                print 'INFO: not saving moderation - DRY_RUN'
+                print('INFO: not saving moderation - DRY_RUN')
             else:
                 db.save(moderation)
-                print 'INFO: saved moderation'
+                print('INFO: saved moderation')
 
-    print 'Done with moderation project addition.'
+    print('Done with moderation project addition.')
 
 convert_moderation_project_additions()
 
 # --------------------------------
 def convert_moderation_project_deletions():
-    print 'Converting moderation project deletions release usage'
+    print('Converting moderation project deletions release usage')
     moderations_with_project_deletions = db.query(moderations_with_project_deletions_fun)
     for moderation_row in moderations_with_project_deletions:
         moderation = moderation_row.value
         project_deletions = moderation[PROJECT_DELETIONS]
-        context_log_message = (u'moderation request with deletions for "%s" [id:%s, requestor:%s]' % (
+        context_log_message = ('moderation request with deletions for "%s" [id:%s, requestor:%s]' % (
             moderation[DOCUMENT_NAME], moderation[ID], moderation[REQUESTING_USER])).encode('utf-8')
         changed = convert_release_id_to_usage_dict(project_deletions[RELEASE_USAGE], context_log_message)
         if changed:
             if DRY_RUN:
-                print 'INFO: not saving moderation - DRY_RUN'
+                print('INFO: not saving moderation - DRY_RUN')
             else:
                 db.save(moderation)
-                print 'INFO: saved moderation'
+                print('INFO: saved moderation')
 
-    print 'Done with moderation project deletion.'
+    print('Done with moderation project deletion.')
 
 convert_moderation_project_deletions()

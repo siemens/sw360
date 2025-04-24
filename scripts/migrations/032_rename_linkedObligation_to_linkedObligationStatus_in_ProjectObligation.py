@@ -51,7 +51,7 @@ projectObligations_with_linkedObligations_query = {"selector": {"type": {"$eq": 
 # ---------------------------------------
 
 def updateFieldNames(qryResult, oldName, newName, log):
-    print 'updating field name from '+oldName+' to '+newName
+    print('updating field name from '+oldName+' to '+newName)
     log['updated ProjectObligations fields from '+oldName+' to '+newName] = []
     for entity in qryResult:
         entity[''+newName+''] = entity[''+oldName+'']
@@ -61,13 +61,13 @@ def updateFieldNames(qryResult, oldName, newName, log):
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated ProjectObligations fields from '+oldName+' to '+newName].append(updatedDocId)
-    print 'updation of field name from '+oldName+' to '+newName+' done'
+    print('updation of field name from '+oldName+' to '+newName+' done')
 
 def run():
     log = {}
-    print 'Getting all ProjectObligations with field linkedObligations'
+    print('Getting all ProjectObligations with field linkedObligations')
     projectObligations_with_linkedObligations = db.find(projectObligations_with_linkedObligations_query)
-    print 'found ' + str(len(projectObligations_with_linkedObligations)) + ' ProjectObligations with field linkedObligations in db!'
+    print('found ' + str(len(projectObligations_with_linkedObligations)) + ' ProjectObligations with field linkedObligations in db!')
     log['totalCount'] = len(projectObligations_with_linkedObligations)
     updateFieldNames(projectObligations_with_linkedObligations, oldFieldName, newFieldName, log);
 
@@ -75,13 +75,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "032_projectObligations_migration_'+oldFieldName+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "032_projectObligations_migration_'+oldFieldName+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

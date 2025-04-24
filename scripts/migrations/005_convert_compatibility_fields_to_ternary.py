@@ -56,10 +56,10 @@ licenses_by_id_fun = '''function(doc){
 
 licenses = db.query(licenses_by_id_fun)
 
-print 'On raw licenses: converting boolean compatibility flags to ternary.'
+print('On raw licenses: converting boolean compatibility flags to ternary.')
 for license_row in licenses:
     db.save(convertLicenseToTernary(license_row.value))
-print 'Done.'
+print('Done.')
 
 # -----------------------------------------------------------------------------
 # migrate moderations related to licenses
@@ -71,10 +71,10 @@ moderations_with_license_stuff_fun = '''function(doc){
 
 moderations_with_license_stuff = db.query(moderations_with_license_stuff_fun)
 
-print 'In moderations: converting boolean compatibility flags to ternary.'
+print('In moderations: converting boolean compatibility flags to ternary.')
 for moderation_row in moderations_with_license_stuff:
     moderation = moderation_row.value
     for field in ['licenseAdditions','licenseDeletions']:
-        moderation[field] = map(convertLicenseToTernary, moderation[field])
+        moderation[field] = list(map(convertLicenseToTernary, moderation[field]))
     db.save(moderation)
-print 'Done.'
+print('Done.')

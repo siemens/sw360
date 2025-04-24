@@ -15,7 +15,7 @@
 # example, server address and db name should be parameterized, the code
 # reorganized into a single class or function, etc.
 #
-# This script merge the risk category and risk text as a single text with the format "Risk category text - Risk text", migrate it to obligation text, 
+# This script merge the risk category and risk text as a single text with the format "Risk category text - Risk text", migrate it to obligation text,
 # removes "riskId" and "riskCategoryDatabaseId" from risk and adds the obligationType as 'RISK' and updates the type to obligation
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -57,9 +57,9 @@ def migrateRiskText(resultFile):
     log = {}
     risk_cat_text = ""
     log['updatedRisksWithTextUpdate'] = []
-    print 'Getting all risk with riskCategoryDatabaseId'
+    print('Getting all risk with riskCategoryDatabaseId')
     all_risk = db.find(all_risk_with_riskCategoryDatabaseId_query)
-    print 'found ' + str(len(all_risk)) + ' risks in db!'
+    print('found ' + str(len(all_risk)) + ' risks in db!')
     log['totalCount'] = len(all_risk)
     for risk in all_risk:
         riskCategoryId = risk.get("riskCategoryDatabaseId");
@@ -73,8 +73,8 @@ def migrateRiskText(resultFile):
         log['updatedRisksWithTextUpdate'].append(updatedRisk)
         if not DRY_RUN:
             db.save(risk);
-            print '\tUpdated risk with id '+risk.get("_id")
-    
+            print('\tUpdated risk with id '+risk.get("_id"))
+
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
 def updateTypeNFillDefaultOblType(resultFile, qryResult):
@@ -82,7 +82,7 @@ def updateTypeNFillDefaultOblType(resultFile, qryResult):
     log['updatedObligation'] = []
 
     for risk in qryResult:
-        print '\tUpdating type of document from risk to '+newValue+' for ID -> ' + risk.get('_id')
+        print('\tUpdating type of document from risk to '+newValue+' for ID -> ' + risk.get('_id'))
         risk['obligationType'] = 'RISK'
         risk['type'] = newValue
         updatedObligation = {}
@@ -90,45 +90,45 @@ def updateTypeNFillDefaultOblType(resultFile, qryResult):
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
             db.save(risk)
-            print '\tUpdated type of document from risk to '+newValue+' for ID -> ' + risk.get('_id')
-    
+            print('\tUpdated type of document from risk to '+newValue+' for ID -> ' + risk.get('_id'))
+
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
 def removeFieldName(resultFile, qryResult, fieldToBeRemoved):
     log = {}
     log['totalCount'] = len(qryResult)
-    print 'Removing field name '+fieldToBeRemoved
+    print('Removing field name '+fieldToBeRemoved)
     log['Updated risk fields '+fieldToBeRemoved] = []
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
             db.save(entity)
-            print 'Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id')
+            print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['Updated risk fields '+fieldToBeRemoved].append(updatedDocId)
-    
+
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
 
 def run():
     logFile = open('035_risk_field_updates.log', 'w')
     migrateRiskText(logFile)
-    print 'Getting all risk'
+    print('Getting all risk')
     all_risk = db.find(all_risk_query)
-    print 'found ' + str(len(all_risk)) + ' risks in db!'
+    print('found ' + str(len(all_risk)) + ' risks in db!')
     removeFieldName(logFile, all_risk, "riskId");
     removeFieldName(logFile, all_risk, "riskCategoryDatabaseId");
     updateTypeNFillDefaultOblType(logFile, all_risk);
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "035_risk_field_updates.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "035_risk_field_updates.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

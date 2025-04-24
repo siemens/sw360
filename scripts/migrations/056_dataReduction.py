@@ -98,7 +98,7 @@ release_query = {
 def deleteCompWithoutReleases(log, comp_data_list):
     log['Component Ids'] = []
     print ('Total Components without any releases')
-    print(len(comp_data_list))
+    print((len(comp_data_list)))
     print ('\n')
 
     #deleting the components without any releases
@@ -120,12 +120,12 @@ def deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list)
             for iteration, item in enumerate(project[RELEASE_IDS]):
                 releaseIds_set.add(item)
     print ('Total Releases linked to Project(s) till date')
-    print(len(releaseIds_set))
+    print((len(releaseIds_set)))
     releaseIds_list = list(releaseIds_set)
 
     #getting list of releases based on the createdOn field
-    print ('Total Releases created before ' + bufferDate)
-    print(len(release_data_list))
+    print(('Total Releases created before ' + bufferDate))
+    print((len(release_data_list)))
 
     #getting list of linked releases based on the createdOn field
     for release in release_data_list:
@@ -133,22 +133,22 @@ def deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list)
         for r_id in releaseIds_list:
             if (release[ID] == r_id):
                 totalReleaseIds_set.add(release[ID])
-    print('Total Releases created before ' + bufferDate + ' that are linked to Project(s)')
-    print(len(totalReleaseIds_set))
+    print(('Total Releases created before ' + bufferDate + ' that are linked to Project(s)'))
+    print((len(totalReleaseIds_set)))
 
     #getting list of unlinked releases based on the createdOn field
     if(r_set ^ totalReleaseIds_set):
         unlinkedIds_set = (r_set ^ totalReleaseIds_set)
-    print ('Total Releases created before ' + bufferDate + ' that are not linked to Project(s)')
+    print(('Total Releases created before ' + bufferDate + ' that are not linked to Project(s)'))
     unlinkedIds_list = list(unlinkedIds_set)
-    print(len(unlinkedIds_list))
+    print((len(unlinkedIds_list)))
     log['Release Ids'].append(unlinkedIds_list)
 
     #deleting the releaseIds that are not linked to any project based on the createdOn filed
     for rId in release_data_list:
         for releaseId in unlinkedIds_list:
             if (releaseId == rId[ID]):
-                print('deleting ' + releaseId)
+                print(('deleting ' + releaseId))
 
                 if not DRY_RUN:
                     sw360Db.delete(rId)
@@ -161,7 +161,7 @@ def run():
     print ('1. Ids of component that does not have any releases')
     print ('2. Ids of releases that are not linked to any projects')
     print ('\n')
-    
+
     comp_data = sw360Db.find(comp_query)
     comp_data_list = list(comp_data)
     print('query done for components')
@@ -174,7 +174,7 @@ def run():
     release_data_list = list(release_data)
     print('query done for releases')
     deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list)
-    
+
     print ('\n')
 
     json.dump(log, logFile, indent = 4, sort_keys = True)
@@ -188,4 +188,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

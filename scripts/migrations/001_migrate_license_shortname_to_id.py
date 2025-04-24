@@ -43,15 +43,15 @@ licenses = db.query(licenses_by_id_fun)
 linking_objects = db.query(linking_objects_fun)
 
 
-print 'Updating external links to licenses'
+print('Updating external links to licenses')
 for linking_obj_row in linking_objects:
     linking_obj = linking_obj_row.value
-    linking_obj['mainLicenseIds'] = map(lambda license_id: licenses[license_id].rows[0].value['shortname'], linking_obj['mainLicenseIds'])
+    linking_obj['mainLicenseIds'] = [licenses[license_id].rows[0].value['shortname'] for license_id in linking_obj['mainLicenseIds']]
     if 'mainLicenseNames' in linking_obj:
         del linking_obj['mainLicenseNames']
     db.save(linking_obj)
 
-print 'Copying licenses to new ids'
+print('Copying licenses to new ids')
 for license_row in licenses:
     license = license_row.value
     db.delete(license)

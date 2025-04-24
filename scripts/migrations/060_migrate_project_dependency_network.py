@@ -60,7 +60,7 @@ def get_children_node(id, createBy, createOn):
     children_nodes = []
     if len(release_by_id) > 0:
         if release_by_id.get('releaseIdToRelationship') != None:
-            for release_id, release_relation in release_by_id.get('releaseIdToRelationship').items():
+            for release_id, release_relation in list(release_by_id.get('releaseIdToRelationship').items()):
                 node = {
                     'releaseId': release_id,
                     'releaseRelationship': release_relation,
@@ -80,7 +80,7 @@ def applyTransferData(project, log):
     updatedDocId['id'] = project.get('_id')
     if not DRY_RUN:
         db.save(project)
-        print ('Add field ' + newFieldName + ' done for project ' + project.get('_id'))
+        print(('Add field ' + newFieldName + ' done for project ' + project.get('_id')))
         log['Success updated project'].append(updatedDocId)
     else:
         log['Project will be update with DRY RUN'].append(updatedDocId)
@@ -91,10 +91,10 @@ def run():
     project_with_releaseIdToUsage_field = db.find(get_projects_with_releaseIdToUsage_field_query)
 
     for project in project_with_releaseIdToUsage_field:
-        print ('migrating for project: ' + project["_id"])
+        print(('migrating for project: ' + project["_id"]))
         dependency_network = []
         try:
-            for release_id, relation_with_project in project.get(releaseIdToUsageFieldName).items():
+            for release_id, relation_with_project in list(project.get(releaseIdToUsageFieldName).items()):
                 createOn = relation_with_project.get('createdOn')
                 createBy = relation_with_project.get('createdBy')
                 node = {
@@ -127,5 +127,4 @@ def writeLog():
 startTime = time.time()
 run()
 writeLog()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
-
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

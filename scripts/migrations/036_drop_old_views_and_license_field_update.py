@@ -15,7 +15,7 @@
 # example, server address and db name should be parameterized, the code
 # reorganized into a single class or function, etc.
 #
-# This script removes old design document for Risk & RiskCategory & merge "riskDatabaseIds" 
+# This script removes old design document for Risk & RiskCategory & merge "riskDatabaseIds"
 # with "obligationDatabaseIds" and  remove "riskDatabaseIds" from license
 # ----------------------------------------------------------------------------------------------
 
@@ -53,9 +53,9 @@ all_license_with_riskDatabaseIds = {"selector": {"type": {"$eq": "license"}, "ri
 
 def mergeRiskDBIdsWithObligationDBIds(resultFile):
     log = {}
-    print 'Getting all licenses with field riskDatabaseIds'
+    print('Getting all licenses with field riskDatabaseIds')
     all_licenses = db.find(all_license_with_riskDatabaseIds)
-    print 'found ' + str(len(all_licenses)) + ' licenses with field riskDatabaseIds in db!'
+    print('found ' + str(len(all_licenses)) + ' licenses with field riskDatabaseIds in db!')
     log['totalCount'] = len(all_licenses)
     log['updatedLicenseWithMergingRiskIdsOblIds'] = []
 
@@ -74,23 +74,23 @@ def mergeRiskDBIdsWithObligationDBIds(resultFile):
             db.save(license)
 
     json.dump(log, resultFile, indent = 4)
-            
+
 
 def dropViews(doc_id, resultFile):
     log = {}
     log['docId'] = doc_id
-    print 'Getting Document by ID : ' + doc_id
+    print('Getting Document by ID : ' + doc_id)
     doc = db.get(doc_id, None)
     if doc is not None:
-        print 'Received document.Deleting Document.'
-        print 'Deleting Document with ID : ' + doc_id
+        print('Received document.Deleting Document.')
+        print('Deleting Document with ID : ' + doc_id)
         log['result'] = 'Deleted Document with ID : ' + doc_id
         if not DRY_RUN:
             db.delete(doc)
     else:
-        print 'No document found with this ID.'
+        print('No document found with this ID.')
         log['result'] = 'No document found with this ID.'
-    
+
     json.dump(log, resultFile, indent = 4)
 
 def run():
@@ -99,16 +99,16 @@ def run():
     dropViews(design_doc_id_risk, logFile);
     dropViews(design_doc_id_riskcategory, logFile);
     logFile.close()
-    
-    
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "036_drop_old_views_and_license_field_update.log" in this directory for details'
-    print '------------------------------------------'
+
+
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "036_drop_old_views_and_license_field_update.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

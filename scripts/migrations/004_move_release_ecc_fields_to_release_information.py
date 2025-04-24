@@ -38,7 +38,7 @@ releases_with_clearing_info_fun = '''function(doc){
 
 releases_with_clearing_info = db.query(releases_with_clearing_info_fun)
 
-print 'Moving release ecc fields to eccInformation'
+print('Moving release ecc fields to eccInformation')
 for release_row in releases_with_clearing_info:
     release = release_row.value
     release[ECC_INFORMATION] = {}
@@ -51,20 +51,20 @@ for release_row in releases_with_clearing_info:
     if changed:
         db.save(release)
 
-print 'Done with releases.'
-               
+print('Done with releases.')
+
 # --------------------------------
-               
-print 'Moving moderation release additions ecc fields to eccInformation'
- 
+
+print('Moving moderation release additions ecc fields to eccInformation')
+
 moderations_with_release_additions_fun = '''function(doc){
     if (doc.type=="moderation" && doc.releaseAdditions && doc.releaseAdditions.clearingInformation){
         emit(doc._id, doc)
     }
 }'''
- 
+
 moderations_with_release_additions = db.query(moderations_with_release_additions_fun)
- 
+
 for moderation_row in moderations_with_release_additions:
     moderation = moderation_row.value
     release_additions = moderation['releaseAdditions']
@@ -76,22 +76,22 @@ for moderation_row in moderations_with_release_additions:
             del release_additions[CLEARING_INFORMATION][field]
             changed = True
     if changed:
-        db.save(moderation)    
-               
-print 'Done with moderation release addition.'
- 
+        db.save(moderation)
+
+print('Done with moderation release addition.')
+
 # --------------------------------
- 
-print 'Moving moderation release deletions ecc fields to eccInformation'
- 
+
+print('Moving moderation release deletions ecc fields to eccInformation')
+
 moderations_with_release_deletions_fun = '''function(doc){
     if (doc.type=="moderation" && doc.releaseDeletions && doc.releaseDeletions.clearingInformation){
         emit(doc._id, doc)
     }
 }'''
- 
+
 moderations_with_release_deletions = db.query(moderations_with_release_deletions_fun)
- 
+
 for moderation_row in moderations_with_release_deletions:
     moderation = moderation_row.value
     release_deletions = moderation['releaseDeletions']
@@ -103,6 +103,6 @@ for moderation_row in moderations_with_release_deletions:
             del release_deletions[CLEARING_INFORMATION][field]
             changed = True
     if changed:
-        db.save(moderation)    
-               
-print 'Done with moderation release deletions.'
+        db.save(moderation)
+
+print('Done with moderation release deletions.')

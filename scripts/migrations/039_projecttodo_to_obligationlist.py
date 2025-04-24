@@ -57,7 +57,7 @@ def getOblTextNLevel(oblId):
         obllevel = obl.get("obligationLevel")
         obltextNLevel["oblText"] = text
         obltextNLevel["oblLevel"] = obllevel
-    
+
     return obltextNLevel
 
 def getDateOnly(dateWithTimes):
@@ -78,7 +78,7 @@ def getLinkedObligationList(linkedOblId):
     obligationList = db.find(get_obligationList_by_id)
     for obList in obligationList:
         oblList = obList
-    
+
     return oblList
 
 def mergeTodoWithObligationList(resultFile, all_projects):
@@ -110,7 +110,7 @@ def mergeTodoWithObligationList(resultFile, all_projects):
                     obligationStatusInfos[todotext] = {}
                     obligationStatusInfos[todotext] = obligationStatusInfo
                 oblList["linkedObligationStatus"] = obligationStatusInfos
-                
+
                 updatedProjectsWithobligationList = {}
                 updatedProjectsWithobligationList['id'] = project.get('_id')
                 log['updatedProjectsWithobligationList'].append(updatedProjectsWithobligationList)
@@ -149,38 +149,38 @@ def mergeTodoWithObligationList(resultFile, all_projects):
 def removeFieldName(resultFile, qryResult, fieldToBeRemoved):
     log = {}
     log['totalCount'] = len(qryResult)
-    print 'Removing field name '+fieldToBeRemoved
+    print('Removing field name '+fieldToBeRemoved)
     log['Updated project fields '+fieldToBeRemoved] = []
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
             db.save(entity)
-            print 'Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id')
+            print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['Updated project fields '+fieldToBeRemoved].append(updatedDocId)
-    
+
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
 def run():
     logFile = open('039_projecttodo_to_obligationlist.log', 'w')
-    
-    print 'Getting all projects with field todos'
+
+    print('Getting all projects with field todos')
     all_projects = db.find(all_project_with_todos)
-    print 'found ' + str(len(all_projects)) + ' projects with field todos in db!'
+    print('found ' + str(len(all_projects)) + ' projects with field todos in db!')
 
     mergeTodoWithObligationList(logFile, all_projects)
 
     removeFieldName(logFile, all_projects, "todos")
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "039_projecttodo_to_obligationlist.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "039_projecttodo_to_obligationlist.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

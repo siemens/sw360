@@ -41,24 +41,23 @@ get_all_moderation_requests_fun = '''function(doc){
 '''
 
 
-print "Retrieve list of all users"
+print("Retrieve list of all users")
 all_users = db_users.query(get_all_users_fun)
 map_users_to_department = {}
 for user in all_users:
     map_users_to_department[user.value['email']] = user.value['department']
 
 
-print "Update missing submitter's department in moderation requests"
+print("Update missing submitter's department in moderation requests")
 all_moderation_requests = db.query(get_all_moderation_requests_fun)
 for request in all_moderation_requests:
     document = request.value
-    if not 'requestingUserGroup' in document.keys():
+    if not 'requestingUserGroup' in list(document.keys()):
         try:
             requestingUserMail = document['requestingUser']
             document['requestingUserDepartment'] = map_users_to_department[requestingUserMail]
             db.save(document)
         except KeyError:
-            print "no requesting user in moderation request with id=" + request.id
+            print("no requesting user in moderation request with id=" + request.id)
 
-print "done."
-
+print("done.")

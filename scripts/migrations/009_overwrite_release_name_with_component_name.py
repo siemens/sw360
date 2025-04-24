@@ -47,9 +47,9 @@ get_all_releases_fun = '''function(doc){
         }
     }'''
 
-print 'Retrieve all components'
+print('Retrieve all components')
 components = db.query(get_all_components_fun)
-print 'Retrieve all releases'
+print('Retrieve all releases')
 releases = db.query(get_all_releases_fun)
 
 componentNamesById = {}
@@ -64,13 +64,13 @@ for release in releases:
     componentId = docRelease[COMPONENTID]
     if componentId in componentNamesById:
         if releaseName != componentNamesById[componentId]:
-            print (u'INFO: releaseId:%s, old name:"%s", new name: "%s"' % (
-                releaseId, releaseName, componentNamesById[componentId])).encode('utf-8')
+            print(('INFO: releaseId:%s, old name:"%s", new name: "%s"' % (
+                releaseId, releaseName, componentNamesById[componentId])).encode('utf-8'))
             if DRY_RUN:
-                print 'INFO: not saving release - DRY_RUN\n'
+                print('INFO: not saving release - DRY_RUN\n')
             else:
                 docRelease[NAME] = componentNamesById[componentId]
                 db.save(docRelease)
-                print 'INFO: saved release\n'
+                print('INFO: saved release\n')
     else:
-        print 'WARN: document for componentId ' + componentId + ' not found\n'
+        print('WARN: document for componentId ' + componentId + ' not found\n')

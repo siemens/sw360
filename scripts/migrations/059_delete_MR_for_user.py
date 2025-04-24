@@ -56,7 +56,7 @@ def removeModerationRequests(logFile, docs):
     log['MR'] = []
     log['MR(Dry run)'] = []
     for mr in docs:
-        print ("MR Id: " + mr.get("_id"))
+        print(("MR Id: " + mr.get("_id")))
         if DRY_RUN:
             deleteMR_Dry_Run = {}
             deleteMR_Dry_Run['MRid'] = mr.get('_id')
@@ -74,7 +74,7 @@ def run():
     logFile = open('RemoveMR.log', 'w')
     print ('Getting all the Moderation Requests')
     Moderation_Requests = list(db.find(all_Moderation_Requests))
-    print ('found ' + str(len(Moderation_Requests)) + ' Moderation Requests\n')
+    print(('found ' + str(len(Moderation_Requests)) + ' Moderation Requests\n'))
     removeModerationRequests(logFile, Moderation_Requests)
     logFile.close()
     print ('------------------------------------------')
@@ -85,4 +85,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of deletion: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of deletion: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

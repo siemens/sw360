@@ -44,14 +44,14 @@ print("This script will collect closed moderation requests statistics that falls
 print("************ NOTE: START_DATE should be less than the END_DATE ************ \n")
 
 print("****** Enter the start date ******")
-start_YYYY = int(input("Enter the Year: "))
-start_MM = int(input("Enter the Month: "))
-start_DD = int(input("Enter the Date: "))
+start_YYYY = int(eval(input("Enter the Year: ")))
+start_MM = int(eval(input("Enter the Month: ")))
+start_DD = int(eval(input("Enter the Date: ")))
 
 print("****** Enter the end date ******")
-end_YYYY = int(input("Enter the Year: "))
-end_MM = int(input("Enter the Month: "))
-end_DD = int(input("Enter the Date: "))
+end_YYYY = int(eval(input("Enter the Year: ")))
+end_MM = int(eval(input("Enter the Month: ")))
+end_DD = int(eval(input("Enter the Date: ")))
 
 startDate = int(datetime.datetime(start_YYYY, start_MM, start_DD, 0, 0, 0).timestamp()*1000)
 endDate = int(datetime.datetime(end_YYYY, end_MM, end_DD, 0, 0, 0).timestamp()*1000)
@@ -81,7 +81,7 @@ MR_query = {
       "requestingUserDepartment",
       "reviewer",
       "timestampOfDecision",
-      "moderationState"  
+      "moderationState"
     ],
    "limit": 999999
 }
@@ -110,20 +110,20 @@ def closedModerationRequestsStatistics(log, MR_data_list):
     log["Closed Moderation Requests TOTAL/APPROVED/REJECTED"].append(approvedCount)
     log["Closed Moderation Requests TOTAL/APPROVED/REJECTED"].append(rejectedCount)
 
-    print("Approved MRs " + str(approvedCount))
-    print("Rejected MRs " + str(rejectedCount))
+    print(("Approved MRs " + str(approvedCount)))
+    print(("Rejected MRs " + str(rejectedCount)))
 
 def run():
     log = {}
     logFile = open('modRequestStats2.log', 'w')
-    
+
     print ('\n')
     MR_data = sw360Db.find(MR_query)
     MR_data_list = list(MR_data)
 
     print ('****** Statistics of closed moderation requests ******')
     total = len(MR_data_list)
-    print ("Total Closed MRs: " + str(total))
+    print(("Total Closed MRs: " + str(total)))
     closedModerationRequestsStatistics(log, MR_data_list)
 
     json.dump(log, logFile, indent = 4, sort_keys = True)
@@ -137,4 +137,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

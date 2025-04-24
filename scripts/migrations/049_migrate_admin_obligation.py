@@ -66,10 +66,10 @@ def migrateAndUpdateAdminObligationStatus(logFile, obligationListWithStatus, adm
         oblStatus = obl.get("linkedObligationStatus")
         docId = obl.get("_id")
         projectId = obl.get('projectId', None)
-        print "\n\nDoc Id: " + docId
-        for k, v in oblStatus.items():
+        print("\n\nDoc Id: " + docId)
+        for k, v in list(oblStatus.items()):
             if bool(v) and bool(v.get("obligationLevel")):
-                print "Obligation Title: " + k
+                print("Obligation Title: " + k)
                 isNotFound = True
                 updatedDocId = {}
                 updatedDocId['id'] = docId
@@ -91,7 +91,7 @@ def migrateAndUpdateAdminObligationStatus(logFile, obligationListWithStatus, adm
                             log['obligations-updated-successfully'].append(updatedDocId)
 
                 if isNotFound:
-                    print "\nNo Admin level obligation is found for Obligation Text: " + k + ", Obl level: " + v.get("obligationLevel")
+                    print("\nNo Admin level obligation is found for Obligation Text: " + k + ", Obl level: " + v.get("obligationLevel"))
                     log['mismatch-obligations-total-count'] += 1
                     mismatchLog[docId] = projectId
                     if k == 'null':
@@ -114,22 +114,22 @@ def migrateAndUpdateAdminObligationStatus(logFile, obligationListWithStatus, adm
 
 def run():
     logFile = open('049_migrate_admin_obligation.log', 'w')
-    print 'Getting all the Obligations with field "linkedObligationStatus"'
+    print('Getting all the Obligations with field "linkedObligationStatus"')
     obligations_with_linkedObligationStatus = db.find(all_Obligations_with_linkedObligationStatus);
-    print 'found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus\n'
-    print 'Getting all the Obligations (License/Project/Component/Organisation) from Admin section'
+    print('found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus\n')
+    print('Getting all the Obligations (License/Project/Component/Organisation) from Admin section')
     obligations_from_AdminSection = db.find(all_Obligations_from_AdminSection);
-    print 'found ' + str(len(obligations_from_AdminSection)) + ' obligations in Admin Section\n'
+    print('found ' + str(len(obligations_from_AdminSection)) + ' obligations in Admin Section\n')
     migrateAndUpdateAdminObligationStatus(logFile, obligations_with_linkedObligationStatus, obligations_from_AdminSection);
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "049_migrate_admin_obligation.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "049_migrate_admin_obligation.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

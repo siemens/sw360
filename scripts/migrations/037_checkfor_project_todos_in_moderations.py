@@ -54,7 +54,7 @@ def checkEmptyTodosAnddeleteFromModeration(logFile, all_moderations):
     log['projectModerationRequestsHavingEmptyTodos'] = []
     log['projectModerationRequestsHavingEmptyTodos'].append(count)
     todo = "todos"
-    
+
     for moderation in all_moderations:
 
         projectAdditions = moderation.get("projectAdditions")
@@ -118,8 +118,8 @@ def checkForFilledTodosInModeration(logFile, all_moderations):
     json.dump(log, logFile, indent = 4, sort_keys = True)
 
     if len(moderationList) > 0:
-        print "\nWarning!! Following moderation requests contains todos with data. Please work on them before proceeding further to execute other migration scripts or else the moderation view might break"
-        print(str(moderationList)[1:-1])
+        print("\nWarning!! Following moderation requests contains todos with data. Please work on them before proceeding further to execute other migration scripts or else the moderation view might break")
+        print((str(moderationList)[1:-1]))
         return True
 
 
@@ -127,26 +127,26 @@ def checkForFilledTodosInModeration(logFile, all_moderations):
 def run():
     logFile = open('037_checkfor_project_todos_in_moderations.log', 'w')
 
-    print 'Getting all project moderations with todos'
+    print('Getting all project moderations with todos')
     all_moderations = db.find(all_project_moderations)
-    print 'found ' + str(len(all_moderations)) + ' project moderations with todos in db!'
+    print('found ' + str(len(all_moderations)) + ' project moderations with todos in db!')
 
-    print 'Checking if there is any moderation request having todos with data'
+    print('Checking if there is any moderation request having todos with data')
     isExists = checkForFilledTodosInModeration(logFile, all_moderations)
 
     if isExists is None:
-        print 'Found zero moderation request having todos with data'
+        print('Found zero moderation request having todos with data')
         checkEmptyTodosAnddeleteFromModeration(logFile, all_moderations)
 
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "037_checkfor_project_todos_in_moderations.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "037_checkfor_project_todos_in_moderations.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

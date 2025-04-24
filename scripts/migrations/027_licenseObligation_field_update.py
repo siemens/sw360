@@ -55,38 +55,38 @@ licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licen
 # ---------------------------------------
 
 def updateFieldNames(qryResult, oldName, newName, log):
-    print 'updating field name from '+oldName+' to '+newName
+    print('updating field name from '+oldName+' to '+newName)
     log['updated licenseObligation fields from '+oldName+' to '+newName] = []
     for entity in qryResult:
         entity[''+newName+''] = entity[''+oldName+'']
         del entity[''+oldName+'']
         if not DRY_RUN:
             db.save(entity)
-            print 'updation of field name from '+oldName+' to '+newName+' done'
+            print('updation of field name from '+oldName+' to '+newName+' done')
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated licenseObligation fields from '+oldName+' to '+newName].append(updatedDocId)
 
 def removeFieldName(qryResult, fieldToBeRemoved, log):
-    print 'Removing field name '+fieldToBeRemoved
+    print('Removing field name '+fieldToBeRemoved)
     log['Updated licenseObligation fields '+fieldToBeRemoved] = []
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
             db.save(entity)
-            print 'Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id')
+            print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['Updated licenseObligation fields '+fieldToBeRemoved].append(updatedDocId)
 
 def run():
     log = {}
-    print 'Getting all licenseObligation with field name'
+    print('Getting all licenseObligation with field name')
     licenseObligation_with_name = db.find(licenseObligation_with_name_query)
-    print 'found ' + str(len(licenseObligation_with_name)) + ' licenseObligation with field name in db!'
+    print('found ' + str(len(licenseObligation_with_name)) + ' licenseObligation with field name in db!')
     log['totalCount'] = len(licenseObligation_with_name)
     updateFieldNames(licenseObligation_with_name, oldFieldName, newFieldName, log);
-    print 'Getting all licenseObligation with field obligationId'
+    print('Getting all licenseObligation with field obligationId')
     licenseObligation_with_obligationId = db.find(licenseObligation_with_obligationId_query)
     removeFieldName(licenseObligation_with_obligationId, deleteFieldName, log);
 
@@ -95,13 +95,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "027_licenseObligation_migration_'+oldFieldName+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "027_licenseObligation_migration_'+oldFieldName+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

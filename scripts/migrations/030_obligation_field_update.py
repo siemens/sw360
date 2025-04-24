@@ -50,22 +50,22 @@ obligation_with_obligationDatabaseIds_query = {"selector": {"type": {"$eq": "obl
 # ---------------------------------------
 
 def removeFieldName(qryResult, fieldToBeRemoved, log):
-    print 'Removing field name '+fieldToBeRemoved+' starts'
+    print('Removing field name '+fieldToBeRemoved+' starts')
     log['Updated obligation fields '+fieldToBeRemoved] = []
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
             db.save(entity)
-            print 'Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id')
+            print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['Updated obligation fields '+fieldToBeRemoved].append(updatedDocId)
 
 def run():
     log = {}
-    print 'Getting all obligation with field obligationDatabaseIds'
+    print('Getting all obligation with field obligationDatabaseIds')
     obligation_with_obligationDatabaseIds = db.find(obligation_with_obligationDatabaseIds_query)
-    print 'found ' + str(len(obligation_with_obligationDatabaseIds)) + ' obligation with field obligationDatabaseIds in db!'
+    print('found ' + str(len(obligation_with_obligationDatabaseIds)) + ' obligation with field obligationDatabaseIds in db!')
     log['totalCount'] = len(obligation_with_obligationDatabaseIds)
     removeFieldName(obligation_with_obligationDatabaseIds, deleteFieldName, log);
 
@@ -74,13 +74,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "030_obligation__remove_field_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "030_obligation__remove_field_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

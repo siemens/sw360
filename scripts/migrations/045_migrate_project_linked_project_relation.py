@@ -49,15 +49,15 @@ projects_all_query = {"selector": {"type": {"$eq": "project"}, "linkedProjects":
 def run():
     log = {}
     log['updatedProjects'] = []
-    print 'Getting all projects with linkedProjects'
+    print('Getting all projects with linkedProjects')
     projects_all = db.find(projects_all_query)
-    print 'Received ' + str(len(projects_all)) + ' projects'
+    print('Received ' + str(len(projects_all)) + ' projects')
     log['totalCount'] = len(projects_all)
 
     for project in projects_all:
         updateflag=False
         oldLinkedProjectsStructure = project.get('linkedProjects');
-        for key, value in oldLinkedProjectsStructure.items():
+        for key, value in list(oldLinkedProjectsStructure.items()):
             if type(value) == dict:
                continue
             projectProjectRelationship = { "projectRelationship" : value }
@@ -65,7 +65,7 @@ def run():
             updateflag = True
         if not updateflag:
             continue
-        print '\tUpdating project ID -> ' + project.get('_id') + ', Project Name -> ' + project.get('name')
+        print('\tUpdating project ID -> ' + project.get('_id') + ', Project Name -> ' + project.get('name'))
         updatedProject = {}
         updatedProject['id'] = project.get('_id')
         updatedProject['name'] = project.get('name')
@@ -76,13 +76,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "045_migrate_project_linked_project_relation.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "045_migrate_project_linked_project_relation.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

@@ -63,14 +63,14 @@ def fix_sha1_in_attachment_list(attachments, log_msg):
         if FIELD_SHA1 in attachment:
             continue
         if not FIELD_ATT_CONTENT_ID in attachment:
-            print (u'WARN: %s - attachmentContentId not found for attachment %s. Skipping' % (log_msg, attachment[FIELD_FILENAME] if FIELD_FILENAME in attachment else u'<not set>' )).encode('utf-8')
+            print(('WARN: %s - attachmentContentId not found for attachment %s. Skipping' % (log_msg, attachment[FIELD_FILENAME] if FIELD_FILENAME in attachment else '<not set>' )).encode('utf-8'))
             continue
         att_cont_id = attachment[FIELD_ATT_CONTENT_ID]
 
         try:
             att_content = attdb[att_cont_id]
         except:
-            print (u'WARN: %s - attachment with id [%s] not found in the attachment database. Skipping' % (log_msg, att_cont_id)).encode('utf-8')
+            print(('WARN: %s - attachment with id [%s] not found in the attachment database. Skipping' % (log_msg, att_cont_id)).encode('utf-8'))
             continue
 
         if FIELD_PARTS_COUNT in att_content:
@@ -80,7 +80,7 @@ def fix_sha1_in_attachment_list(attachments, log_msg):
             for part in range(1, int(att_content[FIELD_PARTS_COUNT]) + 1):
                 att_file = attdb.get_attachment(att_cont_id, attachment[FIELD_FILENAME] + '_part' + str(part))
                 if att_file is None:
-                    print (u'WARN: %s - attachment part %d of attachment id [%s] not found in the attachment database. Skipping' % (log_msg, part, att_cont_id)).encode('utf-8')
+                    print(('WARN: %s - attachment part %d of attachment id [%s] not found in the attachment database. Skipping' % (log_msg, part, att_cont_id)).encode('utf-8'))
                     all_parts_found = False
                     break
 
@@ -93,9 +93,9 @@ def fix_sha1_in_attachment_list(attachments, log_msg):
             hash = hasher.hexdigest()
             attachment[FIELD_SHA1] = hash
             changed = True
-            print (u'INFO: %s - fixed attachment sha1 [%s]=%s' % (log_msg, attachment[FIELD_FILENAME], hash)).encode('utf-8')
+            print(('INFO: %s - fixed attachment sha1 [%s]=%s' % (log_msg, attachment[FIELD_FILENAME], hash)).encode('utf-8'))
         else:
-            print (u'INFO: %s - attachment [%s] has no partsCount. Setting fake sha1' % (log_msg, att_cont_id)).encode('utf-8')
+            print(('INFO: %s - attachment [%s] has no partsCount. Setting fake sha1' % (log_msg, att_cont_id)).encode('utf-8'))
             attachment[FIELD_SHA1] = '<not-set>' + att_cont_id
             changed = True
 
@@ -105,21 +105,20 @@ def fix_sha1_in_attachment_list(attachments, log_msg):
 
 
 def fix_sha1_in_all_objects():
-    print 'Fixing missing sha1 hashes'
+    print('Fixing missing sha1 hashes')
     broken_objects = db.query(objects_with_attachments_without_sha1_fun)
     for row in broken_objects:
         obj = row.value
-        context_log_message = (u'object [id:%s, name:%s, version:%s, type:%s]' % (
+        context_log_message = ('object [id:%s, name:%s, version:%s, type:%s]' % (
              row.id, obj[FIELD_NAME] if FIELD_NAME in obj else "", obj[FIELD_VERSION] if FIELD_VERSION in obj else "", obj[FIELD_TYPE] if FIELD_TYPE in obj else ""))
         changed = fix_sha1_in_attachment_list(obj[FIELD_ATTACHMENTS], context_log_message)
         if changed:
             if DRY_RUN:
-                print 'INFO: not saving - DRY_RUN'
+                print('INFO: not saving - DRY_RUN')
             else:
                 db.save(obj)
-                print 'INFO: saved object'
+                print('INFO: saved object')
 
-    print 'Done'
+    print('Done')
 
 fix_sha1_in_all_objects()
-

@@ -45,7 +45,7 @@ all_projects_with_homepage_or_wiki = {"selector": {"type": {"$eq": "project"}, "
 # ---------------------------------------
 # functions
 # ---------------------------------------
-    
+
 def migrateAndDeleteHomepageWiki(logFile, docs):
     log = {}
     log['totalProjectsWitHomePageOrWiki'] = len(docs)
@@ -78,24 +78,24 @@ def migrateAndDeleteHomepageWiki(logFile, docs):
             updatedDocId['id'] = entity.get('_id')
             log['Updated projects'].append(updatedDocId)
 
-    
+
     json.dump(log, logFile, indent = 4, sort_keys = True)
 
 def run():
     logFile = open('043_migrate_project_homepage_wiki_to_externalUrls.log', 'w')
-    print 'Getting all projects with homepage or wiki'
+    print('Getting all projects with homepage or wiki')
     projects_with_homepage_or_wiki = db.find(all_projects_with_homepage_or_wiki);
-    print 'found ' + str(len(projects_with_homepage_or_wiki)) + ' projects with homepage or wiki'
+    print('found ' + str(len(projects_with_homepage_or_wiki)) + ' projects with homepage or wiki')
     migrateAndDeleteHomepageWiki(logFile, projects_with_homepage_or_wiki);
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "043_migrate_project_homepage_wiki_to_externalUrls.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "043_migrate_project_homepage_wiki_to_externalUrls.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

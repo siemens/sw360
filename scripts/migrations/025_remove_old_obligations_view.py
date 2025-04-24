@@ -44,30 +44,30 @@ doc_id = "_design/Obligations"
 def run():
     log = {}
     log['docId'] = doc_id
-    print 'Getting Document by ID : ' + doc_id
+    print('Getting Document by ID : ' + doc_id)
     doc = db.get(doc_id, None)
     if doc is not None:
-        print 'Received document.Deleting Document.'
-        print 'Deleting Document with ID : ' + doc_id
+        print('Received document.Deleting Document.')
+        print('Deleting Document with ID : ' + doc_id)
         log['result'] = 'Deleted Document with ID : ' + doc_id
         if not DRY_RUN:
             db.delete(doc)
     else:
-        print 'No document found with this ID.'
+        print('No document found with this ID.')
         log['result'] = 'No document found with this ID.'
-    
-    
+
+
     resultFile = open('025_remove_old_obligations_view.log', 'w')
     json.dump(log, resultFile, indent = 4)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "025_remove_old_obligations_view.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "025_remove_old_obligations_view.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

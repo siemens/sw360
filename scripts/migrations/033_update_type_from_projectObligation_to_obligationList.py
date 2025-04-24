@@ -52,32 +52,32 @@ all_projectObligations_query = {"selector": {"type": {"$eq": "projectObligation"
 def run():
     log = {}
     log['updatedProjectObligations'] = []
-    print 'Getting all projectObligations'
+    print('Getting all projectObligations')
     all_projectObligations = db.find(all_projectObligations_query)
-    print 'found ' + str(len(all_projectObligations)) + ' projectObligations in db!'
+    print('found ' + str(len(all_projectObligations)) + ' projectObligations in db!')
     log['totalCount'] = len(all_projectObligations)
 
     for projectObligation in all_projectObligations:
-        print '\tUpdating type of document from obligations to '+newValue+' for ID -> ' + projectObligation.get('_id')
+        print('\tUpdating type of document from obligations to '+newValue+' for ID -> ' + projectObligation.get('_id'))
         projectObligation['type'] = newValue
         updatedProjectObligation = {}
         updatedProjectObligation['id'] = projectObligation.get('_id')
         log['updatedProjectObligations'].append(updatedProjectObligation)
         if not DRY_RUN:
             db.save(projectObligation)
-            print '\tUpdated type of document from projectObligation to '+newValue+' for ID -> ' + projectObligation.get('_id')
+            print('\tUpdated type of document from projectObligation to '+newValue+' for ID -> ' + projectObligation.get('_id'))
 
     resultFile = open('033_projectObligation_type_migration.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "033_projectObligation_type_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "033_projectObligation_type_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

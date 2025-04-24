@@ -59,14 +59,14 @@ def run():
     log = {}
     count = 0;
     log['updatedCR'] = []
-    print 'Getting all clearing requests'
+    print('Getting all clearing requests')
     clearing_request_all = db.query(cr_all_query)
-    print 'found ' + str(len(clearing_request_all)) + ' clearing requests with clearingTeamComment in db!'
+    print('found ' + str(len(clearing_request_all)) + ' clearing requests with clearingTeamComment in db!')
     log['totalCount'] = len(clearing_request_all)
 
     for crRow in clearing_request_all:
         cr = crRow.value
-        print '\tUpdating Clearing Request with ID -> ' + cr.get('_id')
+        print('\tUpdating Clearing Request with ID -> ' + cr.get('_id'))
         del cr[fieldValue]
         updatedCR = {}
         updatedCR['id'] = cr.get('_id')
@@ -74,20 +74,20 @@ def run():
         count = count + 1
         if not DRY_RUN:
             db.save(cr)
-            print '\tUpdated Clearing Request with ID -> ' + cr.get('_id')
+            print('\tUpdated Clearing Request with ID -> ' + cr.get('_id'))
     resultFile = open('018_clearing_request_migration_'+fieldValue+'.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Total Clearing Request updated : ' + str(count)
-    print '------------------------------------------'
-    print 'Please check log file "018_clearing_request_migration_'+fieldValue+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Total Clearing Request updated : ' + str(count))
+    print('------------------------------------------')
+    print('Please check log file "018_clearing_request_migration_'+fieldValue+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

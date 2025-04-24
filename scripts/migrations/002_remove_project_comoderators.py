@@ -35,10 +35,10 @@ projects_with_comoderators_fun = '''function(doc){
 
 projects_with_comoderators = db.query(projects_with_comoderators_fun)
 
-print 'Removing comoderators from projects'
+print('Removing comoderators from projects')
 for project_row in projects_with_comoderators:
     project = project_row.value
     del project['comoderators']
     db.save(project)
 
-print 'Done'
+print('Done')

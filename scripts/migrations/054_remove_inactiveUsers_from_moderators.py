@@ -69,8 +69,8 @@ def activeUsersInModerators(log, inactive_users, moderation_list):
             for iteration, item in enumerate(moderation[MODS]):
                 if (item == user[EMAIL]):
                     moderation[MODS].remove(item)
-                    print (moderation[ID])
-                    print (moderation[STATE])
+                    print((moderation[ID]))
+                    print((moderation[STATE]))
                     log['Inactive Users email id in Moderators with moderation id'].append(moderation[ID])
                     log['Inactive Users email id in Moderators with moderation id'].append(item)
 
@@ -101,4 +101,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

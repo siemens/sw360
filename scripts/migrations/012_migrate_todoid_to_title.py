@@ -34,10 +34,9 @@ todos_by_id_fun = '''function(doc){
 todos = db.query(todos_by_id_fun)
 
 
-print 'Updating todos and replace todoId with title'
+print('Updating todos and replace todoId with title')
 for todo_row in todos:
     todo = todo_row.value
     todo['title'] = str(todo['todoId'])
     del todo['todoId']
     db.save(todo)
-

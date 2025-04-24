@@ -52,32 +52,32 @@ all_obligations_query = {"selector": {"type": {"$eq": "obligations"}}}
 def run():
     log = {}
     log['updatedObligation'] = []
-    print 'Getting all obligations'
+    print('Getting all obligations')
     all_obligations = db.find(all_obligations_query)
-    print 'found ' + str(len(all_obligations)) + ' obligations in db!'
+    print('found ' + str(len(all_obligations)) + ' obligations in db!')
     log['totalCount'] = len(all_obligations)
 
     for obligation in all_obligations:
-        print '\tUpdating type of document from obligations to '+newValue+' for ID -> ' + obligation.get('_id')
+        print('\tUpdating type of document from obligations to '+newValue+' for ID -> ' + obligation.get('_id'))
         obligation['type'] = newValue
         updatedObligation = {}
         updatedObligation['id'] = obligation.get('_id')
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
             db.save(obligation)
-            print '\tUpdated type of document from obligations to '+newValue+' for ID -> ' + obligation.get('_id')
+            print('\tUpdated type of document from obligations to '+newValue+' for ID -> ' + obligation.get('_id'))
 
     resultFile = open('024_obligations_type_migration.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "024_obligations_type_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "024_obligations_type_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

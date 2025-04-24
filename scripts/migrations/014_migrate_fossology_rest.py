@@ -58,20 +58,20 @@ def run():
     log['success-clearingstate'] = list()
     log['exceptions'] = list()
     log['untouched'] = list()
-    
-    print 'Deleting old fossology ssh keys database'
+
+    print('Deleting old fossology ssh keys database')
     deleteDatabase(DBNAME_DELETE)
 
-    print 'Getting all releases'
+    print('Getting all releases')
     releases_all = db.query(releases_all_query)
-    print 'Received ' + str(len(releases_all)) + ' releases'
+    print('Received ' + str(len(releases_all)) + ' releases')
 
-    print '\n'
+    print('\n')
     for releaseRow in releases_all:
         log['count'] += 1
         migrateRelease(log, releaseRow.value)
         if log['count'] % 500 == 0:
-            print 'Checked ' + str(log['count']) + ' releases'
+            print('Checked ' + str(log['count']) + ' releases')
         #if log['count'] > 500:
         #    break
 
@@ -79,15 +79,15 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Releases successfully migrated external tool requests: ' + str(len(log['success-externaltool']))
-    print 'Releases successfully migrated clearing states (SENT_TO_FOSSOLOGY): ' + str(len(log['success-clearingstate']))
-    print 'Releases not migrated because of errors: ' + str(len(log['exceptions']))
-    print 'Releases untouched: ' + str(len(log['untouched']))
-    print '------------------------------------------'
-    print 'Please check log file "014_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Releases successfully migrated external tool requests: ' + str(len(log['success-externaltool'])))
+    print('Releases successfully migrated clearing states (SENT_TO_FOSSOLOGY): ' + str(len(log['success-clearingstate'])))
+    print('Releases not migrated because of errors: ' + str(len(log['exceptions'])))
+    print('Releases untouched: ' + str(len(log['untouched'])))
+    print('------------------------------------------')
+    print('Please check log file "014_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 
 def deleteDatabase(dbname):
@@ -95,9 +95,9 @@ def deleteDatabase(dbname):
         if not DRY_RUN:
             del couch[dbname]
         else:
-            print 'Found database with name ' + dbname + ' which would now be deleted without dry run!'
+            print('Found database with name ' + dbname + ' which would now be deleted without dry run!')
     else:
-        print 'No database with name ' + dbname + ' found, so nothing to delete!'
+        print('No database with name ' + dbname + ' found, so nothing to delete!')
 
 
 def migrateRelease(log, release):
@@ -168,4 +168,4 @@ def migrateRelease(log, release):
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

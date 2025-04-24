@@ -54,7 +54,7 @@ def run():
     logFile = open('061_add_modifiedBy_modifiedOn_project.log', 'w')
     all_projects = db.find(get_all_project);
     all_ = list(all_projects)
-    print ('found ' + str(len(all_)) + ' projects')
+    print(('found ' + str(len(all_)) + ' projects'))
     log = {}
     log['Project Ids'] = []
 
@@ -76,4 +76,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

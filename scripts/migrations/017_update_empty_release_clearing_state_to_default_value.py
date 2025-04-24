@@ -56,15 +56,15 @@ releases_all_query = '''function(doc){
 def run():
     log = {}
     log['updatedReleases'] = []
-    print 'Getting all releases with empty clearingState'
+    print('Getting all releases with empty clearingState')
     releases_all = db.query(releases_all_query)
-    print 'Received ' + str(len(releases_all)) + ' releases'
+    print('Received ' + str(len(releases_all)) + ' releases')
     log['totalCount'] = len(releases_all)
 
     for releaseRow in releases_all:
         release = releaseRow.value
         release['clearingState'] = defaultValue
-        print '\tUpdating release ID -> ' + release.get('_id') + ', Release Name -> ' + release.get('name')
+        print('\tUpdating release ID -> ' + release.get('_id') + ', Release Name -> ' + release.get('name'))
         updatedRelease = {}
         updatedRelease['id'] = release.get('_id')
         updatedRelease['name'] = release.get('name')
@@ -75,15 +75,15 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Total Releases with empty clearingState : ' + str(len(releases_all))
-    print '------------------------------------------'
-    print 'Please check log file "017_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Total Releases with empty clearingState : ' + str(len(releases_all)))
+    print('------------------------------------------')
+    print('Please check log file "017_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

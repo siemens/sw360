@@ -72,12 +72,12 @@ def run():
         if email:
             user_departments[email] = department
         else:
-            print('Failed to get a user email. _id=' + user['_id'])
-    
+            print(('Failed to get a user email. _id=' + user['_id']))
+
     # migrate all components
     components = db.find(all_components)
     component_len = len(components)
-    print('Found ' + str(component_len) + ' components in db!')
+    print(('Found ' + str(component_len) + ' components in db!'))
 
     component_log = {}
     component_log['totalCount'] = component_len
@@ -107,7 +107,7 @@ def run():
 
         if not DRY_RUN:
             db.save(component)
-        
+
         component_log['addFieldsList'].append(addFieldsList)
 
 
@@ -127,4 +127,4 @@ def run():
 
 startTime = time.time()
 run()
-print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

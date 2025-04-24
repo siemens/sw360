@@ -49,35 +49,35 @@ all_obligation_with_validForProject = {"selector": {"type": {"$eq": "obligation"
 def removeFieldName(resultFile, qryResult, fieldToBeRemoved):
     log = {}
     log['totalCount'] = len(qryResult)
-    print 'Removing field name '+fieldToBeRemoved
+    print('Removing field name '+fieldToBeRemoved)
     log['Updated obligation fields '+fieldToBeRemoved] = []
     for entity in qryResult:
         del entity[fieldToBeRemoved]
         if not DRY_RUN:
             db.save(entity)
-            print 'Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id')
+            print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['Updated obligation fields '+fieldToBeRemoved].append(updatedDocId)
-    
+
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
 
 def run():
     logFile = open('042_remove_validForProject_from_Obligation.log', 'w')
-    print 'Getting all obligations with field "validForProject"'
+    print('Getting all obligations with field "validForProject"')
     obligations_with_validForProject = db.find(all_obligation_with_validForProject)
-    print 'found ' + str(len(obligations_with_validForProject)) + ' obligations in db!'
+    print('found ' + str(len(obligations_with_validForProject)) + ' obligations in db!')
     removeFieldName(logFile, obligations_with_validForProject, "validForProject");
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "042_remove_validForProject_from_Obligation.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "042_remove_validForProject_from_Obligation.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

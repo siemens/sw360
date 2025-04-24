@@ -72,28 +72,28 @@ def run():
     log['nolinkedreleases'] = list()
     log['nolinkedprojects'] = list()
 
-    print 'Getting all projects'
+    print('Getting all projects')
     projects_all = {}
     for projectRow in db.query(projects_all_query):
         projects_all[projectRow.key] = projectRow.value
-    print 'Received ' + str(len(projects_all)) + ' projects'
+    print('Received ' + str(len(projects_all)) + ' projects')
 
-    print 'Getting all releases'
+    print('Getting all releases')
     releases_all = {}
     for releaseRow in db.query(releases_all_query):
         releases_all[releaseRow.key] = releaseRow.value
-    print 'Received ' + str(len(releases_all)) + ' releases'
+    print('Received ' + str(len(releases_all)) + ' releases')
 
-    print 'Getting all license infos'
+    print('Getting all license infos')
     license_infos_all = db.query(license_infos_all_query)
-    print 'Received ' + str(len(license_infos_all)) + ' license infos'
+    print('Received ' + str(len(license_infos_all)) + ' license infos')
 
-    print '\n'
+    print('\n')
     for licenseInfoRow in license_infos_all:
         log['count'] += 1
         migrateLicenseInfo(log, licenseInfoRow.value, projects_all, releases_all)
         if log['count'] % 1000 == 0:
-            print 'Checked ' + str(log['count']) + ' license infos'
+            print('Checked ' + str(log['count']) + ' license infos')
         #if log['count'] >= 500:
         #    break
 
@@ -101,16 +101,16 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'License infos successfully migrated: ' + str(len(log['success']))
-    print 'License infos with not existing releaseId: ' + str(len(log['norelease']))
-    print 'License infos with not existing projectId: ' + str(len(log['noproject']))
-    print 'Total license infos with known known reason for outcome (might be less then total number of license infos though): ' + str(len(log['success']) + len(log['norelease']) + len(log['noproject']))
-    print '------------------------------------------'
-    print 'Projects without releaseIdToUsage field: ' + str(len(log['nolinkedreleases']))
-    print 'Projects without linkedProjects field: ' + str(len(log['nolinkedprojects']))
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('License infos successfully migrated: ' + str(len(log['success'])))
+    print('License infos with not existing releaseId: ' + str(len(log['norelease'])))
+    print('License infos with not existing projectId: ' + str(len(log['noproject'])))
+    print('Total license infos with known known reason for outcome (might be less then total number of license infos though): ' + str(len(log['success']) + len(log['norelease']) + len(log['noproject'])))
+    print('------------------------------------------')
+    print('Projects without releaseIdToUsage field: ' + str(len(log['nolinkedreleases'])))
+    print('Projects without linkedProjects field: ' + str(len(log['nolinkedprojects'])))
+    print('------------------------------------------')
 
 def migrateLicenseInfo(log, licenseInfo, projects, releases):
     licenseInfoId = licenseInfo['_id']
@@ -143,20 +143,20 @@ def createProjectPathForReleaseIdInProject(log, projectPath, licenseInfoId, rele
     else:
         log['nolinkedreleases'].append(projectId)
 
-    if linkedReleases is not None and releaseId in linkedReleases.keys():
+    if linkedReleases is not None and releaseId in list(linkedReleases.keys()):
         return projectPath
     else:
         if 'linkedProjects' in project:
             linkedProjects = project['linkedProjects']
 
             if len(linkedProjects) > 0:
-                for linkedProject in linkedProjects.keys():
+                for linkedProject in list(linkedProjects.keys()):
                     if linkedProject not in projectPath:
                         tempPath = createProjectPathForReleaseIdInProject(log, projectPath + ':' + linkedProject, licenseInfoId, releaseId, linkedProject, projects)
                         if tempPath is not None:
                             return tempPath
                     else:
-                        print str(log['count']) + ': Project dependency cycle detected!'
+                        print(str(log['count']) + ': Project dependency cycle detected!')
                         return None
             else:
                 return None
@@ -168,4 +168,4 @@ def createProjectPathForReleaseIdInProject(log, projectPath, licenseInfoId, rele
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

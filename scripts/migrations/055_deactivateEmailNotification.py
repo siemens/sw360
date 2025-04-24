@@ -74,7 +74,7 @@ def deactivateEmailNotification(log, users_data_list):
     for user in users_data_list:
         if (user[NOTIFICATION] == True):
             user[NOTIFICATION] = False
-            print (user[EMAIL])
+            print((user[EMAIL]))
             log["Updated User's mail notification"].append(user)
 
         if not DRY_RUN:
@@ -86,14 +86,14 @@ def run():
 
     print ('Updated Users detail')
     print ('\n')
-    
+
     users_data = userDb.find(user_query)
     users_data_list = list(users_data)
     print ('size of users not belonging to that instance')
-    print (len(users_data_list))
+    print((len(users_data_list)))
     print ('email of users whose emailNotification field set to false')
     deactivateEmailNotification(log, users_data_list)
-    
+
     print ('\n')
 
     json.dump(log, logFile, indent = 4, sort_keys = True)
@@ -107,4 +107,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

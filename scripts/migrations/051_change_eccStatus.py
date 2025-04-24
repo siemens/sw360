@@ -64,7 +64,7 @@ def get_all_releases(log, releases_with_source_code_url, oss_components):
     for component in oss_components:
         for release in new_list:
             if (((component[COMPONENT_ID]) == (release[COMP_ID_IN_RELEASE])) and (release[ECC_INFORMATION][ECC_STATUS] == "OPEN")):
-                print ('-> Affected releaseIDs with source_code_download_url and oss component_type:  ' + release[RELEASE_ID])
+                print(('-> Affected releaseIDs with source_code_download_url and oss component_type:  ' + release[RELEASE_ID]))
                 release[ECC_INFORMATION][ECC_STATUS] = "APPROVED"
                 log['updated releases'].append(release)
 
@@ -92,5 +92,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
-
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

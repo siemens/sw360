@@ -47,8 +47,8 @@ def updateDB(db,db_copy_list):
     print('Correcting the component/release names and updating the database......../')
 
     df = pd.DataFrame(db_copy_list)
-    df['name'] =  df['name'].str.strip()   
-    df = df.fillna('')    
+    df['name'] =  df['name'].str.strip()
+    df = df.fillna('')
     db_df_list = df.to_dict('records')
     if not DRY_RUN:
         #Update call
@@ -68,8 +68,8 @@ def generateLogFile(header, db_copy_list):
 
 def checkDuplicate(db, db_copy_list):
     df = pd.DataFrame(db_copy_list)
-    df['name'] =  df['name'].str.strip()   
-    df = df.fillna('')    
+    df['name'] =  df['name'].str.strip()
+    df = df.fillna('')
     results = []
     query = {"selector": {"type": {"$eq": "component"},"$or": [{"name": name} for name in df['name']]},"limit": 99999}
     results = db.find(query)
@@ -78,8 +78,8 @@ def checkDuplicate(db, db_copy_list):
 def checkDuplicateReleases(db, db_copy_list):
     print('Checking duplicate releases......./')
     df = pd.DataFrame(db_copy_list)
-    df['name'] =  df['name'].str.strip()   
-    df = df.fillna('') 
+    df['name'] =  df['name'].str.strip()
+    df = df.fillna('')
     existing_release_list = []
     query = {"selector": {"type": {"$eq": "release"},"$or": [{"name": name} for name in df['name']]},"limit": 99999}
     existing_release_list = db.find(query)
@@ -96,7 +96,7 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
     print('######################')
     print('Linking Releases to Components........./')
 
-    db_duplicate_corrected_comp_list = filter(lambda x: x['name'] in [d['name'] for d in db_existing_comp_list], db_corrected_comp_list)
+    db_duplicate_corrected_comp_list = [x for x in db_corrected_comp_list if x['name'] in [d['name'] for d in db_existing_comp_list]]
 
     db_upd_comp_list = []
     db_upd_releases_list = []
@@ -109,9 +109,9 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
                     query = {"selector": {"type": {"$eq": "release"}, "_id": { "$eq": i }},"limit": 99999}
                     relation = db.find(query)
                     relation_list = list(relation)
-                    print(relation_list[0]["componentId"])
+                    print((relation_list[0]["componentId"]))
                     relation_list[0]["componentId"] = comp['_id']
-                    print(relation_list[0]["componentId"])
+                    print((relation_list[0]["componentId"]))
                     if("releaseIds" not in comp):
                         comp["releaseIds"] = []
                     comp["releaseIds"].append(i)
@@ -127,12 +127,12 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
     #Generate log file
     header = (f'Releases that will be merged - total count :  {len(db_upd_releases_list)}')
     generateLogFile(header, db_upd_releases_list)
-    
+
     print('Updating Linkage of Components and Releases............/')
     if not DRY_RUN:
         db.update(db_upd_comp_list)
         db.update(db_upd_releases_list)
-                    
+
     print(db_del_comp_Ids)
     return db_del_comp_Ids
 
@@ -185,12 +185,12 @@ def run():
         header = (f'Corrected components - total count :  {len(db_corrected_rel_list)}')
         generateLogFile(header, db_corrected_rel_list)
     else:
-        print('No Records found!') 
+        print('No Records found!')
 
     #link Releases of duplicate components to the exisiting components
     if len(db_corrected_comp_list)!=0:
         db_del_comp_Ids = linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list)
-    
+
     #delete duplicate components
     if len(db_del_comp_Ids)!=0:
         deleteDuplicateComponents(db, db_del_comp_Ids)
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     try:
         start_time = time.time()
         run()
-        print('\nExecution time: ' + "{0:.2f}".format(time.time() - start_time) + 's')
+        print(('\nExecution time: ' + "{0:.2f}".format(time.time() - start_time) + 's'))
 
     except Exception as e:
-        print('Exception message ',e)
+        print(('Exception message ',e))

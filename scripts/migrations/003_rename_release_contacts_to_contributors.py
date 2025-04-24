@@ -35,11 +35,11 @@ releases_with_contacts_fun = '''function(doc){
 
 releases_with_contacts = db.query(releases_with_contacts_fun)
 
-print 'Renaming release.contacts to release.contributors'
+print('Renaming release.contacts to release.contributors')
 for release_row in releases_with_contacts:
     release = release_row.value
     release['contributors'] = release['contacts']
     del release['contacts']
     db.save(release)
 
-print 'Done'
+print('Done')

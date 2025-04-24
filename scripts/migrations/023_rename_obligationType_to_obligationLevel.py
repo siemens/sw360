@@ -51,7 +51,7 @@ obligations_with_obligationType_query = {"selector": {"type": {"$eq": "obligatio
 # ---------------------------------------
 
 def updateFieldNames(qryResult, oldName, newName, log):
-    print 'updating field name from '+oldName+' to '+newName
+    print('updating field name from '+oldName+' to '+newName)
     log['updated Obligations fields from '+oldName+' to '+newName] = []
     for entity in qryResult:
         entity[''+newName+''] = entity[''+oldName+'']
@@ -61,13 +61,13 @@ def updateFieldNames(qryResult, oldName, newName, log):
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated Obligations fields from '+oldName+' to '+newName].append(updatedDocId)
-    print 'updation of field name from '+oldName+' to '+newName+' done'
+    print('updation of field name from '+oldName+' to '+newName+' done')
 
 def run():
     log = {}
-    print 'Getting all obligations with field obligationType'
+    print('Getting all obligations with field obligationType')
     obligations_with_obligationType = db.find(obligations_with_obligationType_query)
-    print 'found ' + str(len(obligations_with_obligationType)) + ' obligations with field obligationType in db!'
+    print('found ' + str(len(obligations_with_obligationType)) + ' obligations with field obligationType in db!')
     log['totalCount'] = len(obligations_with_obligationType)
     updateFieldNames(obligations_with_obligationType, oldFieldName, newFieldName, log);
 
@@ -75,13 +75,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "023_obligations_migration_'+oldFieldName+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "023_obligations_migration_'+oldFieldName+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

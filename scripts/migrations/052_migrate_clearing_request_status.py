@@ -52,7 +52,7 @@ def migrateAndUpdateClearingRequestStatus(logFile, docs):
     log['CR to be updated(Dry run)'] = []
     for cr in docs:
         crState = cr.get("clearingState")
-        print "CR Id: " + cr.get("_id")
+        print("CR Id: " + cr.get("_id"))
         cr["clearingState"] = "AWAITING_RESPONSE"
         if DRY_RUN:
             updateDocId_Dry_Run = {}
@@ -71,17 +71,17 @@ def migrateAndUpdateClearingRequestStatus(logFile, docs):
 
 def run():
     logFile = open('052_migrate_clearing_request_status.log', 'w')
-    print 'Getting all the Clearing Request in "On Hold" state'
+    print('Getting all the Clearing Request in "On Hold" state')
     onHold_ClearingRequests = db.find(all_On_Hold_Clearing_Requests);
-    print 'found ' + str(len(onHold_ClearingRequests)) + ' CR with On HOld status\n'
+    print('found ' + str(len(onHold_ClearingRequests)) + ' CR with On HOld status\n')
     migrateAndUpdateClearingRequestStatus(logFile, onHold_ClearingRequests);
     logFile.close()
-    print '------------------------------------------'
-    print 'Please check log file "052_migrate_clearing_request_status.log" in this directory for details'
-    print '------------------------------------------'
+    print('------------------------------------------')
+    print('Please check log file "052_migrate_clearing_request_status.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

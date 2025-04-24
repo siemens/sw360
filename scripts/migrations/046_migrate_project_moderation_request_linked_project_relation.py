@@ -49,9 +49,9 @@ moderations_all_query = {"selector": {"type": {"$eq": "moderation"},"documentTyp
 def run():
     log = {}
     log['updatedModerations'] = []
-    print 'Getting all project moderation request with linkedProjects changes'
+    print('Getting all project moderation request with linkedProjects changes')
     moderations_all = db.find(moderations_all_query)
-    print 'Received ' + str(len(moderations_all)) + ' moderation requests'
+    print('Received ' + str(len(moderations_all)) + ' moderation requests')
     log['totalCount'] = len(moderations_all)
 
     for moderation in moderations_all:
@@ -59,14 +59,14 @@ def run():
         oldProjectAdditionsLinkedProjectsStructure = moderation.get('projectAdditions').get('linkedProjects');
         oldProjectDeletionsLinkedProjectsStructure = moderation.get('projectDeletions').get('linkedProjects');
         if(oldProjectAdditionsLinkedProjectsStructure is not None):
-            for key, value in oldProjectAdditionsLinkedProjectsStructure.items():
+            for key, value in list(oldProjectAdditionsLinkedProjectsStructure.items()):
                 if type(value) == dict:
                    continue
                 projectProjectRelationship = { "projectRelationship" : value }
                 oldProjectAdditionsLinkedProjectsStructure[key] = projectProjectRelationship
                 updateflag = True
         if(oldProjectDeletionsLinkedProjectsStructure is not None):
-            for key, value in oldProjectDeletionsLinkedProjectsStructure.items():
+            for key, value in list(oldProjectDeletionsLinkedProjectsStructure.items()):
                 if type(value) == dict:
                    continue
                 projectProjectRelationship = { "projectRelationship" : value }
@@ -74,7 +74,7 @@ def run():
                 updateflag = True
         if not updateflag:
             continue
-        print '\tUpdating moderation ID -> ' + moderation.get('_id') + ', Project Name -> ' + moderation.get('documentName')
+        print('\tUpdating moderation ID -> ' + moderation.get('_id') + ', Project Name -> ' + moderation.get('documentName'))
         updatedModeration = {}
         updatedModeration['id'] = moderation.get('_id')
         updatedModeration['projectName'] = moderation.get('documentName')
@@ -85,13 +85,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "046_migrate_project_moderation_request_linked_project_relation.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "046_migrate_project_moderation_request_linked_project_relation.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

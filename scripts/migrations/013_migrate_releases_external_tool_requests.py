@@ -57,16 +57,16 @@ def run():
     log['exceptions'] = list()
     log['untouched'] = list()
 
-    print 'Getting all releases'
+    print('Getting all releases')
     releases_all = db.query(releases_all_query)
-    print 'Received ' + str(len(releases_all)) + ' releases'
+    print('Received ' + str(len(releases_all)) + ' releases')
 
-    print '\n'
+    print('\n')
     for releaseRow in releases_all:
         log['count'] += 1
         migrateRelease(log, releaseRow.value)
         if log['count'] % 500 == 0:
-            print 'Checked ' + str(log['count']) + ' releases'
+            print('Checked ' + str(log['count']) + ' releases')
         #if log['count'] > 500:
         #    break
 
@@ -74,15 +74,15 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Releases successfully migrated: ' + str(len(log['success']))
-    print 'Releases not migrated because of errors: ' + str(len(log['exceptions']))
-    print 'Releases untouched: ' + str(len(log['untouched']))
-    print 'Total releases with known reason for outcome: ' + str(len(log['success']) + len(log['exceptions']) + len(log['untouched']))
-    print '------------------------------------------'
-    print 'Please check log file "013_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Releases successfully migrated: ' + str(len(log['success'])))
+    print('Releases not migrated because of errors: ' + str(len(log['exceptions'])))
+    print('Releases untouched: ' + str(len(log['untouched'])))
+    print('Total releases with known reason for outcome: ' + str(len(log['success']) + len(log['exceptions']) + len(log['untouched'])))
+    print('------------------------------------------')
+    print('Please check log file "013_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 def migrateRelease(log, release):
     releaseId = release['_id']
@@ -94,7 +94,7 @@ def migrateRelease(log, release):
 
                 release['externalToolRequests'] = list()
 
-                for clearingTeam, state in release['clearingTeamToFossologyStatus'].iteritems():
+                for clearingTeam, state in release['clearingTeamToFossologyStatus'].items():
                     externalToolRequest = {}
 
                     externalToolRequest['externalTool'] = 'FOSSOLOGY'
@@ -220,4 +220,4 @@ def mapFossologyStatus(fossologyStatus, externalToolRequest):
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

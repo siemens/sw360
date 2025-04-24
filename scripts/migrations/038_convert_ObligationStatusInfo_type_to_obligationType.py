@@ -52,7 +52,7 @@ def convertTypeNPopulatedata(resultFile, all_obligationlist):
 
     for oblList in all_obligationlist:
         linkedOblStatus = oblList.get("linkedObligationStatus")
-        for lOblSts in linkedOblStatus.values():
+        for lOblSts in list(linkedOblStatus.values()):
             type = lOblSts.get("type")
             if type is not None:
                 type = type.upper()
@@ -70,22 +70,22 @@ def convertTypeNPopulatedata(resultFile, all_obligationlist):
 
 def run():
     logFile = open('038_convert_ObligationStatusInfo_type_to_obligationType.log', 'w')
-    
-    print 'Getting all obligationlist with field linkedObligationStatus'
+
+    print('Getting all obligationlist with field linkedObligationStatus')
     all_obligationlist = db.find(all_obligationlist_with_field_linkedObligationStatus)
-    print 'found ' + str(len(all_obligationlist)) + ' projects with field todos in db!'
+    print('found ' + str(len(all_obligationlist)) + ' projects with field todos in db!')
 
     convertTypeNPopulatedata(logFile, all_obligationlist)
 
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "038_convert_ObligationStatusInfo_type_to_obligationType.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "038_convert_ObligationStatusInfo_type_to_obligationType.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

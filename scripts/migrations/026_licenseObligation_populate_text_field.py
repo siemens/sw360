@@ -50,9 +50,9 @@ licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licen
 def run():
     log = {}
     text = "";
-    print 'Getting all licenseObligation with field obligationId'
+    print('Getting all licenseObligation with field obligationId')
     licenseObligation_with_obligationId = db.find(licenseObligation_with_obligationId_query)
-    print 'found ' + str(len(licenseObligation_with_obligationId)) + ' licenseObligation with field obligationId in db!'
+    print('found ' + str(len(licenseObligation_with_obligationId)) + ' licenseObligation with field obligationId in db!')
     log['totalCount'] = len(licenseObligation_with_obligationId)
     for entity_row in licenseObligation_with_obligationId:
         obligationId = entity_row["obligationId"]
@@ -63,20 +63,20 @@ def run():
         entity_row["text"] = text
         if not DRY_RUN:
             db.save(entity_row);
-    
-    print "Done"
-        
+
+    print("Done")
+
     resultFile = open('026_licenseObligation_populate_text.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "026_licenseObligation_populate_text.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "026_licenseObligation_populate_text.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

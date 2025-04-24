@@ -42,9 +42,9 @@ modState = "PENDING|INPROGRESS"
 print("****** This script will delete all closed moderation requests that were created before the INPUT DATE ****** \n")
 
 print("****** Enter the date ******")
-start_YYYY = int(input("Enter the Year: "))
-start_MM = int(input("Enter the Month: "))
-start_DD = int(input("Enter the Date: "))
+start_YYYY = int(eval(input("Enter the Year: ")))
+start_MM = int(eval(input("Enter the Month: ")))
+start_DD = int(eval(input("Enter the Date: ")))
 inputDate = int(datetime.datetime(start_YYYY, start_MM, start_DD, 0, 0, 0).timestamp()*1000)
 
 # ----------------------------------------
@@ -84,7 +84,7 @@ def deleteClosedModerationRequests(log, MR_data_list):
 def run():
     log = {}
     logFile = open('modRequest.log', 'w')
-    
+
     print ('\n')
     print ('All closed moderation requests older than the mentioned date will get deleted \n')
 
@@ -92,7 +92,7 @@ def run():
     MR_data_list = list(MR_data)
 
     total = len(MR_data_list)
-    print ('Size of closed moderation requests: ' + str(total))
+    print(('Size of closed moderation requests: ' + str(total)))
     deleteClosedModerationRequests(log, MR_data_list)
 
     json.dump(log, logFile, indent = 4, sort_keys = True)
@@ -106,4 +106,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

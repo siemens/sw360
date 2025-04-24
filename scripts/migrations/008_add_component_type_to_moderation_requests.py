@@ -75,40 +75,39 @@ allReleases           = db.query(get_all_releases_fun)
 allModerationRequests = db.query(get_all_moderation_requests_fun)
 
 
-print "Retrieve component and release data"
+print("Retrieve component and release data")
 # Create dict for Component data
 componentData = {}
 for component in allComponents:
     document = component.value
-    if COMPONENT_TYPE in document.keys():
+    if COMPONENT_TYPE in list(document.keys()):
         componentData[component.id] = document[COMPONENT_TYPE]
 
 # Create dict for Release data
 releaseData = {}
 for release in allReleases:
     document = release.value
-    if PARENT_COMPONENT_ID in document.keys():
-        if document[PARENT_COMPONENT_ID] in componentData.keys():
+    if PARENT_COMPONENT_ID in list(document.keys()):
+        if document[PARENT_COMPONENT_ID] in list(componentData.keys()):
             releaseData[release.id] = componentData[document[PARENT_COMPONENT_ID]]
 
 
-print "add component types to moderation requests in the database"
+print("add component types to moderation requests in the database")
 for request in allModerationRequests:
     document = request.value
-    if not COMPONENT_TYPE in document.keys():
-        if MODERATION_TYPE in document.keys():
+    if not COMPONENT_TYPE in list(document.keys()):
+        if MODERATION_TYPE in list(document.keys()):
 
-            if (document[MODERATION_TYPE] == COMPONENT) and (COMPONENT_ID in document.keys()):
+            if (document[MODERATION_TYPE] == COMPONENT) and (COMPONENT_ID in list(document.keys())):
                 componentID = document[COMPONENT_ID]
-                if componentID in componentData.keys():
+                if componentID in list(componentData.keys()):
                     componentType = componentData[componentID]
                     updateDocument(db, document, {COMPONENT_TYPE: componentType})
 
-            elif (document[MODERATION_TYPE] == RELEASE) and (RELEASE_ID in document.keys()):
+            elif (document[MODERATION_TYPE] == RELEASE) and (RELEASE_ID in list(document.keys())):
                 releaseID = document[RELEASE_ID]
-                if releaseID in releaseData.keys():
+                if releaseID in list(releaseData.keys()):
                     componentType = releaseData[releaseID]
                     updateDocument(db, document, {COMPONENT_TYPE: componentType})
 
-print "done."
-
+print("done.")

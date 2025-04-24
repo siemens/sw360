@@ -43,40 +43,40 @@ new_value = "function(doc) {  if (doc.type == 'component') {    for (var externa
 def run():
     log = {}
     log['docId'] = doc_id
-    print 'Getting Document by ID : ' + doc_id
+    print('Getting Document by ID : ' + doc_id)
     doc = db.get(doc_id, None)
     if doc is not None:
-        print 'Received document.'
+        print('Received document.')
         old_value = updateValue(doc, nested_field_key, new_value)
         if old_value is not None:
             field_to_update = "->"
             field_to_update = field_to_update.join(nested_field_key)
-            
-            print 'Field to update : ' + field_to_update
-            print 'Old Value : ' + old_value
-            print 'Updating Value for Document : ' + doc_id
-            
+
+            print('Field to update : ' + field_to_update)
+            print('Old Value : ' + old_value)
+            print('Updating Value for Document : ' + doc_id)
+
             log['field_to_update'] = field_to_update
             log['old_value'] = old_value
             log['new_value'] = new_value
             if not DRY_RUN:
                 db.save(doc)
         else:
-            print 'Key Not Found.'
+            print('Key Not Found.')
             log['result'] = 'Key Not Found.'
     else:
-        print 'No document found with this ID.'
+        print('No document found with this ID.')
         log['result'] = 'No document found with this ID.'
-    
-    
+
+
     resultFile = open('019_migration.log', 'w')
     json.dump(log, resultFile, indent = 4)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "019_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "019_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 def updateValue(input_dictionary, nested_key, new_value):
     dictionary_value = input_dictionary
@@ -87,11 +87,11 @@ def updateValue(input_dictionary, nested_key, new_value):
     last_key = nested_key[-1]
     old_value = dictionary_value.get(last_key, None)
     dictionary_value[last_key] = new_value
-    
+
     return old_value
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

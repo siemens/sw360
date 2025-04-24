@@ -51,7 +51,7 @@ releases_with_downloadurl_query = {"selector": {"type": {"$eq": "release"},oldFi
 # ---------------------------------------
 
 def updateFieldNames(qryResult, oldName, newName, log):
-    print 'updating field name from '+oldName+' to '+newName
+    print('updating field name from '+oldName+' to '+newName)
     log['updated Release fields from '+oldName+' to '+newName] = []
     for entity in qryResult:
         entity[''+newName+''] = entity[''+oldName+'']
@@ -61,13 +61,13 @@ def updateFieldNames(qryResult, oldName, newName, log):
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated Release fields from '+oldName+' to '+newName].append(updatedDocId)
-    print 'updation of field name from '+oldName+' to '+newName+' done'
+    print('updation of field name from '+oldName+' to '+newName+' done')
 
 def run():
     log = {}
-    print 'Getting all Release with field downloadurl'
+    print('Getting all Release with field downloadurl')
     releases_with_downloadurl = db.find(releases_with_downloadurl_query)
-    print 'found ' + str(len(releases_with_downloadurl)) + ' Release with field downloadurl in db!'
+    print('found ' + str(len(releases_with_downloadurl)) + ' Release with field downloadurl in db!')
     log['totalCount'] = len(releases_with_downloadurl)
     updateFieldNames(releases_with_downloadurl, oldFieldName, newFieldName, log);
 
@@ -75,13 +75,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "040_release_migration_'+oldFieldName+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "040_release_migration_'+oldFieldName+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

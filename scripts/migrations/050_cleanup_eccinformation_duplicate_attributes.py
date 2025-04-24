@@ -83,7 +83,7 @@ def cleanup_eccinfo_in_release(log, entities):
                     del entity[ECC_INFORMATION][AL_IN_UPPERCASE]
                     updated_release_Id['id'] = entity['_id']
                 else:
-                    print ("Warning!! Value of AL and al does not match for the release" + entity['_id'])
+                    print(("Warning!! Value of AL and al does not match for the release" + entity['_id']))
                     release_with_error['id'] = entity['_id']
             else:
                 entity[ECC_INFORMATION][AL_IN_LOWERCASE] = entity[ECC_INFORMATION][AL_IN_UPPERCASE]
@@ -96,7 +96,7 @@ def cleanup_eccinfo_in_release(log, entities):
                     del entity[ECC_INFORMATION][ECCN_IN_UPPER_CASE]
                     updated_release_Id['id'] = entity['_id']
                 else:
-                    print ("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id'])
+                    print(("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id']))
                     release_with_error['id'] = entity['_id']
             else:
                 entity[ECC_INFORMATION][ECCN_IN_LOWER_CASE] = entity[ECC_INFORMATION][ECCN_IN_UPPER_CASE]
@@ -129,7 +129,7 @@ def cleanup_eccinfo_in_release_moderation(log, entities):
                         del entity[option][ECC_INFORMATION][AL_IN_UPPERCASE]
                         updated_release_moderation_Id['id'] = entity['_id']
                     else:
-                        print ("Warning!! Value of AL and al does not match for the release" + entity['_id'])
+                        print(("Warning!! Value of AL and al does not match for the release" + entity['_id']))
                         release_moderation_with_error['id'] = entity['_id']
                 else:
                     entity[option][ECC_INFORMATION][AL_IN_LOWERCASE] = entity[option][ECC_INFORMATION][AL_IN_UPPERCASE]
@@ -142,7 +142,7 @@ def cleanup_eccinfo_in_release_moderation(log, entities):
                         del entity[option][ECC_INFORMATION][ECCN_IN_UPPER_CASE]
                         updated_release_moderation_Id['id'] = entity['_id']
                     else:
-                        print ("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id'])
+                        print(("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id']))
                         release_moderation_with_error['id'] = entity['_id']
                 else:
                     entity[option][ECC_INFORMATION][ECCN_IN_LOWER_CASE] = entity[option][ECC_INFORMATION][ECCN_IN_UPPER_CASE]
@@ -177,7 +177,7 @@ def cleanup_eccinfo_in_component_moderation(log, entities):
                                 del entity[ECC_INFORMATION][AL_IN_UPPERCASE]
                                 updated_release_moderation_Id['id'] = component_mod['_id']
                             else:
-                                print ("Warning!! Value of AL and al does not match for the release" + entity['_id'])
+                                print(("Warning!! Value of AL and al does not match for the release" + entity['_id']))
                                 release_moderation_with_error['id'] = component_mod['_id']
                         else:
                             entity[ECC_INFORMATION][AL_IN_LOWERCASE] = entity[ECC_INFORMATION][AL_IN_UPPERCASE]
@@ -190,7 +190,7 @@ def cleanup_eccinfo_in_component_moderation(log, entities):
                                 del entity[ECC_INFORMATION][ECCN_IN_UPPER_CASE]
                                 updated_release_moderation_Id['id'] = component_mod['_id']
                             else:
-                                print ("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id'])
+                                print(("Warning!! Value of ECCN and eccn does not match for the release" + entity['_id']))
                                 release_moderation_with_error['id'] = component_mod['_id']
                         else:
                             entity[ECC_INFORMATION][ECCN_IN_LOWER_CASE] = entity[ECC_INFORMATION][ECCN_IN_UPPER_CASE]
@@ -207,15 +207,15 @@ def run():
     log = {}
     logFile = open('050_cleanup_eccinformation_duplicate_attributes.log', 'w')
 
-    print ('Getting all the releases with field ' + ECC_INFORMATION)
+    print(('Getting all the releases with field ' + ECC_INFORMATION))
     releases_with_eccinfo_field = db.find(all_releases_with_eccinformation)
     cleanup_eccinfo_in_release(log, releases_with_eccinfo_field)
 
-    print ('Getting all release moderation requests with field ' + ECC_INFORMATION)
+    print(('Getting all release moderation requests with field ' + ECC_INFORMATION))
     release_moderations_with_ecc_info = db.find(all_release_moderations_with_eccinfo)
     cleanup_eccinfo_in_release_moderation(log, release_moderations_with_ecc_info )
 
-    print ('Getting all component moderation requests with field ' + ECC_INFORMATION)
+    print(('Getting all component moderation requests with field ' + ECC_INFORMATION))
     component_moderations_with_ecc_info = db.find(all_component_moderations_with_eccinfo)
     cleanup_eccinfo_in_component_moderation(log, component_moderations_with_ecc_info)
 
@@ -231,4 +231,4 @@ def run():
 
 startTime = time.time()
 run()
-print ('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

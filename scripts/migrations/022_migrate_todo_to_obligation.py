@@ -73,7 +73,7 @@ todo_designview_doc_id = "_design/Todo"
 obligation__designview_doc_id = "_design/Obligation"
 
 def updateFieldNames(qryResult, oldValue, newValue):
-    print 'updating field name from '+oldValue+' to '+newValue
+    print('updating field name from '+oldValue+' to '+newValue)
     log['updated fields from '+oldValue+' to '+newValue] = []
     for entity_row in qryResult:
         entity = entity_row.value
@@ -84,10 +84,10 @@ def updateFieldNames(qryResult, oldValue, newValue):
         updatedField = {}
         updatedField['id'] = entity.get('_id')
         log['updated fields from '+oldValue+' to '+newValue].append(updatedField)
-    print 'updation of field name from '+oldValue+' to '+newValue+' done'
+    print('updation of field name from '+oldValue+' to '+newValue+' done')
 
 def updateDocType(query):
-    print 'updating document type from "todo" to "obligations" starts'
+    print('updating document type from "todo" to "obligations" starts')
     log['updatedDocuments'] = []
     todos_all = db.query(query)
     for todoRow in todos_all:
@@ -99,10 +99,10 @@ def updateDocType(query):
         updatedDocs = {}
         updatedDocs['id'] = todo.get('_id')
         log['updatedDocuments'].append(updatedDocs)
-    print 'updation done'
+    print('updation done')
 
 def updateDocTypeObligation(query):
-    print 'updating document type from "obligation" to "licenseObligation" starts'
+    print('updating document type from "obligation" to "licenseObligation" starts')
     log['updatedDocuments'] = []
     obligation_all = db.query(query)
     for obligationRow in obligation_all:
@@ -113,7 +113,7 @@ def updateDocTypeObligation(query):
         updatedDocs = {}
         updatedDocs['id'] = obligation.get('_id')
         log['updatedDocuments'].append(updatedDocs)
-    print 'updation done'
+    print('updation done')
 
 def deleteTodoView():
     if not DRY_RUN:
@@ -138,12 +138,12 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "022_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "022_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

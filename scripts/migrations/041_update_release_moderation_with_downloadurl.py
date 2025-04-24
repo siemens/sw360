@@ -51,9 +51,9 @@ release_moderation_with_downloadurl_query = {"selector": {"type": {"$eq": "moder
 # ---------------------------------------
 
 def updateFieldNames(qryResult, oldName, newName, log):
-    print 'updating field name from '+oldName+' to '+newName
+    print('updating field name from '+oldName+' to '+newName)
     log['updated release moderation fields from '+oldName+' to '+newName] = []
-    
+
     for entity in qryResult:
         if oldName in entity["releaseAdditions"]:
             entity["releaseAdditions"][newName] = entity["releaseAdditions"][oldName]
@@ -66,13 +66,13 @@ def updateFieldNames(qryResult, oldName, newName, log):
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated release moderation fields from '+oldName+' to '+newName].append(updatedDocId)
-    print 'updation of field name from '+oldName+' to '+newName+' done'
+    print('updation of field name from '+oldName+' to '+newName+' done')
 
 def run():
     log = {}
-    print 'Getting all release moderation with field downloadurl'
+    print('Getting all release moderation with field downloadurl')
     release_moderation_with_downloadurl = db.find(release_moderation_with_downloadurl_query)
-    print 'found ' + str(len(release_moderation_with_downloadurl)) + ' release moderation with field downloadurl in db!'
+    print('found ' + str(len(release_moderation_with_downloadurl)) + ' release moderation with field downloadurl in db!')
     log['totalCount'] = len(release_moderation_with_downloadurl)
     updateFieldNames(release_moderation_with_downloadurl, oldFieldName, newFieldName, log);
 
@@ -80,13 +80,13 @@ def run():
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "041_update_release_moderation_with_'+oldFieldName+'.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "041_update_release_moderation_with_'+oldFieldName+'.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

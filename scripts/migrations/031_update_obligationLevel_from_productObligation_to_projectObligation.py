@@ -15,7 +15,7 @@
 # example, server address and db name should be parameterized, the code
 # reorganized into a single class or function, etc.
 #
-# This script updates the value of field "obligationLevel" in Obligation 
+# This script updates the value of field "obligationLevel" in Obligation
 # from "PRODUCT_OBLIGATION" to "PROJECT_OBLIGATION"
 # ------------------------------------------------------------------------------
 
@@ -54,31 +54,31 @@ product_obligations_query = {"selector": {"type": {"$eq": "obligation"},"obligat
 def run():
     log = {}
     log['updatedObligation'] = []
-    print 'Getting all obligations with field "obligationLevel" as ' + oldFieldValue
+    print('Getting all obligations with field "obligationLevel" as ' + oldFieldValue)
     product_obligations = db.find(product_obligations_query)
-    print 'found ' + str(len(product_obligations)) + ' obligations with field obligationLevel as ' + oldFieldValue + ' in db!'
+    print('found ' + str(len(product_obligations)) + ' obligations with field obligationLevel as ' + oldFieldValue + ' in db!')
     log['totalCount'] = len(product_obligations)
 
     for obligation in product_obligations:
-        print '\tUpdating obligationLevel of document from ' + oldFieldValue + ' to ' + newFieldValue + ' for ID -> ' + obligation.get('_id')
+        print('\tUpdating obligationLevel of document from ' + oldFieldValue + ' to ' + newFieldValue + ' for ID -> ' + obligation.get('_id'))
         obligation['obligationLevel'] = newFieldValue
         updatedObligation = {}
         updatedObligation['id'] = obligation.get('_id')
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
             db.save(obligation)
-            print '\tUpdated obligationLevel of document from ' + oldFieldValue + ' to ' + newFieldValue + ' for ID -> ' + obligation.get('_id')
+            print('\tUpdated obligationLevel of document from ' + oldFieldValue + ' to ' + newFieldValue + ' for ID -> ' + obligation.get('_id'))
     resultFile = open('031_update_obligationLevel_from_' + oldFieldValue + '_to_' + newFieldValue + '.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "031_update_obligationLevel_from_' + oldFieldValue + '_to_' + newFieldValue + '.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "031_update_obligationLevel_from_' + oldFieldValue + '_to_' + newFieldValue + '.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

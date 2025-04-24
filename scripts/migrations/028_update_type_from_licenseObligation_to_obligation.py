@@ -52,13 +52,13 @@ all_license_obligation_query = {"selector": {"type": {"$eq": "licenseObligation"
 def run():
     log = {}
     log['updatedObligation'] = []
-    print 'Getting all license obligation'
+    print('Getting all license obligation')
     all_license_obligations = db.find(all_license_obligation_query)
-    print 'found ' + str(len(all_license_obligations)) + ' license obligations in db!'
+    print('found ' + str(len(all_license_obligations)) + ' license obligations in db!')
     log['totalCount'] = len(all_license_obligations)
 
     for obligation in all_license_obligations:
-        print '\tUpdating type of document from licenseObligation to '+newValue+' for ID -> ' + obligation.get('_id')
+        print('\tUpdating type of document from licenseObligation to '+newValue+' for ID -> ' + obligation.get('_id'))
         obligation['type'] = newValue
         obligation['obligationLevel'] = 'LICENSE_OBLIGATION'
         updatedObligation = {}
@@ -66,19 +66,19 @@ def run():
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
             db.save(obligation)
-            print '\tUpdated type of document from licenseObligation to '+newValue+' for ID -> ' + obligation.get('_id')
+            print('\tUpdated type of document from licenseObligation to '+newValue+' for ID -> ' + obligation.get('_id'))
 
     resultFile = open('028_licenseobligation_type_migration.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "028_licenseobligation_type_migration.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "028_licenseobligation_type_migration.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')

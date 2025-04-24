@@ -59,21 +59,21 @@ def replaceFields(license):
 
 def replaceFieldsInLicenseModeration(moderation):
     for field in ['licenseAdditions','licenseDeletions']:
-        moderation[field] = map(replaceFields, moderation[field])
+        moderation[field] = list(map(replaceFields, moderation[field]))
     return moderation
 
 def run():
     log = {}
     # migrate licenses
     if DRY_RUN:
-        print '------------------------------------------'
-        print 'Running in DRY mode'
-        print '------------------------------------------'
-        print '\n'
+        print('------------------------------------------')
+        print('Running in DRY mode')
+        print('------------------------------------------')
+        print('\n')
     print('On raw licenses: replace GPL compatibility fields by OSI approved and FSF libre fields.')
     licenses = db.find(all_licenses)
     licenses_len = len(licenses)
-    print('Found ' + str(licenses_len) + ' licenses in db!')
+    print(('Found ' + str(licenses_len) + ' licenses in db!'))
 
     license_log = {}
     license_log['totalCount'] = licenses_len
@@ -89,7 +89,7 @@ def run():
     print('In license moderations: replace GPL compatibility fields by OSI approved and FSF libre fields.')
     moderations_with_license_stuff = db.find(license_moderation_with_downloadurl_query)
     moderations_len = len(moderations_with_license_stuff)
-    print('Found ' + str(moderations_len) + ' license moderations in db!')
+    print(('Found ' + str(moderations_len) + ' license moderations in db!'))
 
     moderation_log = {}
     moderation_log['totalCount'] = moderations_len
@@ -100,21 +100,21 @@ def run():
             replaceFieldsInLicenseModerationList = {}
             replaceFieldsInLicenseModerationList['id'] = moderation.get('_id')
             log['replaceFieldsInLicenseModerationList'].append(replaceFieldsInLicenseModerationList)
-    
+
     log['licenses'] = license_log
     log['moderations'] = moderation_log
     logFile = open('044_replace_gpl_compatibility_by_osi_approved.log', 'w')
     json.dump(log, logFile, indent = 4, sort_keys = True)
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "044_replace_gpl_compatibility_by_osi_approved.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "044_replace_gpl_compatibility_by_osi_approved.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 
 startTime = time.time()
 run()
-print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
+print(('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'))

@@ -53,8 +53,8 @@ def migrateAndUpdateObligationStatus(logFile, docs):
     log['Obligations to be updated(Dry run)'] = []
     for obl in docs:
         oblStatus = obl.get("linkedObligationStatus")
-        print "\n\nDoc Id: " + obl.get("_id")
-        for k, v in oblStatus.items():
+        print("\n\nDoc Id: " + obl.get("_id"))
+        for k, v in list(oblStatus.items()):
 
             if bool(v) and bool(v.get("status")):
                 print (k)
@@ -83,19 +83,19 @@ def migrateAndUpdateObligationStatus(logFile, docs):
 
 def run():
     logFile = open('047_migrate_obligation_status.log', 'w')
-    print 'Getting all the Obligations with field "linkedObligationStatus"'
+    print('Getting all the Obligations with field "linkedObligationStatus"')
     obligations_with_linkedObligationStatus = db.find(all_Obligations_with_linkedObligationStatus);
-    print 'found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus'
+    print('found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus')
     migrateAndUpdateObligationStatus(logFile, obligations_with_linkedObligationStatus);
     logFile.close()
 
-    print '\n'
-    print '------------------------------------------'
-    print 'Please check log file "047_migrate_obligation_status.log" in this directory for details'
-    print '------------------------------------------'
+    print('\n')
+    print('------------------------------------------')
+    print('Please check log file "047_migrate_obligation_status.log" in this directory for details')
+    print('------------------------------------------')
 
 # --------------------------------
 
 startTime = time.time()
 run()
-print '\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's'
+print('\nTime of migration: ' + "{0:.2f}".format(time.time() - startTime) + 's')
