@@ -18,10 +18,11 @@
 # This script is for removing duplicate AL and ECCN field in eccInformation field of Release & making the field names to lower case
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 ECC_INFORMATION = 'eccInformation'
 AL_IN_UPPERCASE = 'AL'
@@ -107,7 +110,7 @@ def cleanup_eccinfo_in_release(log, entities):
         log['Releases not updated(with Error)'].append(release_with_error)
 
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
 
 def cleanup_eccinfo_in_release_moderation(log, entities):
     log['Updated release moderations'] = []
@@ -153,7 +156,7 @@ def cleanup_eccinfo_in_release_moderation(log, entities):
             log['Release moderations not updated(with Error)'].append(release_moderation_with_error);
 
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
 
 def cleanup_eccinfo_in_component_moderation(log, entities):
     log['Updated component moderations'] = []
@@ -201,22 +204,35 @@ def cleanup_eccinfo_in_component_moderation(log, entities):
                     log['Component moderations not updated(with Error)'].append(release_moderation_with_error);
 
         if not DRY_RUN:
-            db.save(component_mod)
+            client.post_document(DBNAME, component_mod).get_result()
 
 def run():
     log = {}
     logFile = open('050_cleanup_eccinformation_duplicate_attributes.log', 'w')
 
     print(('Getting all the releases with field ' + ECC_INFORMATION))
-    releases_with_eccinfo_field = db.find(all_releases_with_eccinformation)
+    releases_with_eccinfo_field = client.post_find(
+        db=DBNAME,
+        selector=all_releases_with_eccinformation["selector"],
+        limit=all_releases_with_eccinformation["limit"]
+    ).get_result().get('docs', [])
     cleanup_eccinfo_in_release(log, releases_with_eccinfo_field)
 
     print(('Getting all release moderation requests with field ' + ECC_INFORMATION))
-    release_moderations_with_ecc_info = db.find(all_release_moderations_with_eccinfo)
+    release_moderations_with_ecc_info = client.post_find(
+        db=DBNAME,
+        selector=all_release_moderations_with_eccinfo["selector"],
+        limit=all_release_moderations_with_eccinfo["limit"]
+    ).get_result().get('docs', [])
     cleanup_eccinfo_in_release_moderation(log, release_moderations_with_ecc_info )
 
     print(('Getting all component moderation requests with field ' + ECC_INFORMATION))
-    component_moderations_with_ecc_info = db.find(all_component_moderations_with_eccinfo)
+    component_moderations_with_ecc_info = client.post_find(
+        db=DBNAME,
+        selector=all_component_moderations_with_eccinfo["selector"],
+        limit=all_component_moderations_with_eccinfo["limit"]
+    ).get_result().get('docs', [])
+
     cleanup_eccinfo_in_component_moderation(log, component_moderations_with_ecc_info)
 
     json.dump(log, logFile, indent = 4, sort_keys = True)

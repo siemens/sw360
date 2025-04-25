@@ -18,10 +18,11 @@
 # This script merge copy todos from project to obligationList model and and removes the todos field from project
 # -------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -33,9 +34,10 @@ COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 USER_DBNAME = 'sw360users'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
-userdb = couch[USER_DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -51,7 +53,10 @@ all_project_with_todos = {"selector": {"type": {"$eq": "project"}, "todos": {"$e
 def getOblTextNLevel(oblId):
     obltextNLevel = {}
     get_obligation_using_id = {"selector": {"type": {"$eq": "obligation"}, "_id": {"$eq": ""+oblId+"" }}}
-    obligation = db.find(get_obligation_using_id)
+    obligation = client.post_find(
+        db=DBNAME,
+        selector=get_obligation_using_id["selector"]
+    ).get_result().get('docs', [])
     for obl in obligation:
         text = obl.get("text")
         obllevel = obl.get("obligationLevel")
@@ -66,7 +71,10 @@ def getDateOnly(dateWithTimes):
 def getEmailFromUserId(userid):
     emailId = ""
     get_user_by_id = {"selector": {"type": {"$eq": "user"}, "_id": {"$eq": ""+userid+"" }}}
-    user = userdb.find(get_user_by_id)
+    user = client.post_find(
+        db=USER_DBNAME,
+        selector=get_user_by_id["selector"]
+    ).get_result().get('docs', [])
     for usr in user:
         emailId = usr.get("email")
 
@@ -75,7 +83,10 @@ def getEmailFromUserId(userid):
 def getLinkedObligationList(linkedOblId):
     oblList = []
     get_obligationList_by_id = {"selector": {"type": {"$eq": "obligationList"}, "_id": {"$eq": ""+linkedOblId+"" }}}
-    obligationList = db.find(get_obligationList_by_id)
+    obligationList = client.post_find(
+        db=DBNAME,
+        selector=get_obligationList_by_id["selector"]
+    ).get_result().get('docs', [])
     for obList in obligationList:
         oblList = obList
 
@@ -116,9 +127,11 @@ def mergeTodoWithObligationList(resultFile, all_projects):
                 log['updatedProjectsWithobligationList'].append(updatedProjectsWithobligationList)
 
                 if not DRY_RUN:
-                    doc_id, doc_rev = db.save(oblList)
+                    resp = client.post_document(DBNAME, oblList).get_result()
+                    doc_id = resp.get("id")
+                    doc_rev = resp.get("rev")
                     project["linkedObligationId"] = doc_id
-                    db.save(project)
+                    client.post_document(DBNAME, project).get_result()
             else:
                 obligList = getLinkedObligationList(project.get("linkedObligationId"))
                 for todo in todos:
@@ -142,7 +155,7 @@ def mergeTodoWithObligationList(resultFile, all_projects):
                 log['updatedProjectsWithobligationList'].append(updatedProjectsWithobligationList)
 
                 if not DRY_RUN:
-                    doc_id, doc_rev = db.save(obligList)
+                    client.post_document(DBNAME, oblList).get_result()
 
     json.dump(log, resultFile, indent = 4)
 
@@ -154,7 +167,7 @@ def removeFieldName(resultFile, qryResult, fieldToBeRemoved):
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
             print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
@@ -166,7 +179,11 @@ def run():
     logFile = open('039_projecttodo_to_obligationlist.log', 'w')
 
     print('Getting all projects with field todos')
-    all_projects = db.find(all_project_with_todos)
+    all_projects = client.post_find(
+        db=DBNAME,
+        selector=all_project_with_todos["selector"],
+        limit=all_project_with_todos["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_projects)) + ' projects with field todos in db!')
 
     mergeTodoWithObligationList(logFile, all_projects)

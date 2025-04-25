@@ -18,10 +18,11 @@
 # This script is for migrating Obligation status.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -106,7 +109,7 @@ def migrateAndUpdateAdminObligationStatus(logFile, obligationListWithStatus, adm
         if DRY_RUN:
             log['mismatch-obligations-DocId-To-ProjectId'] = mismatchLog
         if not DRY_RUN:
-            db.save(obl);
+            client.post_document(DBNAME, obl).get_result()
             log['mismatch-obligations-DocId-To-ProjectId'] = mismatchLog
 
     json.dump(log, logFile, indent = 4, sort_keys = True)
@@ -115,18 +118,28 @@ def migrateAndUpdateAdminObligationStatus(logFile, obligationListWithStatus, adm
 def run():
     logFile = open('049_migrate_admin_obligation.log', 'w')
     print('Getting all the Obligations with field "linkedObligationStatus"')
-    obligations_with_linkedObligationStatus = db.find(all_Obligations_with_linkedObligationStatus);
+    obligations_with_linkedObligationStatus = client.post_find(
+        db=DBNAME,
+        selector=all_Obligations_with_linkedObligationStatus["selector"],
+        limit=all_Obligations_with_linkedObligationStatus["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus\n')
     print('Getting all the Obligations (License/Project/Component/Organisation) from Admin section')
-    obligations_from_AdminSection = db.find(all_Obligations_from_AdminSection);
+    obligations_from_AdminSection = client.post_find(
+        db=DBNAME,
+        selector=all_Obligations_from_AdminSection["selector"],
+        limit=all_Obligations_from_AdminSection["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(obligations_from_AdminSection)) + ' obligations in Admin Section\n')
-    migrateAndUpdateAdminObligationStatus(logFile, obligations_with_linkedObligationStatus, obligations_from_AdminSection);
+    migrateAndUpdateAdminObligationStatus(logFile, obligations_with_linkedObligationStatus,
+                                          obligations_from_AdminSection)
     logFile.close()
 
     print('\n')
     print('------------------------------------------')
     print('Please check log file "049_migrate_admin_obligation.log" in this directory for details')
     print('------------------------------------------')
+
 
 # --------------------------------
 

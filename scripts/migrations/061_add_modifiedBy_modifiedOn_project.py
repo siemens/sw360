@@ -18,10 +18,11 @@
 # This script is to add modifiedOn and modifiedBy in project.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -29,11 +30,14 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = "http://username:pwd@localhost:5984/"
+COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
+
 MODIFIED_BY= 'modifiedBy'
 MODIFIED_ON= 'modifiedOn'
 
@@ -52,7 +56,11 @@ get_all_project = {"selector": {"type": { "$eq": "project" },"modifiedOn": { "$e
 
 def run():
     logFile = open('061_add_modifiedBy_modifiedOn_project.log', 'w')
-    all_projects = db.find(get_all_project);
+    all_projects = client.post_find(
+        db=DBNAME,
+        selector=get_all_project["selector"],
+        limit=get_all_project["limit"]
+    ).get_result().get('docs', [])
     all_ = list(all_projects)
     print(('found ' + str(len(all_)) + ' projects'))
     log = {}
@@ -63,7 +71,7 @@ def run():
            prj[MODIFIED_BY]=""
            prj[MODIFIED_ON] =""
            if not DRY_RUN:
-              db.save(prj);
+               client.post_document(DBNAME, prj).get_result()
     json.dump(log, logFile, indent = 4, sort_keys = True)
     logFile.close()
 

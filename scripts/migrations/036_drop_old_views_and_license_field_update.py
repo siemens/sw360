@@ -19,10 +19,11 @@
 # with "obligationDatabaseIds" and  remove "riskDatabaseIds" from license
 # ----------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -33,11 +34,13 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
-design_doc_id_risk = "_design/Risk"
-design_doc_id_riskcategory = "_design/RiskCategory"
+design_doc_id_risk = "Risk"
+design_doc_id_riskcategory = "RiskCategory"
 
 
 # ----------------------------------------
@@ -45,7 +48,7 @@ design_doc_id_riskcategory = "_design/RiskCategory"
 # ----------------------------------------
 
 # get all license with "riskDatabaseIds"
-all_license_with_riskDatabaseIds = {"selector": {"type": {"$eq": "license"}, "riskDatabaseIds": {"$exists": True}}}
+all_license_with_riskDatabaseIds = {"selector": {"type": {"$eq": "license"}, "riskDatabaseIds": {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -54,7 +57,11 @@ all_license_with_riskDatabaseIds = {"selector": {"type": {"$eq": "license"}, "ri
 def mergeRiskDBIdsWithObligationDBIds(resultFile):
     log = {}
     print('Getting all licenses with field riskDatabaseIds')
-    all_licenses = db.find(all_license_with_riskDatabaseIds)
+    all_licenses = client.post_find(
+        db=DBNAME,
+        selector=all_license_with_riskDatabaseIds["selector"],
+        limit=all_license_with_riskDatabaseIds["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_licenses)) + ' licenses with field riskDatabaseIds in db!')
     log['totalCount'] = len(all_licenses)
     log['updatedLicenseWithMergingRiskIdsOblIds'] = []
@@ -71,7 +78,7 @@ def mergeRiskDBIdsWithObligationDBIds(resultFile):
         updatedLicense['id'] = license.get('_id')
         log['updatedLicenseWithMergingRiskIdsOblIds'].append(updatedLicense)
         if not DRY_RUN:
-            db.save(license)
+            client.post_document(DBNAME, license).get_result()
 
     json.dump(log, resultFile, indent = 4)
 
@@ -80,13 +87,13 @@ def dropViews(doc_id, resultFile):
     log = {}
     log['docId'] = doc_id
     print('Getting Document by ID : ' + doc_id)
-    doc = db.get(doc_id, None)
+    doc = client.get_design_document(DBNAME, doc_id).get_result().get("_id", None)
     if doc is not None:
         print('Received document.Deleting Document.')
         print('Deleting Document with ID : ' + doc_id)
         log['result'] = 'Deleted Document with ID : ' + doc_id
         if not DRY_RUN:
-            db.delete(doc)
+            client.delete_design_document(doc_id).get_result()
     else:
         print('No document found with this ID.')
         log['result'] = 'No document found with this ID.'
@@ -96,8 +103,8 @@ def dropViews(doc_id, resultFile):
 def run():
     logFile = open('036_drop_old_views_and_license_field_update.log', 'w')
     mergeRiskDBIdsWithObligationDBIds(logFile)
-    dropViews(design_doc_id_risk, logFile);
-    dropViews(design_doc_id_riskcategory, logFile);
+    dropViews(design_doc_id_risk, logFile)
+    dropViews(design_doc_id_riskcategory, logFile)
     logFile.close()
 
 

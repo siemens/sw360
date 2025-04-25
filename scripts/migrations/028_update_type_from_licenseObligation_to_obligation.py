@@ -18,10 +18,11 @@
 # This script updates type of document from license 0obligation to obligation and add ObligationLevel as LICENSE_OBLIGATION
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 newValue = "obligation"
@@ -43,7 +46,7 @@ newValue = "obligation"
 # ----------------------------------------
 
 # get all license obligation
-all_license_obligation_query = {"selector": {"type": {"$eq": "licenseObligation"}}}
+all_license_obligation_query = {"selector": {"type": {"$eq": "licenseObligation"}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -53,7 +56,11 @@ def run():
     log = {}
     log['updatedObligation'] = []
     print('Getting all license obligation')
-    all_license_obligations = db.find(all_license_obligation_query)
+    all_license_obligations = client.post_find(
+        db=DBNAME,
+        selector=all_license_obligation_query["selector"],
+        limit=all_license_obligation_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_license_obligations)) + ' license obligations in db!')
     log['totalCount'] = len(all_license_obligations)
 
@@ -65,7 +72,7 @@ def run():
         updatedObligation['id'] = obligation.get('_id')
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
-            db.save(obligation)
+            client.post_document(DBNAME, obligation).get_result()
             print('\tUpdated type of document from licenseObligation to '+newValue+' for ID -> ' + obligation.get('_id'))
 
     resultFile = open('028_licenseobligation_type_migration.log', 'w')

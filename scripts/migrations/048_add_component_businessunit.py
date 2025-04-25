@@ -18,9 +18,11 @@
 # This script adds a business unit field to all components and set the creator organization.
 # -----------------------------------------------------------------------------
 
-import couchdb
 import json
 import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -31,20 +33,13 @@ COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 DBNAME_USERS = 'sw360users'
 
-# set admin name and password for couchdb3
-DB_USER_NAME = ''
-DB_USER_PASSWORD = ''
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 DEFAULT_VISIBILITY = 'EVERYONE'
 DEFAULT_BUSINESS_UNIT = ''
-
-couch = couchdb.Server(COUCHSERVER)
-# set credentials for couchdb3
-if DB_USER_NAME:
-    couch.resource.credentials=(DB_USER_NAME, DB_USER_PASSWORD)
-
-db = couch[DBNAME]
-db_users = couch[DBNAME_USERS]
 
 # ----------------------------------------
 # queries
@@ -75,7 +70,11 @@ def run():
             print(('Failed to get a user email. _id=' + user['_id']))
 
     # migrate all components
-    components = db.find(all_components)
+    components = client.post_find(
+        db=DBNAME,
+        selector=all_components["selector"],
+        limit=all_components["limit"]
+    ).get_result().get('docs', [])
     component_len = len(components)
     print(('Found ' + str(component_len) + ' components in db!'))
 
@@ -106,7 +105,7 @@ def run():
             addFieldsList['businessUnit'] = component['businessUnit']
 
         if not DRY_RUN:
-            db.save(component)
+            client.post_document(DBNAME, component).get_result()
 
         component_log['addFieldsList'].append(addFieldsList)
 

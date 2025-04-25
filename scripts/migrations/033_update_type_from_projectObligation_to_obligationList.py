@@ -18,10 +18,11 @@
 # This script updates type of document from projectObligation to obligationList
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 newValue = "obligationList"
@@ -43,7 +46,7 @@ newValue = "obligationList"
 # ----------------------------------------
 
 # get all projectObligations
-all_projectObligations_query = {"selector": {"type": {"$eq": "projectObligation"}}}
+all_projectObligations_query = {"selector": {"type": {"$eq": "projectObligation"}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -53,7 +56,11 @@ def run():
     log = {}
     log['updatedProjectObligations'] = []
     print('Getting all projectObligations')
-    all_projectObligations = db.find(all_projectObligations_query)
+    all_projectObligations = client.post_find(
+        db=DBNAME,
+        selector=all_projectObligations_query["selector"],
+        limit=all_projectObligations_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_projectObligations)) + ' projectObligations in db!')
     log['totalCount'] = len(all_projectObligations)
 
@@ -64,7 +71,7 @@ def run():
         updatedProjectObligation['id'] = projectObligation.get('_id')
         log['updatedProjectObligations'].append(updatedProjectObligation)
         if not DRY_RUN:
-            db.save(projectObligation)
+            client.post_document(DBNAME, projectObligation).get_result()
             print('\tUpdated type of document from projectObligation to '+newValue+' for ID -> ' + projectObligation.get('_id'))
 
     resultFile = open('033_projectObligation_type_migration.log', 'w')

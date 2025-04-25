@@ -19,10 +19,11 @@
 # removes "riskId" and "riskCategoryDatabaseId" from risk and adds the obligationType as 'RISK' and updates the type to obligation
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -33,8 +34,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 newValue = "obligation"
@@ -44,10 +47,10 @@ newValue = "obligation"
 # ----------------------------------------
 
 # get all risk
-all_risk_query = {"selector": {"type": {"$eq": "risk"}}}
+all_risk_query = {"selector": {"type": {"$eq": "risk"}}, "limit": 99999}
 
 # get all risk with "riskCategoryDatabaseId"
-all_risk_with_riskCategoryDatabaseId_query = {"selector": {"type": {"$eq": "risk"}, "riskCategoryDatabaseId": {"$exists": True}}}
+all_risk_with_riskCategoryDatabaseId_query = {"selector": {"type": {"$eq": "risk"}, "riskCategoryDatabaseId": {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -58,21 +61,28 @@ def migrateRiskText(resultFile):
     risk_cat_text = ""
     log['updatedRisksWithTextUpdate'] = []
     print('Getting all risk with riskCategoryDatabaseId')
-    all_risk = db.find(all_risk_with_riskCategoryDatabaseId_query)
+    all_risk = client.post_find(
+        db=DBNAME,
+        selector=all_risk_with_riskCategoryDatabaseId_query["selector"],
+        limit=all_risk_with_riskCategoryDatabaseId_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_risk)) + ' risks in db!')
     log['totalCount'] = len(all_risk)
     for risk in all_risk:
-        riskCategoryId = risk.get("riskCategoryDatabaseId");
+        riskCategoryId = risk.get("riskCategoryDatabaseId")
         risk_with_riskCategoryDatabaseId_query = {"selector": {"type": {"$eq": "riskCategory"}, "_id": {"$eq":""+riskCategoryId+"" }}}
-        riskCat = db.find(risk_with_riskCategoryDatabaseId_query);
+        riskCat = client.post_find(
+            db=DBNAME,
+            selector=risk_with_riskCategoryDatabaseId_query["selector"]
+        ).get_result().get('docs', [])
         for entity in riskCat:
-            risk_cat_text = entity["text"];
+            risk_cat_text = entity["text"]
         risk["text"] = risk_cat_text+" - "+risk["text"]
         updatedRisk = {}
         updatedRisk['id'] = risk.get('_id')
         log['updatedRisksWithTextUpdate'].append(updatedRisk)
         if not DRY_RUN:
-            db.save(risk);
+            client.post_document(DBNAME, risk).get_result()
             print('\tUpdated risk with id '+risk.get("_id"))
 
     json.dump(log, resultFile, indent = 4, sort_keys = True)
@@ -89,7 +99,7 @@ def updateTypeNFillDefaultOblType(resultFile, qryResult):
         updatedObligation['id'] = risk.get('_id')
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
-            db.save(risk)
+            client.post_document(DBNAME, risk).get_result()
             print('\tUpdated type of document from risk to '+newValue+' for ID -> ' + risk.get('_id'))
 
     json.dump(log, resultFile, indent = 4, sort_keys = True)
@@ -102,7 +112,7 @@ def removeFieldName(resultFile, qryResult, fieldToBeRemoved):
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
             print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
@@ -115,11 +125,15 @@ def run():
     logFile = open('035_risk_field_updates.log', 'w')
     migrateRiskText(logFile)
     print('Getting all risk')
-    all_risk = db.find(all_risk_query)
+    all_risk = client.post_find(
+        db=DBNAME,
+        selector=all_risk_query["selector"],
+        limit=all_risk_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_risk)) + ' risks in db!')
-    removeFieldName(logFile, all_risk, "riskId");
-    removeFieldName(logFile, all_risk, "riskCategoryDatabaseId");
-    updateTypeNFillDefaultOblType(logFile, all_risk);
+    removeFieldName(logFile, all_risk, "riskId")
+    removeFieldName(logFile, all_risk, "riskCategoryDatabaseId")
+    updateTypeNFillDefaultOblType(logFile, all_risk)
     logFile.close()
 
     print('\n')

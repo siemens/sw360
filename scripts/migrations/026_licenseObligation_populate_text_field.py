@@ -18,10 +18,11 @@
 # This script finds and copies "text" field value from Obligation to licenseObligation
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,15 +33,17 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
 # ----------------------------------------
 
 # get all license obligation with field "obligationId"
-licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licenseObligation"},"obligationId": {"$exists": True}}}
+licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licenseObligation"},"obligationId": {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -49,20 +52,27 @@ licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licen
 
 def run():
     log = {}
-    text = "";
+    text = ""
     print('Getting all licenseObligation with field obligationId')
-    licenseObligation_with_obligationId = db.find(licenseObligation_with_obligationId_query)
+    licenseObligation_with_obligationId = client.post_find(
+        db=DBNAME,
+        selector=licenseObligation_with_obligationId_query["selector"],
+        limit=licenseObligation_with_obligationId_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(licenseObligation_with_obligationId)) + ' licenseObligation with field obligationId in db!')
     log['totalCount'] = len(licenseObligation_with_obligationId)
     for entity_row in licenseObligation_with_obligationId:
         obligationId = entity_row["obligationId"]
         obligation_with_obligationDatabaseIds_query = {"selector": { "type": { "$eq": "obligation" }, "obligationDatabaseIds": { "$exists": True, "$elemMatch": { "$eq": ""+obligationId+"" } } }}
-        obligation_with_obligationDatabaseIds = db.find(obligation_with_obligationDatabaseIds_query)
+        obligation_with_obligationDatabaseIds = client.post_find(
+            db=DBNAME,
+            selector=obligation_with_obligationDatabaseIds_query["selector"]
+        ).get_result().get('docs', [])
         for entity_r in obligation_with_obligationDatabaseIds:
-            text = entity_r["text"];
+            text = entity_r["text"]
         entity_row["text"] = text
         if not DRY_RUN:
-            db.save(entity_row);
+            client.post_document(DBNAME, entity_row).get_result()
 
     print("Done")
 

@@ -18,11 +18,12 @@
 # This script is for removing the trailing and leading whitespaces in component's name
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-from logging import exception
-import couchdb
-import pandas as pd
 import json
 import time
+
+import pandas as pd
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 #Constants
 DRY_RUN = True
@@ -32,18 +33,25 @@ DBNAME = 'sw360db'
 
 def dbConnection():
     print('Connecting to local couchdb stage server....../')
-    couch = couchdb.Server(COUCHSERVER)
-    return couch[DBNAME]
+    authenticator = BasicAuthenticator(username='user', password='pass')
+    client = CloudantV1(authenticator=authenticator)
+    client.set_service_url(COUCHSERVER)
+    client.configure_service(COUCHSERVER)
+    return client
 
-def queryExecution(db,type):
+def queryExecution(client, type):
     print(f'Executing the {type} whitespace query.................../')
-    db_query = db.find({"selector":{"type": type,"name": {"$regex": "(^\\s.+)|(.+\\s$)"}},"limit":999999999999999})
+    db_query = client.post_find(
+        db=DBNAME,
+        selector={"type": type,"name": {"$regex": "(^\\s.+)|(.+\\s$)"}},
+        limit=999999999999999
+    ).get_result().get('docs', [])
     if bool(db_query):
         return list(db_query)
     else:
         return []
 
-def updateDB(db,db_copy_list):
+def updateDB(client, db_copy_list):
     print('Correcting the component/release names and updating the database......../')
 
     df = pd.DataFrame(db_copy_list)
@@ -52,7 +60,7 @@ def updateDB(db,db_copy_list):
     db_df_list = df.to_dict('records')
     if not DRY_RUN:
         #Update call
-        db.update(db_df_list)
+        client.post_document(DBNAME, db_df_list).get_result()
 
     return db_df_list
 
@@ -66,23 +74,27 @@ def generateLogFile(header, db_copy_list):
     json.dump(result, logFile, indent = 4, sort_keys = True)
     logFile.close()
 
-def checkDuplicate(db, db_copy_list):
+def checkDuplicate(client, db_copy_list):
     df = pd.DataFrame(db_copy_list)
     df['name'] =  df['name'].str.strip()
     df = df.fillna('')
-    results = []
-    query = {"selector": {"type": {"$eq": "component"},"$or": [{"name": name} for name in df['name']]},"limit": 99999}
-    results = db.find(query)
+    results = client.post_find(
+        db=DBNAME,
+        selector={"type": {"$eq": "component"},"$or": [{"name": name} for name in df['name']]},
+        limit=99999
+    ).get_result().get('docs', [])
     return list(results)
 
-def checkDuplicateReleases(db, db_copy_list):
+def checkDuplicateReleases(client, db_copy_list):
     print('Checking duplicate releases......./')
     df = pd.DataFrame(db_copy_list)
     df['name'] =  df['name'].str.strip()
     df = df.fillna('')
-    existing_release_list = []
-    query = {"selector": {"type": {"$eq": "release"},"$or": [{"name": name} for name in df['name']]},"limit": 99999}
-    existing_release_list = db.find(query)
+    existing_release_list = client.post_find(
+        db=DBNAME,
+        selector={"type": {"$eq": "release"},"$or": [{"name": name} for name in df['name']]},
+        limit=99999
+    ).get_result().get('docs', [])
     db_copy_list = df.to_dict('records')
     dup_rel_list = []
     for rel in list(existing_release_list):
@@ -91,7 +103,7 @@ def checkDuplicateReleases(db, db_copy_list):
                 dup_rel_list.append(x)
     return dup_rel_list
 
-def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
+def linkReleaseToComponent(client, db_corrected_comp_list, db_existing_comp_list):
 
     print('######################')
     print('Linking Releases to Components........./')
@@ -106,8 +118,11 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
             if(x['name'] == comp['name']):
                 db_del_comp_Ids.append(x['_id'])
                 for i in x["releaseIds"]:
-                    query = {"selector": {"type": {"$eq": "release"}, "_id": { "$eq": i }},"limit": 99999}
-                    relation = db.find(query)
+                    relation = client.post_find(
+                        db=DBNAME,
+                        selector={"type": {"$eq": "release"}, "_id": { "$eq": i }},
+                        limit=99999
+                    ).get_result().get('docs', [])
                     relation_list = list(relation)
                     print((relation_list[0]["componentId"]))
                     relation_list[0]["componentId"] = comp['_id']
@@ -118,7 +133,7 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
                     db_upd_releases_list.append(relation_list[0])
                     db_upd_comp_list.append(comp)
 
-    db_dup_release_list = checkDuplicateReleases(db, db_upd_releases_list)
+    db_dup_release_list = checkDuplicateReleases(client, db_upd_releases_list)
 
     #Generate log file
     header = (f'Duplicate releases that will be merged - total count :  {len(db_dup_release_list)}')
@@ -130,48 +145,48 @@ def linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list):
 
     print('Updating Linkage of Components and Releases............/')
     if not DRY_RUN:
-        db.update(db_upd_comp_list)
-        db.update(db_upd_releases_list)
+        client.post_document(DBNAME, db_upd_comp_list).get_result()
+        client.post_document(DBNAME, db_upd_releases_list).get_result()
 
     print(db_del_comp_Ids)
     return db_del_comp_Ids
 
-def deleteDuplicateComponents(db, db_del_comp_Ids):
+def deleteDuplicateComponents(client, db_del_comp_Ids):
     if not DRY_RUN:
         #Generate log file
         header = (f'Duplicate components that are getting deleted {len(db_del_comp_Ids)}')
         generateLogFile(header, db_del_comp_Ids)
         print('Deleting duplicate components........../')
-        for id in db_del_comp_Ids :
-            del db[id]
+        for doc_id in db_del_comp_Ids :
+            client.delete_document(DBNAME, doc_id).get_result()
 
 def run():
 
     #DB connection
-    db = dbConnection()
+    client = dbConnection()
 
     #Query to fetch the component names with whitespace
-    db_comp_list = queryExecution(db,'component')
+    db_comp_list = queryExecution(client,'component')
     #Generate log file
     header = (f'Components with whitespaces - total count :  {len(db_comp_list)}')
     generateLogFile(header, db_comp_list)
 
     #Query to fetch the release names with whitespaces
-    db_rel_list = queryExecution(db,'release')
+    db_rel_list = queryExecution(client,'release')
     #Generate log file
     header = (f'Releases with whitespaces - total count :  {len(db_rel_list)}')
     generateLogFile(header, db_rel_list)
 
     #check Duplicate
     if len(db_comp_list)!=0:
-        db_existing_comp_list = checkDuplicate(db,db_comp_list)
+        db_existing_comp_list = checkDuplicate(client,db_comp_list)
         #Generate log file
         header = (f'Existing components with the same name - total count :  {len(db_existing_comp_list)}')
         generateLogFile(header, db_existing_comp_list)
 
     #Converting document data to dataframe and removing the whitespace of components
     if len(db_comp_list)!=0:
-        db_corrected_comp_list = updateDB(db,db_comp_list)
+        db_corrected_comp_list = updateDB(client,db_comp_list)
         #Generate log file
         header = (f'Corrected components - total count :  {len(db_corrected_comp_list)}')
         generateLogFile(header, db_corrected_comp_list)
@@ -180,20 +195,20 @@ def run():
 
     #Converting document data to dataframe and removing the whitespace of releases
     if len(db_rel_list)!=0:
-        db_corrected_rel_list = updateDB(db,db_rel_list)
+        db_corrected_rel_list = updateDB(client,db_rel_list)
         #Generate log file
         header = (f'Corrected components - total count :  {len(db_corrected_rel_list)}')
         generateLogFile(header, db_corrected_rel_list)
     else:
         print('No Records found!')
 
-    #link Releases of duplicate components to the exisiting components
+    #link Releases of duplicate components to the existing components
     if len(db_corrected_comp_list)!=0:
-        db_del_comp_Ids = linkReleaseToComponent(db, db_corrected_comp_list, db_existing_comp_list)
+        db_del_comp_Ids = linkReleaseToComponent(client, db_corrected_comp_list, db_existing_comp_list)
 
     #delete duplicate components
     if len(db_del_comp_Ids)!=0:
-        deleteDuplicateComponents(db, db_del_comp_Ids)
+        deleteDuplicateComponents(client, db_del_comp_Ids)
 
     print('Execution completed....')
 

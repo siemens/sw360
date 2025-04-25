@@ -18,10 +18,11 @@
 # This script renames the field "name" to "title" in license obligation and delete field "obligationId"
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 oldFieldName = "name"
@@ -45,10 +48,10 @@ deleteFieldName = "obligationId"
 # ----------------------------------------
 
 # get all license obligation with field "name"
-licenseObligation_with_name_query = {"selector": {"type": {"$eq": "licenseObligation"},oldFieldName: {"$exists": True}}}
+licenseObligation_with_name_query = {"selector": {"type": {"$eq": "licenseObligation"},oldFieldName: {"$exists": True}}, "limit": 99999}
 
 # get all license obligation with field "obligationId"
-licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licenseObligation"},deleteFieldName: {"$exists": True}}}
+licenseObligation_with_obligationId_query = {"selector": {"type": {"$eq": "licenseObligation"},deleteFieldName: {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -61,7 +64,7 @@ def updateFieldNames(qryResult, oldName, newName, log):
         entity[''+newName+''] = entity[''+oldName+'']
         del entity[''+oldName+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
             print('updation of field name from '+oldName+' to '+newName+' done')
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
@@ -73,7 +76,7 @@ def removeFieldName(qryResult, fieldToBeRemoved, log):
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
             print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
@@ -82,14 +85,22 @@ def removeFieldName(qryResult, fieldToBeRemoved, log):
 def run():
     log = {}
     print('Getting all licenseObligation with field name')
-    licenseObligation_with_name = db.find(licenseObligation_with_name_query)
+    licenseObligation_with_name = client.post_find(
+        db=DBNAME,
+        selector=licenseObligation_with_name_query["selector"],
+        limit=licenseObligation_with_name_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(licenseObligation_with_name)) + ' licenseObligation with field name in db!')
     log['totalCount'] = len(licenseObligation_with_name)
-    updateFieldNames(licenseObligation_with_name, oldFieldName, newFieldName, log);
-    print('Getting all licenseObligation with field obligationId')
-    licenseObligation_with_obligationId = db.find(licenseObligation_with_obligationId_query)
-    removeFieldName(licenseObligation_with_obligationId, deleteFieldName, log);
+    updateFieldNames(licenseObligation_with_name, oldFieldName, newFieldName, log)
 
+    print('Getting all licenseObligation with field obligationId')
+    licenseObligation_with_obligationId = client.post_find(
+        db=DBNAME,
+        selector=licenseObligation_with_obligationId_query["selector"],
+        limit=licenseObligation_with_obligationId_query["limit"]
+    ).get_result().get('docs', [])
+    removeFieldName(licenseObligation_with_obligationId, deleteFieldName, log)
 
     resultFile = open('027_licenseObligation_migration_'+oldFieldName+'.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)

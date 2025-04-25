@@ -18,10 +18,11 @@
 # This script to update linkedProjects field in project document to a new structure.
 # -----------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -50,7 +53,11 @@ def run():
     log = {}
     log['updatedProjects'] = []
     print('Getting all projects with linkedProjects')
-    projects_all = db.find(projects_all_query)
+    projects_all = client.post_find(
+        db=DBNAME,
+        selector=projects_all_query["selector"],
+        limit=projects_all_query["limit"]
+    ).get_result().get('docs', [])
     print('Received ' + str(len(projects_all)) + ' projects')
     log['totalCount'] = len(projects_all)
 
@@ -71,7 +78,7 @@ def run():
         updatedProject['name'] = project.get('name')
         log['updatedProjects'].append(updatedProject)
         if not DRY_RUN:
-            db.save(project)
+            client.post_document(DBNAME, project).get_result()
     resultFile = open('045_migrate_project_linked_project_relation.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)
     resultFile.close()

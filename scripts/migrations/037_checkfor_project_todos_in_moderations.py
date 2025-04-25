@@ -19,10 +19,11 @@
 # before proceeding with further migration scriptsor else delete the empty todos field from the moderation request.
 # ---------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -33,8 +34,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -79,7 +82,7 @@ def checkEmptyTodosAnddeleteFromModeration(logFile, all_moderations):
             del(moderation["projectDeletions"]["todos"])
 
         if not DRY_RUN:
-            db.save(moderation)
+            client.post_document(DBNAME, moderation).get_result()
 
 
         openModRequestList = {}
@@ -128,7 +131,11 @@ def run():
     logFile = open('037_checkfor_project_todos_in_moderations.log', 'w')
 
     print('Getting all project moderations with todos')
-    all_moderations = db.find(all_project_moderations)
+    all_moderations = client.post_find(
+        db=DBNAME,
+        selector=all_project_moderations["selector"],
+        limit=all_project_moderations["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_moderations)) + ' project moderations with todos in db!')
 
     print('Checking if there is any moderation request having todos with data')

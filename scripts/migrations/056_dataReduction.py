@@ -18,11 +18,11 @@
 # This script will delete the Releases that are not linked to any project and does not have any clearing results and will also delete the components that does not have any releases..
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import datetime
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -30,11 +30,13 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = 'http://username:pwd@localhost:5984/'
+COUCHSERVER = 'http://localhost:5984/'
 SW360_DB = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-sw360Db = couch[SW360_DB]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 #enter the date, all the releases not linked to any project before this date will get deleted
 bufferDate = '2022-06-01'
@@ -105,7 +107,7 @@ def deleteCompWithoutReleases(log, comp_data_list):
     for component in comp_data_list:
         log['Component Ids'].append(component[ID])
         if not DRY_RUN:
-            sw360Db.delete(component)
+            client.delete_document(SW360_DB, component[ID]).get_result()
 
 def deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list):
     log['Release Ids'] = []
@@ -151,7 +153,7 @@ def deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list)
                 print(('deleting ' + releaseId))
 
                 if not DRY_RUN:
-                    sw360Db.delete(rId)
+                    client.delete_document(SW360_DB, rId).get_result()
 
 def run():
     log = {}
@@ -162,15 +164,29 @@ def run():
     print ('2. Ids of releases that are not linked to any projects')
     print ('\n')
 
-    comp_data = sw360Db.find(comp_query)
+    comp_data = client.post_find(
+        db=SW360_DB,
+        selector=comp_query["selector"],
+        limit=comp_query["limit"]
+    ).get_result().get('docs', [])
     comp_data_list = list(comp_data)
     print('query done for components')
     deleteCompWithoutReleases(log, comp_data_list)
 
-    project_data = sw360Db.find(proj_query)
+    project_data = client.post_find(
+        db=SW360_DB,
+        selector=proj_query["selector"],
+        fields=proj_query["fields"],
+        limit=proj_query["limit"]
+    ).get_result().get('docs', [])
     project_data_list = list(project_data)
     print('query done for projects')
-    release_data = sw360Db.find(release_query)
+
+    release_data = client.post_find(
+        db=SW360_DB,
+        selector=release_query["selector"],
+        limit=release_query["limit"]
+    ).get_result().get('docs', [])
     release_data_list = list(release_data)
     print('query done for releases')
     deleteReleasesNotLinkedToProjects(log, project_data_list, release_data_list)

@@ -18,10 +18,11 @@
 # This script removes old design document for ProjectObligation
 # -----------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,10 +33,12 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
-doc_id = "_design/ProjectObligation"
+doc_id = "ProjectObligation"
 
 # ---------------------------------------
 # functions
@@ -45,13 +48,13 @@ def run():
     log = {}
     log['docId'] = doc_id
     print('Getting Document by ID : ' + doc_id)
-    doc = db.get(doc_id, None)
+    doc = client.get_design_document(DBNAME, doc_id).get_result().get("_id", None)
     if doc is not None:
         print('Received document.Deleting Document.')
         print('Deleting Document with ID : ' + doc_id)
         log['result'] = 'Deleted Document with ID : ' + doc_id
         if not DRY_RUN:
-            db.delete(doc)
+            client.delete_design_document(DBNAME, doc_id).get_result()
     else:
         print('No document found with this ID.')
         log['result'] = 'No document found with this ID.'

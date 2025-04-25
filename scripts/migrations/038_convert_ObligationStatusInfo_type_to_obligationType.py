@@ -18,10 +18,11 @@
 # This script renames the type to obligationType and converts the existing type to upper case and saves it to DB
 # -------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -63,7 +66,7 @@ def convertTypeNPopulatedata(resultFile, all_obligationlist):
         updatedObligationLists['id'] = oblList.get('_id')
         log['updatedObligationLists'].append(updatedObligationLists)
         if not DRY_RUN:
-            db.save(oblList);
+            client.post_document(DBNAME, oblList).get_result()
 
     json.dump(log, resultFile, indent = 4, sort_keys = True)
 
@@ -72,7 +75,11 @@ def run():
     logFile = open('038_convert_ObligationStatusInfo_type_to_obligationType.log', 'w')
 
     print('Getting all obligationlist with field linkedObligationStatus')
-    all_obligationlist = db.find(all_obligationlist_with_field_linkedObligationStatus)
+    all_obligationlist = client.post_find(
+        db=DBNAME,
+        selector=all_obligationlist_with_field_linkedObligationStatus["selector"],
+        limit=all_obligationlist_with_field_linkedObligationStatus["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(all_obligationlist)) + ' projects with field todos in db!')
 
     convertTypeNPopulatedata(logFile, all_obligationlist)

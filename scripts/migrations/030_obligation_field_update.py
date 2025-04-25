@@ -18,10 +18,11 @@
 # This script removes the "obligationDatabaseIds" from obligation
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 deleteFieldName = "obligationDatabaseIds"
@@ -43,7 +46,7 @@ deleteFieldName = "obligationDatabaseIds"
 # ----------------------------------------
 
 # get all obligation with field "obligationDatabaseIds"
-obligation_with_obligationDatabaseIds_query = {"selector": {"type": {"$eq": "obligation"},deleteFieldName: {"$exists": True}}}
+obligation_with_obligationDatabaseIds_query = {"selector": {"type": {"$eq": "obligation"},deleteFieldName: {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -55,7 +58,7 @@ def removeFieldName(qryResult, fieldToBeRemoved, log):
     for entity in qryResult:
         del entity[''+fieldToBeRemoved+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
             print('Removing field name '+fieldToBeRemoved+' done for '+entity.get('_id'))
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
@@ -64,10 +67,14 @@ def removeFieldName(qryResult, fieldToBeRemoved, log):
 def run():
     log = {}
     print('Getting all obligation with field obligationDatabaseIds')
-    obligation_with_obligationDatabaseIds = db.find(obligation_with_obligationDatabaseIds_query)
+    obligation_with_obligationDatabaseIds = client.post_find(
+        db=DBNAME,
+        selector=obligation_with_obligationDatabaseIds_query["selector"],
+        limit=obligation_with_obligationDatabaseIds_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(obligation_with_obligationDatabaseIds)) + ' obligation with field obligationDatabaseIds in db!')
     log['totalCount'] = len(obligation_with_obligationDatabaseIds)
-    removeFieldName(obligation_with_obligationDatabaseIds, deleteFieldName, log);
+    removeFieldName(obligation_with_obligationDatabaseIds, deleteFieldName, log)
 
 
     resultFile = open('030_obligation__remove_field_migration.log', 'w')

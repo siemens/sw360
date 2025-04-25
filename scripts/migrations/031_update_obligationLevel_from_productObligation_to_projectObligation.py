@@ -19,10 +19,11 @@
 # from "PRODUCT_OBLIGATION" to "PROJECT_OBLIGATION"
 # ------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -33,8 +34,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 oldFieldValue = "PRODUCT_OBLIGATION"
@@ -45,7 +48,7 @@ newFieldValue = "PROJECT_OBLIGATION"
 # ----------------------------------------
 
 # get all obligations with field "obligationLevel" as "PRODUCT_OBLIGATION"
-product_obligations_query = {"selector": {"type": {"$eq": "obligation"},"obligationLevel": {"$eq": oldFieldValue}}}
+product_obligations_query = {"selector": {"type": {"$eq": "obligation"},"obligationLevel": {"$eq": oldFieldValue}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -55,7 +58,11 @@ def run():
     log = {}
     log['updatedObligation'] = []
     print('Getting all obligations with field "obligationLevel" as ' + oldFieldValue)
-    product_obligations = db.find(product_obligations_query)
+    product_obligations = client.post_find(
+        db=DBNAME,
+        selector=product_obligations_query["selector"],
+        limit=product_obligations_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(product_obligations)) + ' obligations with field obligationLevel as ' + oldFieldValue + ' in db!')
     log['totalCount'] = len(product_obligations)
 
@@ -66,7 +73,7 @@ def run():
         updatedObligation['id'] = obligation.get('_id')
         log['updatedObligation'].append(updatedObligation)
         if not DRY_RUN:
-            db.save(obligation)
+            client.post_document(DBNAME, obligation).get_result()
             print('\tUpdated obligationLevel of document from ' + oldFieldValue + ' to ' + newFieldValue + ' for ID -> ' + obligation.get('_id'))
     resultFile = open('031_update_obligationLevel_from_' + oldFieldValue + '_to_' + newFieldValue + '.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)

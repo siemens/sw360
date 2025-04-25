@@ -11,10 +11,11 @@
 # This script is for removing Moderation requests of a particular user.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -22,11 +23,13 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = "http://user:pwd@localhost:5984/"
+COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 EMAIL = "user_email"
 MODERATION_STATE = ""
@@ -62,7 +65,7 @@ def removeModerationRequests(logFile, docs):
             deleteMR_Dry_Run['MRid'] = mr.get('_id')
             log['MR(Dry run)'].append(deleteMR_Dry_Run)
         if not DRY_RUN:
-            db.delete(mr)
+            client.delete_document(DBNAME, mr.get('_id')).get_result()
             deleteMR = {}
             deleteMR['id'] = mr.get('_id')
             log['MR'].append(deleteMR)
@@ -73,7 +76,11 @@ def removeModerationRequests(logFile, docs):
 def run():
     logFile = open('RemoveMR.log', 'w')
     print ('Getting all the Moderation Requests')
-    Moderation_Requests = list(db.find(all_Moderation_Requests))
+    Moderation_Requests = list(client.post_find(
+        db=DBNAME,
+        selector=all_Moderation_Requests["selector"],
+        limit=all_Moderation_Requests["limit"]
+    ).get_result().get('docs', []))
     print(('found ' + str(len(Moderation_Requests)) + ' Moderation Requests\n'))
     removeModerationRequests(logFile, Moderation_Requests)
     logFile.close()

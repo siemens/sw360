@@ -19,9 +19,11 @@
 # This script replace Ternary fields "GPLv2Compat" and "GPLv3Compat" by Quadratic fields "OSIApproved" and "FSFLibre" in Licenses
 # -----------------------------------------------------------------------------
 
-import couchdb
 import json
 import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +34,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -71,7 +75,11 @@ def run():
         print('------------------------------------------')
         print('\n')
     print('On raw licenses: replace GPL compatibility fields by OSI approved and FSF libre fields.')
-    licenses = db.find(all_licenses)
+    licenses = client.post_find(
+        db=DBNAME,
+        selector=all_licenses["selector"],
+        limit=all_licenses["limit"]
+    ).get_result().get('docs', [])
     licenses_len = len(licenses)
     print(('Found ' + str(licenses_len) + ' licenses in db!'))
 
@@ -80,14 +88,18 @@ def run():
     license_log['replaceFieldsList'] = []
     for license in licenses:
         if not DRY_RUN:
-            db.save(replaceFields(license))
+            client.post_document(DBNAME, replaceFields(license)).get_result()
             replaceFieldsList = {}
             replaceFieldsList['id'] = license.get('_id')
             license_log['replaceFieldsList'].append(replaceFieldsList)
 
     # migrate moderations related to licenses
     print('In license moderations: replace GPL compatibility fields by OSI approved and FSF libre fields.')
-    moderations_with_license_stuff = db.find(license_moderation_with_downloadurl_query)
+    moderations_with_license_stuff = client.post_find(
+        db=DBNAME,
+        selector=license_moderation_with_downloadurl_query["selector"],
+        limit=license_moderation_with_downloadurl_query["limit"]
+    ).get_result().get('docs', [])
     moderations_len = len(moderations_with_license_stuff)
     print(('Found ' + str(moderations_len) + ' license moderations in db!'))
 
@@ -96,7 +108,7 @@ def run():
     moderation_log['replaceFieldsInLicenseModerationList'] = []
     for moderation in moderations_with_license_stuff:
         if not DRY_RUN:
-            db.save(replaceFieldsInLicenseModeration(moderation))
+            client.post_document(DBNAME, replaceFieldsInLicenseModeration(moderation)).get_result()
             replaceFieldsInLicenseModerationList = {}
             replaceFieldsInLicenseModerationList['id'] = moderation.get('_id')
             log['replaceFieldsInLicenseModerationList'].append(replaceFieldsInLicenseModerationList)

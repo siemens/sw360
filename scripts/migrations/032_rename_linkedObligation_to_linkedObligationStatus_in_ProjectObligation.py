@@ -18,10 +18,11 @@
 # This script renames the field "linkedObligations" to "linkedObligationStatus" in ProjectObligation
 # --------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 oldFieldName = "linkedObligations"
@@ -44,7 +47,7 @@ newFieldName = "linkedObligationStatus"
 # ----------------------------------------
 
 # get all ProjectObligations with field "linkedObligations"
-projectObligations_with_linkedObligations_query = {"selector": {"type": {"$eq": "projectObligation"},oldFieldName: {"$exists": True}}}
+projectObligations_with_linkedObligations_query = {"selector": {"type": {"$eq": "projectObligation"},oldFieldName: {"$exists": True}}, "limit": 99999}
 
 # ---------------------------------------
 # functions
@@ -57,7 +60,7 @@ def updateFieldNames(qryResult, oldName, newName, log):
         entity[''+newName+''] = entity[''+oldName+'']
         del entity[''+oldName+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated ProjectObligations fields from '+oldName+' to '+newName].append(updatedDocId)
@@ -66,10 +69,14 @@ def updateFieldNames(qryResult, oldName, newName, log):
 def run():
     log = {}
     print('Getting all ProjectObligations with field linkedObligations')
-    projectObligations_with_linkedObligations = db.find(projectObligations_with_linkedObligations_query)
+    projectObligations_with_linkedObligations = client.post_find(
+        db=DBNAME,
+        selector=projectObligations_with_linkedObligations_query["selector"],
+        limit=projectObligations_with_linkedObligations_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(projectObligations_with_linkedObligations)) + ' ProjectObligations with field linkedObligations in db!')
     log['totalCount'] = len(projectObligations_with_linkedObligations)
-    updateFieldNames(projectObligations_with_linkedObligations, oldFieldName, newFieldName, log);
+    updateFieldNames(projectObligations_with_linkedObligations, oldFieldName, newFieldName, log)
 
     resultFile = open('032_projectObligations_migration_'+oldFieldName+'.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)

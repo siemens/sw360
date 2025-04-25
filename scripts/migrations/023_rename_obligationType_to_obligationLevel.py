@@ -18,10 +18,11 @@
 # This script renames the field "obligationType" to "obligationLevel" in Obligations
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # set fieldName
 oldFieldName = "obligationType"
@@ -57,7 +60,7 @@ def updateFieldNames(qryResult, oldName, newName, log):
         entity[''+newName+''] = entity[''+oldName+'']
         del entity[''+oldName+'']
         if not DRY_RUN:
-            db.save(entity)
+            client.post_document(DBNAME, entity).get_result()
         updatedDocId = {}
         updatedDocId['id'] = entity.get('_id')
         log['updated Obligations fields from '+oldName+' to '+newName].append(updatedDocId)
@@ -66,10 +69,14 @@ def updateFieldNames(qryResult, oldName, newName, log):
 def run():
     log = {}
     print('Getting all obligations with field obligationType')
-    obligations_with_obligationType = db.find(obligations_with_obligationType_query)
+    obligations_with_obligationType = client.post_find(
+        db=DBNAME,
+        selector=obligations_with_obligationType_query["selector"],
+        limit=obligations_with_obligationType_query["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(obligations_with_obligationType)) + ' obligations with field obligationType in db!')
     log['totalCount'] = len(obligations_with_obligationType)
-    updateFieldNames(obligations_with_obligationType, oldFieldName, newFieldName, log);
+    updateFieldNames(obligations_with_obligationType, oldFieldName, newFieldName, log)
 
     resultFile = open('023_obligations_migration_'+oldFieldName+'.log', 'w')
     json.dump(log, resultFile, indent = 4, sort_keys = True)

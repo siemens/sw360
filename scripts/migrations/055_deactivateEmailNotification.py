@@ -18,11 +18,11 @@
 # This script is for deactivating email notification for user not belonging to a domain.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import datetime
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -30,11 +30,13 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = 'http://username:password@localhost:5984/'
+COUCHSERVER = 'http://localhost:5984/'
 USERS_DB = 'sw360users'
 
-couch = couchdb.Server(COUCHSERVER)
-userDb = couch[USERS_DB]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 #Users
 NOTIFICATION = 'wantsMailNotification'
@@ -78,7 +80,7 @@ def deactivateEmailNotification(log, users_data_list):
             log["Updated User's mail notification"].append(user)
 
         if not DRY_RUN:
-            userDb.save(user)
+            client.post_document(USERS_DB, user).get_result()
 
 def run():
     log = {}
@@ -87,7 +89,11 @@ def run():
     print ('Updated Users detail')
     print ('\n')
 
-    users_data = userDb.find(user_query)
+    users_data = client.post_find(
+        db=USERS_DB,
+        selector=user_query["selector"],
+        limit=user_query["limit"]
+    ).get_result().get('docs', [])
     users_data_list = list(users_data)
     print ('size of users not belonging to that instance')
     print((len(users_data_list)))

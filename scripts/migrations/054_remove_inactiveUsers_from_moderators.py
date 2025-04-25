@@ -18,25 +18,26 @@
 # This script is for removing deactivated users from moderators list.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import datetime
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
 # ---------------------------------------
 
-DRY_RUN = True
+DRY_RUN = False
 
-COUCHSERVER = 'http://username:pwd@localhost:5984/'
+COUCHSERVER = 'http://localhost:5984/'
 SW360_DB = 'sw360db'
 USERS_DB = 'sw360users'
 
-couch = couchdb.Server(COUCHSERVER)
-sw360db = couch[SW360_DB]
-userDb = couch[USERS_DB]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 MODS = "moderators"
 EMAIL = "email"
@@ -75,7 +76,7 @@ def activeUsersInModerators(log, inactive_users, moderation_list):
                     log['Inactive Users email id in Moderators with moderation id'].append(item)
 
         if not DRY_RUN:
-            sw360db.save(moderation)
+            client.post_document(SW360_DB, moderation).get_result()
 
 def run():
     log = {}
@@ -83,8 +84,16 @@ def run():
 
     print ('Updated Users detail in log file:')
     print ('\n')
-    inactive_users = userDb.find(inactive_users_query)
-    mod_requests = sw360db.find(mr_query)
+    inactive_users = client.post_find(
+        db=USERS_DB,
+        selector=inactive_users_query["selector"],
+        limit=inactive_users_query["limit"]
+    ).get_result().get('docs', [])
+    mod_requests = client.post_find(
+        db=SW360_DB,
+        selector=mr_query["selector"],
+        limit=mr_query["limit"]
+    ).get_result().get('docs', [])
     moderation_list = list(mod_requests)
 
     activeUsersInModerators(log, inactive_users, moderation_list)

@@ -11,7 +11,7 @@
 FROM python:3.10-bookworm@sha256:2c7bb615d8d39334f857260dc012e27070f04bea5d653e687f5f6fb643637e15
 
 RUN set -x \
-    && pip install pycouchdb \
+    && pip install CouchDB==1.2 ibmcloudant==0.10.2 \
     && mkdir -p /migrations
 
 WORKDIR /migrations

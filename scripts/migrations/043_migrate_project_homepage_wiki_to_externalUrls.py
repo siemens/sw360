@@ -18,10 +18,11 @@
 # This script is for migrating project's homepage and wiki to externalUrls. And removing those fields after migration.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -73,7 +76,7 @@ def migrateAndDeleteHomepageWiki(logFile, docs):
         updateDocId_Dry_Run['id'] = entity.get('_id')
         log['Projects to be updated(Dry run)'].append(updateDocId_Dry_Run)
         if not DRY_RUN:
-            db.save(entity);
+            client.post_document(DBNAME, entity).get_result()
             updatedDocId = {}
             updatedDocId['id'] = entity.get('_id')
             log['Updated projects'].append(updatedDocId)
@@ -84,9 +87,13 @@ def migrateAndDeleteHomepageWiki(logFile, docs):
 def run():
     logFile = open('043_migrate_project_homepage_wiki_to_externalUrls.log', 'w')
     print('Getting all projects with homepage or wiki')
-    projects_with_homepage_or_wiki = db.find(all_projects_with_homepage_or_wiki);
+    projects_with_homepage_or_wiki = client.post_find(
+        db=DBNAME,
+        selector=all_projects_with_homepage_or_wiki["selector"],
+        limit=all_projects_with_homepage_or_wiki["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(projects_with_homepage_or_wiki)) + ' projects with homepage or wiki')
-    migrateAndDeleteHomepageWiki(logFile, projects_with_homepage_or_wiki);
+    migrateAndDeleteHomepageWiki(logFile, projects_with_homepage_or_wiki)
     logFile.close()
 
     print('\n')

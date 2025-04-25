@@ -23,10 +23,11 @@
 #
 # ------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -37,8 +38,10 @@ DRY_RUN = True
 COUCHSERVER = 'http://localhost:5984/'
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # oldField
 releaseIdToUsageFieldName = "releaseIdToUsage"
@@ -55,7 +58,7 @@ get_projects_with_releaseIdToUsage_field_query = {"selector": {"type": {"$eq": "
 
 def get_children_node(id, createBy, createOn):
     get_release_by_id = {"selector":{"type": {"$eq":"release"}, "_id":{"$eq":id}}}
-    release_by_id = list(db.find(get_release_by_id))[0]
+    release_by_id = client.get_document(DBNAME, id).get_result()
 
     children_nodes = []
     if len(release_by_id) > 0:
@@ -79,7 +82,7 @@ def applyTransferData(project, log):
     updatedDocId = {}
     updatedDocId['id'] = project.get('_id')
     if not DRY_RUN:
-        db.save(project)
+        client.post_document(DBNAME, project).get_result()
         print(('Add field ' + newFieldName + ' done for project ' + project.get('_id')))
         log['Success updated project'].append(updatedDocId)
     else:
@@ -88,7 +91,11 @@ def applyTransferData(project, log):
 
 def run():
     print ('Getting all project with field releaseIdToUsage')
-    project_with_releaseIdToUsage_field = db.find(get_projects_with_releaseIdToUsage_field_query)
+    project_with_releaseIdToUsage_field = client.post_find(
+        db=DBNAME,
+        selector=get_projects_with_releaseIdToUsage_field_query["selector"],
+        limit=get_projects_with_releaseIdToUsage_field_query["limit"]
+    ).get_result().get('docs', [])
 
     for project in project_with_releaseIdToUsage_field:
         print(('migrating for project: ' + project["_id"]))

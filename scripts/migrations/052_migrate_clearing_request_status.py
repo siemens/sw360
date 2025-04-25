@@ -18,10 +18,11 @@
 # This script is for migrating Obligation status.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -60,7 +63,7 @@ def migrateAndUpdateClearingRequestStatus(logFile, docs):
             updateDocId_Dry_Run['projectId'] = cr.get('projectId', None)
             log['CR to be updated(Dry run)'].append(updateDocId_Dry_Run)
         if not DRY_RUN:
-            db.save(cr);
+            client.post_document(DBNAME, cr).get_result()
             updatedDocId = {}
             updatedDocId['id'] = cr.get('_id')
             updatedDocId['projectId'] = cr.get('projectId', None)
@@ -72,9 +75,13 @@ def migrateAndUpdateClearingRequestStatus(logFile, docs):
 def run():
     logFile = open('052_migrate_clearing_request_status.log', 'w')
     print('Getting all the Clearing Request in "On Hold" state')
-    onHold_ClearingRequests = db.find(all_On_Hold_Clearing_Requests);
+    onHold_ClearingRequests = client.post_find(
+        db=DBNAME,
+        selector=all_On_Hold_Clearing_Requests["selector"],
+        limit=all_On_Hold_Clearing_Requests["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(onHold_ClearingRequests)) + ' CR with On HOld status\n')
-    migrateAndUpdateClearingRequestStatus(logFile, onHold_ClearingRequests);
+    migrateAndUpdateClearingRequestStatus(logFile, onHold_ClearingRequests)
     logFile.close()
     print('------------------------------------------')
     print('Please check log file "052_migrate_clearing_request_status.log" in this directory for details')

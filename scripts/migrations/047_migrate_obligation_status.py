@@ -18,10 +18,11 @@
 # This script is for migrating Obligation status.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 # ----------------------------------------
 # queries
@@ -73,7 +76,7 @@ def migrateAndUpdateObligationStatus(logFile, docs):
             updateDocId_Dry_Run['projectId'] = obl.get('projectId', None)
             log['Obligations to be updated(Dry run)'].append(updateDocId_Dry_Run)
         if not DRY_RUN:
-            db.save(obl);
+            client.post_document(DBNAME, obl).get_result()
             updatedDocId = {}
             updatedDocId['id'] = obl.get('_id')
             updatedDocId['projectId'] = obl.get('projectId', None)
@@ -84,9 +87,13 @@ def migrateAndUpdateObligationStatus(logFile, docs):
 def run():
     logFile = open('047_migrate_obligation_status.log', 'w')
     print('Getting all the Obligations with field "linkedObligationStatus"')
-    obligations_with_linkedObligationStatus = db.find(all_Obligations_with_linkedObligationStatus);
+    obligations_with_linkedObligationStatus = client.post_find(
+        db=DBNAME,
+        selector=all_Obligations_with_linkedObligationStatus["selector"],
+        limit=all_Obligations_with_linkedObligationStatus["limit"]
+    ).get_result().get('docs', [])
     print('found ' + str(len(obligations_with_linkedObligationStatus)) + ' obligations with linkedObligationStatus')
-    migrateAndUpdateObligationStatus(logFile, obligations_with_linkedObligationStatus);
+    migrateAndUpdateObligationStatus(logFile, obligations_with_linkedObligationStatus)
     logFile.close()
 
     print('\n')

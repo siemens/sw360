@@ -18,11 +18,12 @@
 # This script is for deleting all closed moderation requests based on date/timestamp.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
 import datetime
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -30,11 +31,13 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = 'http://username:pwd@localhost:5984/'
+COUCHSERVER = 'http://localhost:5984/'
 SW360_DB = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-sw360Db = couch[SW360_DB]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 MR_id = '_id'
 modState = "PENDING|INPROGRESS"
@@ -79,7 +82,7 @@ def deleteClosedModerationRequests(log, MR_data_list):
         log['Closed Moderation Requests Ids'].append(MR[MR_id])
 
         if not DRY_RUN:
-            sw360Db.delete(MR)
+            client.delete_document(SW360_DB, MR[MR_id]).get_result()
 
 def run():
     log = {}
@@ -88,7 +91,11 @@ def run():
     print ('\n')
     print ('All closed moderation requests older than the mentioned date will get deleted \n')
 
-    MR_data = sw360Db.find(MR_query)
+    MR_data = client.post_find(
+        db=SW360_DB,
+        selector=MR_query["selector"],
+        limit=MR_query["limit"]
+    ).get_result().get('docs', [])
     MR_data_list = list(MR_data)
 
     total = len(MR_data_list)

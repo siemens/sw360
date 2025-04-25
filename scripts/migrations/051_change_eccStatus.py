@@ -18,10 +18,11 @@
 # This script is for changing the ecc status to Approved for the affected releases (releases with source code download url and component type OSS).
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -32,8 +33,10 @@ DRY_RUN = True
 COUCHSERVER = "http://localhost:5984/"
 DBNAME = 'sw360db'
 
-couch=couchdb.Server(COUCHSERVER)
-db = couch[DBNAME]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 COMPONENT_ID = '_id'
 RELEASE_ID = '_id'
@@ -69,16 +72,24 @@ def get_all_releases(log, releases_with_source_code_url, oss_components):
                 log['updated releases'].append(release)
 
                 if not DRY_RUN:
-                    db.save(release)
+                    client.post_document(DBNAME, release).get_result()
 
 def run():
     log = {}
     logFile = open('051_change_eccStatus.log', 'w')
 
-    print ('Getting all the affected releases with source_code_dwonload_url and oss component type')
+    print ('Getting all the affected releases with source_code_download_url and oss component type')
     print ('\n')
-    releases_with_source_code_url = db.find(all_releases)
-    oss_components = db.find(all_oss_components)
+    releases_with_source_code_url = client.post_find(
+        db=DBNAME,
+        selector=all_releases["selector"],
+        limit=all_releases["limit"]
+    ).get_result().get('docs', [])
+    oss_components = client.post_find(
+        db=DBNAME,
+        selector=all_oss_components["selector"],
+        limit=all_oss_components["limit"]
+    ).get_result().get('docs', [])
     get_all_releases(log, releases_with_source_code_url, oss_components)
 
     json.dump(log, logFile, indent = 4, sort_keys = True)

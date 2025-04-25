@@ -18,11 +18,12 @@
 # This script is for collecting closed moderation requests statistics.
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-import time
 import datetime
-import couchdb
 import json
-from webbrowser import get
+import time
+
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
 
 # ---------------------------------------
 # constants
@@ -30,11 +31,13 @@ from webbrowser import get
 
 DRY_RUN = True
 
-COUCHSERVER = 'http://username:pwd@localhost:5984/'
+COUCHSERVER = 'http://localhost:5984/'
 SW360_DB = 'sw360db'
 
-couch = couchdb.Server(COUCHSERVER)
-sw360Db = couch[SW360_DB]
+authenticator = BasicAuthenticator(username='user', password='pass')
+client = CloudantV1(authenticator=authenticator)
+client.set_service_url(COUCHSERVER)
+client.configure_service(COUCHSERVER)
 
 modState = "PENDING|INPROGRESS"
 state = "moderationState"
@@ -118,7 +121,12 @@ def run():
     logFile = open('modRequestStats2.log', 'w')
 
     print ('\n')
-    MR_data = sw360Db.find(MR_query)
+    MR_data = client.post_find(
+        db=SW360_DB,
+        selector=MR_query["selector"],
+        fields=MR_query["fields"],
+        limit=MR_query["limit"]
+    ).get_result().get('docs', [])
     MR_data_list = list(MR_data)
 
     print ('****** Statistics of closed moderation requests ******')
