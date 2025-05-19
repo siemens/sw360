@@ -12,6 +12,7 @@ package org.eclipse.sw360.rest.resourceserver.security;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.core.SimpleAuthenticationEntryPoint;
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationFilter;
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationProvider;
@@ -23,6 +24,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.Customizer;
@@ -90,6 +95,12 @@ public class ResourceServerConfiguration {
                 .csrf(csrf -> csrf.disable()).build();
     }
 
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
 
     @Bean
     AuthenticationManager authenticationManager() {
@@ -99,5 +110,40 @@ public class ResourceServerConfiguration {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.withDefaultRolePrefix()
+                // SW360_ADMIN implies ADMIN
+                .role(UserGroup.SW360_ADMIN.name()).implies(
+                        UserGroup.ADMIN.name()
+                )
+                // ADMIN role implies all roles
+                .role(UserGroup.ADMIN.name()).implies(
+                        UserGroup.SECURITY_ADMIN.name(),
+                        UserGroup.ECC_ADMIN.name(),
+                        UserGroup.CLEARING_ADMIN.name(),
+                        UserGroup.CLEARING_EXPERT.name(),
+                        UserGroup.USER.name()
+                )
+                // CLEARING_ADMIN implies CLEARING_EXPERT or USER
+                .role(UserGroup.CLEARING_ADMIN.name()).implies(
+                        UserGroup.CLEARING_EXPERT.name(),
+                        UserGroup.USER.name()
+                )
+                // CLEARING_EXPERT implies USER
+                .role(UserGroup.CLEARING_EXPERT.name()).implies(
+                        UserGroup.USER.name()
+                )
+                // ECC_ADMIN implies USER
+                .role(UserGroup.ECC_ADMIN.name()).implies(
+                        UserGroup.USER.name()
+                )
+                // SECURITY_ADMIN implies USER
+                .role(UserGroup.SECURITY_ADMIN.name()).implies(
+                        UserGroup.USER.name()
+                )
+                .build();
     }
 }

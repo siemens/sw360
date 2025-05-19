@@ -37,6 +37,7 @@ public class Sw360GrantedAuthoritiesCalculator {
                 log.debug("User {} has admin access", user.getEmail());
                 grantedAuthorities.add(new SimpleGrantedAuthority(Sw360GrantedAuthority.ADMIN.getAuthority()));
             }
+            grantedAuthorities.add(new SimpleGrantedAuthority("ROLE_" + user.getUserGroup().name()));
         }
 
         log.info("Granted authorities for user {} are {}", user.getEmail(), grantedAuthorities);

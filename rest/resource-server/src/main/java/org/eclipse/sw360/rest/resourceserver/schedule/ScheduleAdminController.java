@@ -27,6 +27,7 @@ import org.springframework.data.rest.webmvc.RepositoryLinksResource;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,8 +38,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.server.ResponseStatusException;
-
 
 import java.util.Map;
 
@@ -47,6 +46,7 @@ import java.util.Map;
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
+@PreAuthorize("hasRole('ADMIN')")
 public class ScheduleAdminController implements RepresentationModelProcessor<RepositoryLinksResource> {
     public static final String SCHEDULE_URL = "/schedule";
 
