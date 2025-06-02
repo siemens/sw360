@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -21,13 +22,17 @@ import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
+import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.hateoas.CollectionModel;
@@ -54,6 +59,8 @@ import java.util.Set;
 import java.util.List;
 import jakarta.servlet.http.HttpServletResponse;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.eclipse.sw360.datahandler.common.SW360Constants.CONTENT_TYPE_OPENXML_SPREADSHEET;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
@@ -77,10 +84,18 @@ public class VendorController implements RepresentationModelProcessor<Repository
     )
     @RequestMapping(value = VENDORS_URL, method = RequestMethod.GET)
     public ResponseEntity<CollectionModel<EntityModel<Vendor>>> getVendors(
+            @Parameter(description = "Search text")
+            @RequestParam(value = "searchText", required = false) String searchText,
+            @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             HttpServletRequest request
-            ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
-        List<Vendor> vendors = vendorService.getVendors();
+    ) throws URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
+        List<Vendor> vendors = null;
+        if (!isNullOrEmpty(searchText)) {
+            vendors = vendorService.searchVendors(searchText);
+        } else {
+            vendors = vendorService.getVendors();
+        }
 
         PaginationResult<Vendor> paginationResult = restControllerHelper.createPaginationResult(request, pageable, vendors, SW360Constants.TYPE_VENDOR);
         List<EntityModel<Vendor>> vendorResources = new ArrayList<>();
@@ -124,7 +139,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
     public ResponseEntity<CollectionModel<EntityModel<Release>>> getReleases(
             @Parameter(description = "The id of the vendor to get.")
             @PathVariable("id") String id
-    ) throws TException {
+    ) throws SW360Exception {
         try {
             Set<Release> releases = vendorService.getAllReleaseList(id);
             List<EntityModel<Release>> resources = new ArrayList<>();
@@ -137,7 +152,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
             HttpStatus status = relResources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
             return new ResponseEntity<>(relResources, status);
         } catch (TException e) {
-            throw new TException(e.getMessage());
+            throw new SW360Exception(e.getMessage());
         }
     }
 
@@ -154,13 +169,13 @@ public class VendorController implements RepresentationModelProcessor<Repository
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         Vendor sw360Vendor = vendorService.getVendorById(id);
         if (sw360Vendor == null) {
-            return new ResponseEntity<>("Vendor with id " + id + " not found.", HttpStatus.NOT_FOUND);
+            throw new ResourceNotFoundException("Vendor with id " + id + " not found.");
         }
         RequestStatus requestStatus = vendorService.deleteVendorByid(id, sw360User);
         if (requestStatus == RequestStatus.SUCCESS) {
             return new ResponseEntity<>("Vendor with full name " + sw360Vendor.getFullname() + " deleted successfully.", HttpStatus.OK);
         } else {
-            return new ResponseEntity<>("Vendor with full name " + sw360Vendor.getFullname() + " cannot be deleted.", HttpStatus.BAD_REQUEST);
+            throw new BadRequestClientException("Vendor with full name " + sw360Vendor.getFullname() + " cannot be deleted.");
         }
     }
 
@@ -226,7 +241,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
     ) {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         if (vendor.getFullname() == null && vendor.getShortname() == null && vendor.getUrl() == null) {
-            return new ResponseEntity<>("Value cannot be null", HttpStatus.BAD_REQUEST);
+            throw new BadRequestClientException("Vendor cannot be null");
         }
         RequestStatus status = vendorService.vendorUpdate(vendor, sw360User, id);
         if (RequestStatus.SUCCESS.equals(status)) {
@@ -256,7 +271,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Vendor spreadsheet.",
                     content = {
-                            @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                            @Content(mediaType = CONTENT_TYPE_OPENXML_SPREADSHEET)
                     })
     })
     @PreAuthorize("hasAuthority('WRITE')")
@@ -271,6 +286,56 @@ public class VendorController implements RepresentationModelProcessor<Repository
             throw new TException(e.getMessage());
         }
         return ResponseEntity.ok(HttpStatus.OK);
+    }
+
+    @PreAuthorize("hasAuthority('WRITE')")
+    @Operation(
+            summary = "Merge two vendors.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Merge successful.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            examples = @ExampleObject(
+                                                    value = "{\"message\": \"Merge successful.\"}"
+                                            ))
+                            }),
+                    @ApiResponse(responseCode = "400", description = "Vendor used as source or target has an open MR..",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            examples = @ExampleObject(
+                                                    value = "{\"message\": \"Vendor used as source or target has an open MR.\"}"
+                                            ))
+                            }),
+                    @ApiResponse(responseCode = "500", description = "Internal server error while merging the vendors.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            examples = @ExampleObject(
+                                                    value = "{\"message\": \"Internal server error while merging the vendors.\"}"
+                                            ))
+                            }),
+                    @ApiResponse(responseCode = "403", description = "Access denied.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            examples = @ExampleObject(
+                                                    value = "{\"message\": \"Access denied.\"}"
+                                            ))
+                            })
+            },
+            tags = {"Vendor"}
+    )
+    @RequestMapping(value = VENDORS_URL + "/mergeVendors", method = RequestMethod.PATCH)
+    public ResponseEntity<RequestStatus> mergeVendors(
+            @Parameter(description = "The id of the merge target vendor.")
+            @RequestParam(value = "mergeTargetId", required = true) String mergeTargetId,
+            @Parameter(description = "The id of the merge source vendor.")
+            @RequestParam(value = "mergeSourceId", required = true) String mergeSourceId,
+            @Parameter(description = "The merge selection.")
+            @RequestBody Vendor mergeSelection
+    ) throws TException, ResourceClassNotFoundException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        // perform the real merge, update merge target and delete merge sources
+        RequestStatus requestStatus = vendorService.mergeVendors(mergeTargetId, mergeSourceId, mergeSelection, sw360User);
+        return new ResponseEntity<>(requestStatus, HttpStatus.OK);
     }
 
     private void copyDataStreamToResponse(HttpServletResponse response, ByteBuffer buffer) throws IOException {

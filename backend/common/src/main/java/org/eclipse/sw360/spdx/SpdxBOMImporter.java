@@ -33,16 +33,18 @@ import org.eclipse.sw360.datahandler.thrift.spdx.snippetinformation.*;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.*;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.*;
 import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.spdx.library.model.enumerations.Purpose;
-import org.spdx.library.model.enumerations.RelationshipType;
-import org.spdx.library.model.license.ExtractedLicenseInfo;
-import org.spdx.library.model.license.SpdxNoAssertionLicense;
-import org.spdx.library.model.pointer.ByteOffsetPointer;
-import org.spdx.library.model.pointer.LineCharPointer;
-import org.spdx.library.model.pointer.SinglePointer;
-import org.spdx.library.model.pointer.StartEndPointer;
-import org.spdx.library.model.*;
-import org.spdx.library.InvalidSPDXAnalysisException;
+import org.spdx.core.InvalidSPDXAnalysisException;
+import org.spdx.core.ModelCollection;
+import org.spdx.library.model.v2.enumerations.Purpose;
+import org.spdx.library.model.v2.enumerations.RelationshipType;
+import org.spdx.library.model.v2.license.ExtractedLicenseInfo;
+import org.spdx.library.model.v2.license.SpdxNoAssertionLicense;
+import org.spdx.library.model.v2.pointer.ByteOffsetPointer;
+import org.spdx.library.model.v2.pointer.LineCharPointer;
+import org.spdx.library.model.v2.pointer.SinglePointer;
+import org.spdx.library.model.v2.pointer.StartEndPointer;
+import org.spdx.library.model.v2.*;
+import org.spdx.library.SpdxModelFactory;
 import org.spdx.tools.InvalidFileNameException;
 import org.spdx.tools.SpdxToolsHelper;
 
@@ -60,6 +62,7 @@ import java.util.stream.Stream;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNotNullEmptyOrWhitespace;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.SPDX_DOCUMENT_ENABLED;
 
 public class SpdxBOMImporter {
     private static final Logger log = LogManager.getLogger(SpdxBOMImporter.class);
@@ -128,7 +131,7 @@ public class SpdxBOMImporter {
     private SpdxDocument openAsSpdx(File file){
         try {
             log.info("Read file: " + file.getName());
-            return SpdxToolsHelper.deserializeDocument(file);
+            return SpdxToolsHelper.deserializeDocumentCompatV2(file);
         } catch (InvalidSPDXAnalysisException | IOException | InvalidFileNameException e) {
             log.error("Error read file " + file.getName() + " to SpdxDocument:" + e.getMessage());
             return null;
@@ -233,13 +236,14 @@ public class SpdxBOMImporter {
         return release;
     }
 
-    private SPDXDocument createSPDXDocumentFromSpdxDocument(String releaseId, SpdxDocument spdxDocument) throws SW360Exception, MalformedURLException {
+    private SPDXDocument createSPDXDocumentFromSpdxDocument(String releaseId, SpdxDocument spdxDocument) throws SW360Exception {
         final SPDXDocument doc = getSpdxDocumentFromRelease(releaseId);
         doc.setReleaseId(releaseId);
         try {
 
-            List<SpdxSnippet> spdxSnippets = (List<SpdxSnippet>) SpdxModelFactory.getElements(spdxDocument.getModelStore(), spdxDocument.getDocumentUri(), null, SpdxSnippet.class).collect(Collectors.toList());
-            if (spdxSnippets.size() != 0) {
+            List<SpdxSnippet> spdxSnippets = (List<SpdxSnippet>) SpdxModelFactory.getSpdxObjects(spdxDocument.getModelStore(),
+                    null, SpdxConstantsCompatV2.CLASS_SPDX_SNIPPET, spdxDocument.getDocumentUri(), null).collect(Collectors.toList());
+            if (!spdxSnippets.isEmpty()) {
                 final Set<SnippetInformation> snippetInfos = createSnippetsFromSpdxSnippets(spdxSnippets);
                 doc.setSnippets(snippetInfos);
             }
@@ -414,7 +418,16 @@ public class SpdxBOMImporter {
             String licenseId = spdxExtractedLicense.getLicenseId();
             String extractedText = spdxExtractedLicense.getExtractedText();
             String name = spdxExtractedLicense.getName();
-            Set<String> crossRef = new HashSet<>(Arrays.asList(verifyOrSetDefault(spdxExtractedLicense.getCrossRef().toArray(new String[spdxExtractedLicense.getCrossRef().size()]))));
+
+            Optional<Object> crossRefs = spdxExtractedLicense
+                    .getObjectPropertyValue(SpdxConstantsCompatV2.PROP_CROSS_REF);
+
+            Set<String> crossRef = new HashSet<>();
+            if (crossRefs.isPresent() && crossRefs.get() instanceof ModelCollection) {
+                String[] res = ((ModelCollection<String>) crossRefs.get()).toArray(new String[((ModelCollection<?>) crossRefs.get()).size()]);
+                crossRef = new HashSet<>(Arrays.asList(res));
+            }
+
             String comment = spdxExtractedLicense.getComment();
 
             OtherLicensingInformationDetected otherLicense = new OtherLicensingInformationDetected();
@@ -751,7 +764,7 @@ public class SpdxBOMImporter {
                         spdxPackages.add(spdxPackageCheck);
                 }
                 importAsReleaseFromSpdxDocument(spdxPackages,attachmentContent,spdxDocument);
-                if (SW360Constants.SPDX_DOCUMENT_ENABLED) {
+                if (SW360Utils.readConfig(SPDX_DOCUMENT_ENABLED, false)) {
                     try {
                         importSpdxDocument(response.getId(), spdxDocument, spdxPackage);
                     } catch (MalformedURLException e) {
@@ -770,8 +783,8 @@ public class SpdxBOMImporter {
     private List<SpdxPackage> getPackages(SpdxDocument spdxDocument) throws InvalidSPDXAnalysisException {
         List<SpdxPackage> allPackages = new ArrayList<>();
         try(@SuppressWarnings("unchecked")
-            Stream<SpdxPackage> allPackagesStream = (Stream<SpdxPackage>) SpdxModelFactory.getElements(spdxDocument.getModelStore(), spdxDocument.getDocumentUri(),
-                spdxDocument.getCopyManager(), SpdxPackage.class)) {
+            Stream<SpdxPackage> allPackagesStream = (Stream<SpdxPackage>) SpdxModelFactory.getSpdxObjects(spdxDocument.getModelStore(),
+                    spdxDocument.getCopyManager(), SpdxConstantsCompatV2.CLASS_SPDX_PACKAGE, spdxDocument.getDocumentUri(), null)) {
             allPackages = allPackagesStream.collect(Collectors.toList());
         }
         return allPackages;
@@ -799,7 +812,7 @@ public class SpdxBOMImporter {
                         release.setAttachments(Collections.singleton(attachment));
                     }
                     final SpdxBOMImporterSink.Response response = sink.addRelease(release);
-                    if (SW360Constants.SPDX_DOCUMENT_ENABLED) {
+                    if (SW360Utils.readConfig(SPDX_DOCUMENT_ENABLED, false)) {
                         try {
                             importSpdxDocument(response.getId(), spdxDocument, spdxElement);
                         } catch (MalformedURLException e) {
@@ -820,9 +833,9 @@ public class SpdxBOMImporter {
         sink.addOrUpdateDocumentCreationInformation(docCreationInfo);
         List<SpdxPackage> allPackages = new ArrayList<>();
         try(@SuppressWarnings("unchecked")
-            Stream<SpdxPackage> allPackagesStream = (Stream<SpdxPackage>) SpdxModelFactory.getElements(spdxDocument.getModelStore(), spdxDocument.getDocumentUri(),
-                spdxDocument.getCopyManager(), SpdxPackage.class)) {
-            allPackages = allPackagesStream.collect(Collectors.toList());
+            Stream<SpdxPackage> allPackagesStream = (Stream<SpdxPackage>) SpdxModelFactory.getSpdxObjects(spdxDocument.getModelStore(),
+                spdxDocument.getCopyManager(), SpdxConstantsCompatV2.CLASS_SPDX_PACKAGE, spdxDocument.getDocumentUri(), null)) {
+            allPackages = allPackagesStream.toList();
         }
         List<SpdxPackage> spdxPackages =new ArrayList<>();
         for (SpdxPackage spdxPackageCheck : allPackages) {
@@ -878,14 +891,8 @@ public class SpdxBOMImporter {
     private PackageInformation getPackageInformationFromSpdxDocument(String spdxDocId, String packageName) throws SW360Exception {
         PackageInformation info;
         final SPDXDocument spdxDoc = sink.getSPDXDocument(spdxDocId);
-        if (spdxDoc.getSpdxPackageInfoIdsSize() > 0) {
-            for (String packageId : spdxDoc.getSpdxPackageInfoIds()) {
-                if (sink.getPackageInfo(packageId).getName().equals(packageName)) {
-                    info = sink.getPackageInfo(packageId);
-                    return info;
-                }
-            }
-            return new PackageInformation();
+        if (spdxDoc.getSpdxPackageInfoIdsSize() > 0 ) {
+            return sink.getPackageInfo(spdxDoc.getSpdxPackageInfoIds().iterator().next());
         } else {
             return new PackageInformation();
         }
@@ -937,7 +944,6 @@ public class SpdxBOMImporter {
                     return projectReleaseRelationship;
                 }));
     }
-
 
     private Optional<SpdxBOMImporterSink.Response> importAsProject(SpdxElement spdxElement, AttachmentContent attachmentContent, User user) throws SW360Exception, InvalidSPDXAnalysisException {
         if (spdxElement instanceof SpdxPackage) {

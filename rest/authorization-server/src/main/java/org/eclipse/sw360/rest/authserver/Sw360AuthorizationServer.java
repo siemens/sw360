@@ -16,13 +16,14 @@ import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.common.PropertyUtils;
 import org.eclipse.sw360.rest.common.Sw360CORSFilter;
+import org.eclipse.sw360.rest.common.Sw360XssFilter;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.Import;
 
 @SpringBootApplication
-@Import(Sw360CORSFilter.class)
+@Import({Sw360CORSFilter.class, Sw360XssFilter.class})
 public class Sw360AuthorizationServer extends SpringBootServletInitializer {
 
     private static final String SW360_PROPERTIES_FILE_PATH = "/sw360.properties";
@@ -30,8 +31,6 @@ public class Sw360AuthorizationServer extends SpringBootServletInitializer {
     private static final String DEFAULT_ADMIN_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
     private static final String APPLICATION_ID = "authorization";
 
-    public static final String SW360_LIFERAY_COMPANY_ID;
-    public static final String CONFIG_ACCESS_TOKEN_VALIDITY_SECONDS;
     public static final UserGroup CONFIG_WRITE_ACCESS_USERGROUP;
     public static final UserGroup CONFIG_ADMIN_ACCESS_USERGROUP;
 
@@ -39,8 +38,6 @@ public class Sw360AuthorizationServer extends SpringBootServletInitializer {
         Properties props = CommonUtils.loadProperties(Sw360AuthorizationServer.class, SW360_PROPERTIES_FILE_PATH);
         CONFIG_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", DEFAULT_WRITE_ACCESS_USERGROUP));
         CONFIG_ADMIN_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.admin.access.usergroup", DEFAULT_ADMIN_ACCESS_USERGROUP));
-        CONFIG_ACCESS_TOKEN_VALIDITY_SECONDS = props.getProperty("rest.access.token.validity.seconds", null);
-        SW360_LIFERAY_COMPANY_ID = props.getProperty("sw360.liferay.company.id", null);
     }
 
     @Override

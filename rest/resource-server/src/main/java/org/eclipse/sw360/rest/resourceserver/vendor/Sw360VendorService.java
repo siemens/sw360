@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
@@ -23,10 +24,11 @@ import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.nio.ByteBuffer;
@@ -42,6 +44,15 @@ public class Sw360VendorService {
     public List<Vendor> getVendors() {
         try {
             return getAllVendorList();
+        } catch (TException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<Vendor> searchVendors(String searchText) {
+        try {
+            VendorService.Iface sw360VendorClient = getThriftVendorClient();
+            return sw360VendorClient.searchVendors(searchText);
         } catch (TException e) {
             throw new RuntimeException(e);
         }
@@ -74,7 +85,7 @@ public class Sw360VendorService {
             VendorService.Iface sw360VendorClient = getThriftVendorClient();
             if (CommonUtils.isNullEmptyOrWhitespace(vendor.getFullname()) || CommonUtils.isNullEmptyOrWhitespace(vendor.getShortname())
                     || CommonUtils.isNullEmptyOrWhitespace(vendor.getUrl())) {
-                throw new HttpMessageNotReadableException("A Vendor cannot have null or empty 'Full Name' or 'Short Name' or 'URL'!");
+                throw new BadRequestClientException("A Vendor cannot have null or empty 'Full Name' or 'Short Name' or 'URL'!");
             }
             AddDocumentRequestSummary summary = sw360VendorClient.addVendor(vendor);
             if (AddDocumentRequestStatus.SUCCESS.equals(summary.getRequestStatus())) {
@@ -83,7 +94,7 @@ public class Sw360VendorService {
             } else if (AddDocumentRequestStatus.DUPLICATE.equals(summary.getRequestStatus())) {
                 throw new DataIntegrityViolationException("A Vendor with same full name '" + vendor.getFullname() + "' and URL already exists!");
             } else if (AddDocumentRequestStatus.FAILURE.equals(summary.getRequestStatus())) {
-                throw new HttpMessageNotReadableException(summary.getMessage());
+                throw new BadRequestClientException(summary.getMessage());
             }
             return null;
         } catch (TException e) {
@@ -185,5 +196,21 @@ public class Sw360VendorService {
         ComponentService.Iface componentsClient = getThriftComponentClient();
         Set<Release> releases = componentsClient.getReleasesByVendorId(vendorId);
         return releases;
+    }
+
+    public RequestStatus mergeVendors(String vendorTargetId, String vendorSourceId, Vendor vendorSelection, User user) throws TException, ResourceClassNotFoundException {
+        VendorService.Iface sw360VendorClient = getThriftVendorClient();
+        RequestStatus requestStatus;
+        requestStatus =  sw360VendorClient.mergeVendors(vendorTargetId, vendorSourceId, vendorSelection, user);
+
+        if (requestStatus == RequestStatus.IN_USE) {
+            throw new BadRequestClientException("Vendor used as source or target has an open MR");
+        } else if (requestStatus == RequestStatus.FAILURE) {
+            throw new ResourceClassNotFoundException("Internal server error while merging the vendors");
+        } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
+            throw new AccessDeniedException("Access denied");
+        }
+
+        return requestStatus;
     }
 }

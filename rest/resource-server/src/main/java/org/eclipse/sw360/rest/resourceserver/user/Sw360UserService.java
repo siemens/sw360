@@ -12,6 +12,9 @@ package org.eclipse.sw360.rest.resourceserver.user;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Sets;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -27,17 +30,18 @@ import org.eclipse.sw360.datahandler.thrift.users.RestApiToken;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.users.UserService;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.Collection;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer.API_TOKEN_MAX_VALIDITY_READ_IN_DAYS;
@@ -46,11 +50,12 @@ import static org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer.API_WRIT
 
 @Service
 public class Sw360UserService {
+    private static final Logger log = LogManager.getLogger(Sw360UserService.class);
     @Value("${sw360.thrift-server-url:http://localhost:8080}")
     private String thriftServerUrl;
-    private static final String AUTHORITIES_READ = "READ";
-    private static final String AUTHORITIES_WRITE = "WRITE";
-    private static final String EXPIRATION_DATE_PROPERTY = "expirationDate";
+    public static final String AUTHORITIES_READ = "READ";
+    public static final String AUTHORITIES_WRITE = "WRITE";
+    public static final String EXPIRATION_DATE_PROPERTY = "expirationDate";
 
     public List<User> getAllUsers() {
         try {
@@ -79,12 +84,16 @@ public class Sw360UserService {
         }
     }
 
-    public User getUser(String id) {
+    public User getUser(String id) throws TException {
+        UserService.Iface sw360UserClient = getThriftUserClient();
         try {
-            UserService.Iface sw360UserClient = getThriftUserClient();
             return sw360UserClient.getUser(id);
-        } catch (TException e) {
-            throw new RuntimeException(e);
+        } catch (SW360Exception sw360Exp) {
+            if (sw360Exp.getErrorCode() == 404) {
+                throw new ResourceNotFoundException("Requested User Not Found");
+            } else {
+                throw sw360Exp;
+            }
         }
     }
 
@@ -106,7 +115,7 @@ public class Sw360UserService {
         }
     }
 
-    public User addUser(User user) throws TException{
+    public User addUser(User user) {
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
             user.setUserGroup(UserGroup.USER);
@@ -118,12 +127,10 @@ public class Sw360UserService {
                 throw new DataIntegrityViolationException("sw360 user with name '" + user.getEmail()
                         + "' already exists, having database identifier " + documentRequestSummary.getId());
             } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.INVALID_INPUT) {
-                throw new HttpMessageNotReadableException(documentRequestSummary.getMessage());
+                throw new BadRequestClientException(documentRequestSummary.getMessage());
             }
-        } catch (SW360Exception sw360Exp) {
-            throw new HttpMessageNotReadableException(sw360Exp.getMessage());
         } catch (TException e) {
-            throw new HttpMessageNotReadableException(e.getMessage());
+            throw new BadRequestClientException(e.getMessage());
         }
         return null;
     }
@@ -144,7 +151,7 @@ public class Sw360UserService {
         return sw360UserClient.refineSearch(null, filterMap);
     }
 
-    public List<User> searchUserByName(String givenname) throws TException {
+    public List<User> searchUserByName(String givenname) {
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
             return sw360UserClient.searchUsers(givenname);
@@ -153,7 +160,7 @@ public class Sw360UserService {
         }
     }
 
-    public List<User> searchUserByLastName(String lastname) throws TException {
+    public List<User> searchUserByLastName(String lastname) {
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
             return sw360UserClient.searchUsers(lastname);
@@ -162,7 +169,7 @@ public class Sw360UserService {
         }
     }
 
-    public List<User> searchUserByDepartment(String department) throws TException {
+    public List<User> searchUserByDepartment(String department) {
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
             return sw360UserClient.searchDepartmentUsers(department);
@@ -171,7 +178,7 @@ public class Sw360UserService {
         }
     }
 
-    public List<User> searchUserByUserGroup(UserGroup usergroup) throws TException {
+    public List<User> searchUserByUserGroup(UserGroup usergroup) {
         try {
             UserService.Iface sw360UserClient = getThriftUserClient();
             return sw360UserClient.searchUsersGroup(usergroup);
@@ -186,10 +193,10 @@ public class Sw360UserService {
 
         if (!requestBody.containsKey(EXPIRATION_DATE_PROPERTY)
                 || CommonUtils.isNullEmptyOrWhitespace(requestBody.get(EXPIRATION_DATE_PROPERTY).toString())) {
-            throw new IllegalArgumentException("expirationDate is a required field.");
+            throw new IllegalArgumentException(EXPIRATION_DATE_PROPERTY + " is a required field.");
         }
         if (!(requestBody.get(EXPIRATION_DATE_PROPERTY) instanceof String)) {
-            throw new IllegalArgumentException("expirationDate must be a string.");
+            throw new IllegalArgumentException(EXPIRATION_DATE_PROPERTY + " must be a string.");
         }
 
         RestApiToken restApiToken = mapper.convertValue(requestBody, RestApiToken.class);
@@ -257,6 +264,32 @@ public class Sw360UserService {
                 .collect(Collectors.toSet());
         if (!otherPermissions.isEmpty()) {
             throw new IllegalArgumentException("Invalid permissions: " + String.join(", ", otherPermissions) + ".");
+        }
+    }
+
+    public Set<String> getAvailableDepartments() {
+        Set<String> primaryDepartments = getExistingPrimaryDepartments();
+        Set<String> secondaryDepartments = getExistingSecondaryDepartments();
+        return Sets.union(primaryDepartments, secondaryDepartments);
+    }
+
+    public Set<String> getExistingPrimaryDepartments() {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getUserDepartments();
+        } catch (TException e) {
+            log.error(e.getMessage());
+            return Collections.emptySet();
+        }
+    }
+
+    public Set<String> getExistingSecondaryDepartments() {
+        try {
+            UserService.Iface sw360UserClient = getThriftUserClient();
+            return sw360UserClient.getUserSecondaryDepartments();
+        } catch (TException e) {
+            log.error(e.getMessage());
+            return Collections.emptySet();
         }
     }
 }

@@ -155,8 +155,8 @@ public class UserRepository extends SummaryAwareRepository<User> {
         return getUserFromIds(userIds);
     }
 
-    public Set<String> getEmailsByDepartmentName(String key) {
-        final Set<String> emails = queryForIdsAsValue("find_by_secondaryDepartments", key);
+    public Set<String> getEmailsBySecondaryDepartmentName(String departmentName) {
+        final Set<String> emails = queryForIdsAsValue("find_by_secondaryDepartments", departmentName);
         return emails;
     }
 
@@ -175,6 +175,10 @@ public class UserRepository extends SummaryAwareRepository<User> {
 
     public Set<String> getUserDepartments() {
         return getResultBasedOnQuery("userDepartments");
+    }
+
+    public Set<String> getUserSecondaryDepartments() {
+        return getResultBasedOnQuery("userSecondaryDepartments");
     }
 
     public Set<String> getUserEmails() {

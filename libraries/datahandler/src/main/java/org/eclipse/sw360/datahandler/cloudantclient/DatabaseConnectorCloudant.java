@@ -9,6 +9,11 @@
  */
 package org.eclipse.sw360.datahandler.cloudantclient;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -30,6 +35,8 @@ import org.jetbrains.annotations.NotNull;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -245,6 +252,9 @@ public class DatabaseConnectorCloudant {
      * @see DatabaseConnectorCloudant::getDocumentWithPost()
      */
     public Document getDocument(@NotNull String id) throws SW360Exception {
+        if (id.isEmpty()) {
+            throw new SW360Exception("Document id cannot be empty");
+        }
         if (id.contains("+")) {
             return getDocumentWithPost(id);
         }
@@ -662,27 +672,45 @@ public class DatabaseConnectorCloudant {
             return (Document) document;
         }
         Document doc = new Document();
-        Gson gson = this.instance.getGson();
-        Type t = new TypeToken<Map<String, Object>>() {}.getType();
-        Map<String, Object> map = gson.fromJson(gson.toJson(document), t);
+        Map<String, Object> map;
+
+        if (isInstanceOfOAuthClientEntity(document)) {
+            ObjectMapper objectMapper = new ObjectMapper();
+            map = objectMapper.convertValue(document, new TypeReference<Map<String, Object>>() {});
+        } else {
+            Gson gson = this.instance.getGson();
+            Type type = new TypeToken<Map<String, Object>>() {}.getType();
+            map = gson.fromJson(gson.toJson(document), type);
+        }
+
         if (map.containsKey("id")) {
-            doc.setId((String) map.get("id"));
+            if (!((String) map.get("id")).isEmpty()) {
+                doc.setId((String) map.get("id"));
+            }
             map.remove("id");
         }
         if (map.containsKey("_id")) {
-            doc.setId((String) map.get("_id"));
+            if (map.get("_id") != null && !((String) map.get("_id")).isEmpty()) {
+                doc.setId((String) map.get("_id"));
+            }
             map.remove("_id");
         }
         if (map.containsKey("rev")) {
-            doc.setRev((String) map.get("rev"));
+            if (!((String) map.get("rev")).isEmpty()) {
+                doc.setRev((String) map.get("rev"));
+            }
             map.remove("rev");
         }
         if (map.containsKey("revision")) {
-            doc.setRev((String) map.get("revision"));
+            if (!((String) map.get("revision")).isEmpty()) {
+                doc.setRev((String) map.get("revision"));
+            }
             map.remove("revision");
         }
         if (map.containsKey("_rev")) {
-            doc.setRev((String) map.get("_rev"));
+            if (map.get("_rev") != null && !((String) map.get("_rev")).isEmpty()) {
+                doc.setRev((String) map.get("_rev"));
+            }
             map.remove("_rev");
         }
         doc.setProperties(map);
@@ -690,8 +718,18 @@ public class DatabaseConnectorCloudant {
     }
 
     public <T> T getPojoFromDocument(@NotNull Document document, Class<T> type) {
-        T doc = this.instance.getGson().fromJson(document.toString(), type);
-        updateIdAndRev(doc, document.getId(), document.getRev());
+        T doc = null;
+        try {
+            if (type.getSimpleName().equals("OAuthClientEntity"))  {
+                ObjectMapper objectMapper = new ObjectMapper();
+                doc = objectMapper.readValue(document.toString(), type);
+            } else {
+                doc = this.instance.getGson().fromJson(document.toString(), type);
+            }
+            updateIdAndRev(doc, document.getId(), document.getRev());
+        } catch (JsonProcessingException e) {
+            log.error(e.getMessage());
+        }
         return doc;
     }
 
@@ -702,7 +740,22 @@ public class DatabaseConnectorCloudant {
             TFieldIdEnum rev = tbase.fieldForId(2);
             tbase.setFieldValue(id, docId);
             tbase.setFieldValue(rev, docRev);
+        }  else if (isInstanceOfOAuthClientEntity(doc)) {
+            Class<?> clazz = doc.getClass();
+            try {
+                Method setIdMethod = clazz.getMethod("setId", String.class);
+                setIdMethod.invoke(doc, docId);
+
+                Method setRevMethod = clazz.getMethod("setRev", String.class);
+                setRevMethod.invoke(doc, docRev);
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                log.error(e.getMessage());
+            }
         }
+    }
+
+    private <T> boolean isInstanceOfOAuthClientEntity(T doc) {    
+        return doc.getClass().getSimpleName().equals("OAuthClientEntity");
     }
 
     public boolean contains(@NotNull String docId) {
@@ -772,7 +825,7 @@ public class DatabaseConnectorCloudant {
      * @return New selector
      */
     public static @NotNull Map<String, Object> elemMatch(String field, String value) {
-        return Collections.singletonMap("$elemMatch",
-                eq(field, value));
+        return Collections.singletonMap(field,
+                eq("$elemMatch", value));
     }
 }

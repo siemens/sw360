@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.common.utils.BackendUtils;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
 import org.eclipse.sw360.datahandler.entitlement.ComponentModerator;
 import org.eclipse.sw360.datahandler.entitlement.ReleaseModerator;
@@ -43,6 +44,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_ADMIN_PRIVATE_ACCESS_ENABLED;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_BULK_RELEASE_DELETING_ENABLED;
 
 /**
  * Provides a utility for the bulk delete function
@@ -101,13 +104,13 @@ public class BulkDeleteUtil extends BackendUtils {
     }
 
     public BulkOperationNode deleteBulkRelease(String releaseId, User user, boolean isPreview) throws SW360Exception  {
-        if (!BackendUtils.IS_BULK_RELEASE_DELETING_ENABLED) {
+        if (!SW360Utils.readConfig(IS_BULK_RELEASE_DELETING_ENABLED, false)) {
             throw fail(500, "Bulk release deleting feature is not enabled.");
         }
         if (!PermissionUtils.isAdmin(user)) {
             throw fail(403, "Failed to check the admin privilege.");
         }
-        if (!PermissionUtils.IS_ADMIN_PRIVATE_ACCESS_ENABLED) {
+        if (!SW360Utils.readConfig(IS_ADMIN_PRIVATE_ACCESS_ENABLED, false)) {
             throw fail(500, "Admin private access is not enabled.");
         }
         
@@ -173,8 +176,11 @@ public class BulkDeleteUtil extends BackendUtils {
                             Release referencingRelease = workReleaseMap.get(referencingReleaseId);
                             Map<String, ReleaseRelationship> relationMap = referencingRelease.getReleaseIdToRelationship();
                             relationMap.remove(leafReleaseId);
-                            if (!isPreview) {
-                                releaseRepository.update(referencingRelease);
+                            //Do not update the repository link if both the referencing Release and the referenced Release are externally referenced.
+                            if (!externalLinkMap.get(referencingReleaseId)) {
+                                if (!isPreview) {
+                                    releaseRepository.update(referencingRelease);
+                                }
                             }
                         }
                     }

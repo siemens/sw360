@@ -25,7 +25,7 @@ import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.fossology.config.FossologyRestConfig;
 import org.eclipse.sw360.fossology.rest.FossologyRestClient;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +40,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD;
 
 /**
  * Implementation of the Thrift service. Offers a very simple interface where
@@ -159,12 +161,12 @@ public class FossologyHandler implements FossologyService.Iface {
 
         FossologyUtils.ensureOrderOfProcessSteps(fossologyProcess);
 
-        ExternalToolProcessStep furthestStep = fossologyProcess.getProcessSteps().get(fossologyProcess.getProcessSteps().size() - 1); 
+        ExternalToolProcessStep furthestStep = fossologyProcess.getProcessSteps().get(fossologyProcess.getProcessSteps().size() - 1);
         if (FossologyUtils.FOSSOLOGY_STEP_NAME_UPLOAD.equals(furthestStep.getStepName())) {
             handleUploadStep(componentClient, release, user, fossologyProcess, sourceAttachment, uploadDescription);
         } else if (FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN.equals(furthestStep.getStepName())) {
             handleScanStep(componentClient, release, user, fossologyProcess);
-        } else if(!BackendUtils.DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD && FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT.equals(furthestStep.getStepName())) {
+        } else if(!SW360Utils.readConfig(DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD, false) && FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT.equals(furthestStep.getStepName())) {
             handleReportStep(componentClient, release, user, fossologyProcess);
         } else if(reportStep && FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT.equals(furthestStep.getStepName())) {
             handleReportStep(componentClient, release, user, fossologyProcess);
@@ -335,16 +337,25 @@ public class FossologyHandler implements FossologyService.Iface {
             String attachmentContentId = sourceAttachment.getAttachmentContentId();
             AttachmentContent attachmentContent = attachmentConnector.getAttachmentContent(attachmentContentId);
 
-            InputStream attachmentStream = attachmentConnector.getAttachmentStream(attachmentContent, user, release);
-            int uploadId = fossologyRestClient.uploadFile(attachmentFilename, attachmentStream, uploadDescription);
-            if (uploadId > -1) {
+            String shaValue = sourceAttachment.getSha1();
+            int lastUploadId = fossologyRestClient.getUploadId(shaValue, attachmentFilename);
+            if (lastUploadId > -1) {
                 furthestStep.setFinishedOn(Instant.now().toString());
                 furthestStep.setStepStatus(ExternalToolProcessStatus.DONE);
-                furthestStep.setProcessStepIdInTool(uploadId + "");
-                furthestStep.setResult(uploadId + "");
+                furthestStep.setProcessStepIdInTool(lastUploadId + "");
+                furthestStep.setResult(lastUploadId + "");
             } else {
-                furthestStep.setStepStatus(ExternalToolProcessStatus.NEW);
-                furthestStep.setResult(uploadId + "");
+                InputStream attachmentStream = attachmentConnector.getAttachmentStream(attachmentContent, user, release);
+                int uploadId = fossologyRestClient.uploadFile(attachmentFilename, attachmentStream, uploadDescription);
+                if (uploadId > -1) {
+                    furthestStep.setFinishedOn(Instant.now().toString());
+                    furthestStep.setStepStatus(ExternalToolProcessStatus.DONE);
+                    furthestStep.setProcessStepIdInTool(uploadId + "");
+                    furthestStep.setResult(uploadId + "");
+                } else {
+                    furthestStep.setStepStatus(ExternalToolProcessStatus.NEW);
+                    furthestStep.setResult(uploadId + "");
+                }
             }
             break;
         case DONE:
@@ -397,7 +408,7 @@ public class FossologyHandler implements FossologyService.Iface {
             break;
         case DONE:
             // start report
-            if(!BackendUtils.DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD) {
+            if(!SW360Utils.readConfig(DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD, false)) {
                 fossologyProcess.addToProcessSteps(createFossologyProcessStep(user, FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT));
                 handleReportStep(componentClient, release, user, fossologyProcess);
             }
@@ -505,7 +516,7 @@ public class FossologyHandler implements FossologyService.Iface {
             if (extToolProcess.getProcessSteps().size() > 2) {
                 extToolProcess.getProcessSteps().get(extToolProcess.getProcessSteps().size() - 1)
                         .setStepStatus(ExternalToolProcessStatus.NEW);
-            } else if (extToolProcess.getProcessSteps().size() == 2 && BackendUtils.DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD) {
+            } else if (extToolProcess.getProcessSteps().size() == 2 && SW360Utils.readConfig(DISABLE_CLEARING_FOSSOLOGY_REPORT_DOWNLOAD, false)) {
                 extToolProcess.addToProcessSteps(createFossologyProcessStep(user, FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT));
                 reportStep = true;
             } else {

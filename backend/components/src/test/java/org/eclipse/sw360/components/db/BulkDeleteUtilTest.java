@@ -10,20 +10,21 @@
 
 package org.eclipse.sw360.components.db;
 
-import org.eclipse.sw360.common.utils.BackendUtils;
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
+import org.eclipse.sw360.datahandler.common.SW360ConfigKeys;
+import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.BulkDeleteUtil;
 import org.eclipse.sw360.datahandler.entitlement.ComponentModerator;
 import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.entitlement.ReleaseModerator;
-import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
@@ -31,9 +32,13 @@ import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.junit.*;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
+import org.mockito.Answers;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -44,9 +49,15 @@ import java.util.*;
 
 import static org.eclipse.sw360.datahandler.TestUtils.assertTestString;
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.withSettings;
 
 @RunWith(MockitoJUnitRunner.class)
 public class BulkDeleteUtilTest {
+
+    private static final Logger log = LogManager.getLogger(BulkDeleteUtilTest.class);
 
     private static final String dbName = DatabaseSettingsTest.COUCH_DB_DATABASE;
     private static final String attachmentsDbName = DatabaseSettingsTest.COUCH_DB_ATTACHMENTS;
@@ -109,7 +120,18 @@ public class BulkDeleteUtilTest {
     ReleaseModerator releaseModerator;
     @Mock
     ProjectModerator projectModerator;
-    
+
+    private static MockedStatic<SW360Utils> mockedStatic;
+
+    @BeforeClass
+    public static void setUpOnce() {
+        mockedStatic = mockStatic(SW360Utils.class, withSettings().defaultAnswer(Answers.CALLS_REAL_METHODS));
+        mockedStatic.when(() -> SW360Utils.readConfig(eq(SW360ConfigKeys.IS_ADMIN_PRIVATE_ACCESS_ENABLED), any()))
+                .thenReturn(TestUtils.IS_ADMIN_PRIVATE_ACCESS_ENABLED);
+        mockedStatic.when(() -> SW360Utils.readConfig(eq(SW360ConfigKeys.IS_BULK_RELEASE_DELETING_ENABLED), any()))
+                .thenReturn(TestUtils.IS_BULK_RELEASE_DELETING_ENABLED);
+    }
+
     @Before
     public void setUp() throws Exception {
         assertTestString(dbName);
@@ -142,6 +164,7 @@ public class BulkDeleteUtilTest {
         bulkDeleteUtil = handler.getBulkDeleteUtil();
         
         treeNodeCreateReleaseCounter = 0;
+
     }
 
     @After
@@ -154,7 +177,7 @@ public class BulkDeleteUtilTest {
     @Test
     public void testGetAllLinkedReleaseMap() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
         
@@ -230,7 +253,7 @@ public class BulkDeleteUtilTest {
     @Test
     public void testDeleteBulkRelease001() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
 
@@ -461,7 +484,7 @@ public class BulkDeleteUtilTest {
     //@Test
     public void testDeleteBulkRelease002() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
         
@@ -518,9 +541,63 @@ public class BulkDeleteUtilTest {
     }
     
     @Test
+    public void testDeleteBulkRelease_ExternalLink001() throws Exception {
+        if (!isFeatureEnable()) {
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
+            return;
+        }
+
+        List<String> releaseIdList = new ArrayList<String>();
+        List<String> componentIdList = new ArrayList<String>();
+        
+        createTestRecords002(1, 2, releaseIdList, componentIdList);
+        String rootReleaseId = releaseIdList.get(0);
+        assertEquals(3, releaseIdList.size());
+        assertEquals(3, componentIdList.size());
+
+        Project project = new Project().setId("P1").setName("project1").setVisbility(Visibility.EVERYONE).setProjectType(ProjectType.CUSTOMER);
+        project.putToReleaseIdToUsage(rootReleaseId, new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.OPEN));
+        databaseConnector.add(project);
+        
+        BulkOperationNode level1Component = bulkDeleteUtil.deleteBulkRelease(rootReleaseId, user1, false);
+        assertNotNull(level1Component);
+
+        //Check the BulkOperationNode status
+        //Object[0] : NodeType, Object[1] : ResultState
+        Map<String, Object[]> expectedResults = new HashMap<String, Object[]>();
+        expectedResults.put(releaseIdList.get(0), new Object[]{BulkOperationNodeType.RELEASE, BulkOperationResultState.EXCLUDED});
+        expectedResults.put(releaseIdList.get(1), new Object[]{BulkOperationNodeType.RELEASE, BulkOperationResultState.EXCLUDED});
+        expectedResults.put(releaseIdList.get(2), new Object[]{BulkOperationNodeType.RELEASE, BulkOperationResultState.EXCLUDED});
+        expectedResults.put(componentIdList.get(0), new Object[]{BulkOperationNodeType.COMPONENT, BulkOperationResultState.EXCLUDED});
+        expectedResults.put(componentIdList.get(1), new Object[]{BulkOperationNodeType.COMPONENT, BulkOperationResultState.EXCLUDED});
+        expectedResults.put(componentIdList.get(2), new Object[]{BulkOperationNodeType.COMPONENT, BulkOperationResultState.EXCLUDED});
+        checkBulkOperationNode(level1Component, expectedResults);
+        
+        //Releases to be undeleted
+        for (String releaseId : releaseIdList) {
+            assertTrue(this.releaseExists(releaseId));
+        }
+        
+        //Release links to be undeleted
+        Release release0 = databaseConnector.get(Release.class, releaseIdList.get(0));
+        assertEquals(1, release0.getReleaseIdToRelationshipSize());
+        Release release1 = databaseConnector.get(Release.class, releaseIdList.get(1));
+        assertEquals(1, release1.getReleaseIdToRelationshipSize());
+        Release release2 = databaseConnector.get(Release.class, releaseIdList.get(2));
+        assertEquals(0, release2.getReleaseIdToRelationshipSize());
+        
+        //Components and links to be undeleted
+        for (String componentId : componentIdList) {
+            assertTrue(this.componentExists(componentId));
+            Component component = databaseConnector.get(Component.class, componentId);
+            assertEquals(1, component.getReleaseIdsSize());
+        }
+    }
+    
+    @Test
     public void testDeleteBulkRelease_ConflictError001() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
         
@@ -743,7 +820,7 @@ public class BulkDeleteUtilTest {
     @Test
     public void testDeleteBulkRelease_ConflictError002() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
         
@@ -931,7 +1008,7 @@ public class BulkDeleteUtilTest {
     @Test
     public void testDeleteBulkRelease_ConflictError003() throws Exception {
         if (!isFeatureEnable()) {
-            System.out.println("BulkReleaseDeletion is disabled. these test is Skipped.");
+            log.warn("BulkReleaseDeletion is disabled. these test is Skipped.");
             return;
         }
         
@@ -1374,10 +1451,10 @@ public class BulkDeleteUtilTest {
     }
     
     private boolean isFeatureEnable() {
-        if (!BackendUtils.IS_BULK_RELEASE_DELETING_ENABLED) {
+        if (!TestUtils.IS_BULK_RELEASE_DELETING_ENABLED) {
             return false;
         }
-        if (!PermissionUtils.IS_ADMIN_PRIVATE_ACCESS_ENABLED) {
+        if (!TestUtils.IS_ADMIN_PRIVATE_ACCESS_ENABLED) {
             return false;
         }
         return true;
@@ -1428,4 +1505,10 @@ public class BulkDeleteUtilTest {
         }
     }
 
+    @AfterClass
+    public static void tearDownOnce() {
+        if (mockedStatic != null) {
+            mockedStatic.close();  // Ensure cleanup after all tests
+        }
+    }
 }

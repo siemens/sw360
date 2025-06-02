@@ -57,6 +57,7 @@ public class ThriftEnumUtils {
             .put(ComponentType.SERVICE, "Service")
             .put(ComponentType.FREESOFTWARE, "Freeware")
             .put(ComponentType.CODE_SNIPPET, "Code Snippet")
+            .put(ComponentType.COTS_TRUSTED_SUPPLIER, "COTS-Trusted Supplier")
             .build();
 
     private static final ImmutableMap<ObligationLevel, String> MAP_OBLIGATION_LEVEL_STRING = ImmutableMap.<ObligationLevel, String>builder()
@@ -249,7 +250,11 @@ public class ThriftEnumUtils {
     private static final ImmutableMap<ProjectState, String> MAP_PROJECT_STATE_STRING = ImmutableMap.of(
             ProjectState.ACTIVE, "Active" ,
             ProjectState.PHASE_OUT, "Phase out" ,
-            ProjectState.UNKNOWN, "Unknown");
+            ProjectState.UNKNOWN, "Unknown",
+            ProjectState.SVM_ONLY, "SVM Only",
+            ProjectState.PRIVATE, "Private",
+            ProjectState.UNDER_DEVELOPMENT, "Under Development",
+            ProjectState.RELEASED, "Released");
 
     private static final ImmutableMap<ProjectClearingState, String> MAP_PROJECT_CLEARING_STATE_STRING = ImmutableMap.of(
             ProjectClearingState.OPEN, "Open",

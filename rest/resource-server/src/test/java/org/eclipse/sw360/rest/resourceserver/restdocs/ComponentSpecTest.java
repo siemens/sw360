@@ -32,9 +32,9 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityState;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
+import org.eclipse.sw360.rest.resourceserver.component.ComponentMergeSelector;
 import org.eclipse.sw360.rest.resourceserver.component.Sw360ComponentService;
 import org.eclipse.sw360.rest.resourceserver.report.SW360ReportService;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
 import org.hamcrest.Matchers;
@@ -232,28 +232,28 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         componentList.add(angularTargetComponent);
         componentListByName.add(angularComponent);
 
-        AttachmentDTO attachmentDTO = new AttachmentDTO();
-        attachmentDTO.setAttachmentContentId("");
-        attachmentDTO.setFilename(attachment.getFilename());
-        attachmentDTO.setSha1(attachment.getSha1());
-        attachmentDTO.setAttachmentType(AttachmentType.BINARY_SELF);
-        attachmentDTO.setCreatedBy("admin@sw360.org");
-        attachmentDTO.setCreatedTeam("Clearing Team 1");
-        attachmentDTO.setCreatedComment("please check asap");
-        attachmentDTO.setCreatedOn("2016-12-18");
-        attachmentDTO.setCheckedTeam("Clearing Team 2");
-        attachmentDTO.setCheckedComment("everything looks good");
-        attachmentDTO.setCheckedOn("2016-12-18");
-        attachmentDTO.setCheckStatus(CheckStatus.ACCEPTED);
+        Attachment attachmentWithUsage = new Attachment();
+        attachmentWithUsage.setAttachmentContentId("");
+        attachmentWithUsage.setFilename(attachment.getFilename());
+        attachmentWithUsage.setSha1(attachment.getSha1());
+        attachmentWithUsage.setAttachmentType(AttachmentType.BINARY_SELF);
+        attachmentWithUsage.setCreatedBy("admin@sw360.org");
+        attachmentWithUsage.setCreatedTeam("Clearing Team 1");
+        attachmentWithUsage.setCreatedComment("please check asap");
+        attachmentWithUsage.setCreatedOn("2016-12-18");
+        attachmentWithUsage.setCheckedTeam("Clearing Team 2");
+        attachmentWithUsage.setCheckedComment("everything looks good");
+        attachmentWithUsage.setCheckedOn("2016-12-18");
+        attachmentWithUsage.setCheckStatus(CheckStatus.ACCEPTED);
 
-        UsageAttachment usageAttachment = new UsageAttachment();
+        ProjectAttachmentUsage usageAttachment = new ProjectAttachmentUsage();
         usageAttachment.setVisible(0);
         usageAttachment.setRestricted(0);
 
-        attachmentDTO.setUsageAttachment(usageAttachment);
-        List<EntityModel<AttachmentDTO>> atEntityModels = new ArrayList<>();
-        atEntityModels.add(EntityModel.of(attachmentDTO));
-        given(this.attachmentServiceMock.getAttachmentDTOResourcesFromList(any(), any(), any())).willReturn(CollectionModel.of(atEntityModels));
+        attachmentWithUsage.setProjectAttachmentUsage(usageAttachment);
+        List<EntityModel<Attachment>> atEntityModels = new ArrayList<>();
+        atEntityModels.add(EntityModel.of(attachmentWithUsage));
+        given(this.attachmentServiceMock.getAttachmentResourcesFromList(any(), any(), any())).willReturn(CollectionModel.of(atEntityModels));
 
         Component springComponent = new Component();
         Map<String, String> springComponentExternalIds = new HashMap<>();
@@ -637,6 +637,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy.wantsMailNotification").description("Does user want to be notified via mail?").optional(),
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy.deactivated").description("The user is activated or deactivated").optional(),
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.createdBy._links").description("Self <<resources-index-links,Links>> to Component resource").optional(),
+                                subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]attachmentContentId").description("Attachment content id").optional(),
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]filename").description("Attached file name").optional(),
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]sha1").description("The attachment sha1 value").optional(),
                                 subsectionWithPath("_embedded.sw360:components.[]_embedded.sw360:attachments.[]_links").description("Self <<resources-index-links,Links>> to Component resource").optional(),
@@ -913,13 +914,54 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_components_by_type_and_created_on() throws Exception {
+        mockMvc.perform(get("/api/components")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .queryParam("componentType", angularComponent.getComponentType().toString())
+                        .queryParam("createdOn", angularComponent.getCreatedOn())
+                        .queryParam("categories", "javascript, sql")
+                        .queryParam("luceneSearch", "false")
+                        .queryParam("page", "0")
+                        .queryParam("page_entries", "5")
+                        .queryParam("sort", "name,desc")
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        queryParameters(
+                                parameterWithName("componentType").description("Filter for type"),
+                                parameterWithName("createdOn").description("Filter for component creation date"),
+                                parameterWithName("categories").description("Filter for categories"),
+                                parameterWithName("luceneSearch").description("Filter with exact match or lucene match."),
+                                parameterWithName("page").description("Page of components"),
+                                parameterWithName("page_entries").description("Amount of components per page"),
+                                parameterWithName("sort").description("Defines order of the components")
+                        ),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:components.[]name").description("The name of the component"),
+                                subsectionWithPath("_embedded.sw360:components.[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
+                                subsectionWithPath("_embedded.sw360:components").description("An array of <<resources-components, Components resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of components per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing components"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
+    }
+
+    @Test
     public void should_document_update_component() throws Exception {
         ComponentDTO updateComponent = new ComponentDTO();
-        AttachmentDTO attachmentDTO = new AttachmentDTO("1231231255", "spring-mvc-4.3.4.RELEASE.jar");
-        Set<AttachmentDTO> attachmentDTOS = new HashSet<>();
-        attachmentDTOS.add(attachmentDTO);
+        Attachment attachment = new Attachment("1231231255", "spring-mvc-4.3.4.RELEASE.jar");
+        Set<Attachment> attachments = new HashSet<>();
+        attachments.add(attachment);
         updateComponent.setName("Updated Component");
-        updateComponent.setAttachmentDTOs(attachmentDTOS);
+        updateComponent.setAttachments(attachments);
 
         mockMvc.perform(patch("/api/components/17653524")
                 .contentType(MediaTypes.HAL_JSON)
@@ -932,9 +974,10 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_merge_components() throws Exception {
+        ComponentMergeSelector mergeSelection = ComponentMergeSelector.from(angularTargetComponent);
         mockMvc.perform(patch("/api/components/mergecomponents")
                 .contentType(MediaTypes.HAL_JSON)
-                .content(this.objectMapper.writeValueAsString(angularTargetComponent))
+                .content(this.objectMapper.writeValueAsString(mergeSelection))
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .queryParam("mergeTargetId", "87654321")
                 .queryParam("mergeSourceId", "17653524")
@@ -946,11 +989,11 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 parameterWithName("mergeTargetId").description("Id of a target component to merge")
                         ),
                         requestFields(
-                                fieldWithPath("id").description("The Id of the component"),
                                 fieldWithPath("subscribers").description("The subscribers of component"),
                                 fieldWithPath("ownerAccountingUnit").description("The owner accounting unit of the component"),
                                 subsectionWithPath("externalIds").description("When components are imported from other tools, the external ids can be stored here. Store as 'Single String' when single value, or 'Array of String' when multi-values"),
                                 subsectionWithPath("additionalData").description("A place to store additional data used by external tools"),
+                                subsectionWithPath("attachments").description("Attachments to be carried over"),
                                 fieldWithPath("mainLicenseIds").description("The Main License Ids of component"),
                                 fieldWithPath("languages").description("The language of the component"),
                                 fieldWithPath("softwarePlatforms").description("The Software Platforms of component"),
@@ -958,13 +1001,12 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("wiki").description("The wiki of component"),
                                 fieldWithPath("blog").description("The blog of component"),
                                 fieldWithPath("homepage").description("The homepage url of the component"),
-                                fieldWithPath("modifiedOn").description("The date the component was modified"),
 
                                 fieldWithPath("moderators").description("The component moderators"),
 
                                 fieldWithPath("name").description("The updated name of the component"),
-                                fieldWithPath("type").description("The updated name of the component"),
                                 fieldWithPath("createdOn").description("The date the component was created"),
+                                fieldWithPath("createdBy").description("The updated creator of this component"),
                                 fieldWithPath("componentOwner").description("The owner name of the component"),
                                 fieldWithPath("ownerGroup").description("The owner group of the component"),
                                 fieldWithPath("ownerCountry").description("The owner country of the component"),
@@ -974,7 +1016,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("mailinglist").description("Component mailing lists"),
                                 fieldWithPath("vendors").description("The vendors list"),
                                 fieldWithPath("description").description("The updated component description"),
-                                fieldWithPath("componentType").description("The updated  component type, possible values are: " + Arrays.asList(ComponentType.values()))
+                                fieldWithPath("componentType").description("The updated component type, possible values are: " + Arrays.asList(ComponentType.values()))
                         )));
     }
 
@@ -1048,20 +1090,19 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         responseFields(
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes").description("An array of <<resources-attachment, Attachments resources>>"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]attachmentContentId").description("The attachment attachmentContentId"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]filename").description("The attachment filename"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]sha1").description("The attachment sha1"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]attachmentType").description("The attachment attachmentType"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]createdBy").description("The attachment createdBy"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]createdTeam").description("The attachment createdTeam"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]createdComment").description("The attachment createdComment"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]createdOn").description("The attachment createdOn"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]checkedComment").description("The attachment checkedComment"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]checkStatus").description("The attachment checkStatus"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]usageAttachment").description("The usages in project"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]usageAttachment.visible").description("The visible usages in project"),
-                                subsectionWithPath("_embedded.sw360:attachmentDTOes.[]usageAttachment.restricted").description("The restricted usages in project"),
+                                subsectionWithPath("_embedded.sw360:attachments").description("An array of <<resources-attachment, Attachments resources>>"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]filename").description("The attachment filename"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]sha1").description("The attachment sha1"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]attachmentType").description("The attachment attachmentType"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]createdBy").description("The attachment createdBy"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]createdTeam").description("The attachment createdTeam"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]createdComment").description("The attachment createdComment"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]createdOn").description("The attachment createdOn"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]checkedComment").description("The attachment checkedComment"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]checkStatus").description("The attachment checkStatus"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]projectAttachmentUsage").description("The usages in project"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]projectAttachmentUsage.visible").description("The visible usages in project"),
+                                subsectionWithPath("_embedded.sw360:attachments.[]projectAttachmentUsage.restricted").description("The restricted usages in project"),
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                         )));
     }
@@ -1084,6 +1125,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                         fieldWithPath("checkStatus").description("The checkStatus of Attachment. Possible Values are: "+Arrays.asList(CheckStatus.values())),
                         fieldWithPath("checkedComment").description("The checked Comment of Attachment")),
                 responseFields(
+                        fieldWithPath("attachmentContentId").description("The attachment content id"),
                         fieldWithPath("filename").description("The attachment filename"),
                         fieldWithPath("sha1").description("The attachment sha1 value"),
                         fieldWithPath("attachmentType").description("The type of attachment. Possible Values are: "+Arrays.asList(AttachmentType.values())),
@@ -1304,6 +1346,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_import_sbom_for_component() throws Exception {
+        given(this.attachmentServiceMock.isValidSbomFile(any(), any())).willReturn(true);
         MockMultipartFile file = new MockMultipartFile("file","file=@/bom.spdx.rdf".getBytes());
 
         MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.post("/api/components/import/SBOM")
@@ -1316,6 +1359,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_prepare_import_sbom_for_component() throws Exception {
+        given(this.attachmentServiceMock.isValidSbomFile(any(), any())).willReturn(true);
         MockMultipartFile file = new MockMultipartFile("file","file=@/bom.spdx.rdf".getBytes());
 
         MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.post("/api/components/prepareImport/SBOM")
@@ -1331,7 +1375,6 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         mockMvc.perform(get("/api/reports")
                         .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                         .queryParam("withlinkedreleases", "true")
-                        .queryParam("mimetype", "xlsx")
                         .queryParam("module", "components")
                         .queryParam("excludeReleaseVersion", "false")
                         .accept(MediaTypes.HAL_JSON))
@@ -1339,10 +1382,17 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
              .andDo(this.documentationHandler.document(
                      queryParameters(
                              parameterWithName("withlinkedreleases").description("Projects with linked releases. Possible values are `<true|false>`"),
-                             parameterWithName("mimetype").description("Projects download format. Possible values are `<xls|xlsx>`"),
                              parameterWithName("module").description("module represent the project or component. Possible values are `<components|projects>`"),
                              parameterWithName("excludeReleaseVersion").description("Exclude version of the components from the generated license info file. "
                                      + "Possible values are `<true|false>`")
                      )));
+    }
+
+    @Test
+    public void should_subscribe_user_to_component() throws Exception {
+        mockMvc.perform(post("/api/components/" + angularComponent.getId() + "/subscriptions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
+                .andExpect(status().isOk());
     }
 }

@@ -175,10 +175,9 @@ public class ModerationDatabaseHandler {
     }
 
     public List<ModerationRequest> getRequestByDocumentId(String documentId) {
-        List<ModerationRequest> requests = CommonUtils.nullToEmptyList(repository.getRequestsByDocumentId(documentId));
-
-        Collections.sort(requests, CommonUtils.compareByTimeStampDescending());
-
+        List<ModerationRequest> requests = new ArrayList<>(CommonUtils.nullToEmptyList(
+                repository.getRequestsByDocumentId(documentId)));
+        requests.sort(CommonUtils.compareByTimeStampDescending());
         return requests;
     }
 
@@ -651,7 +650,7 @@ public class ModerationDatabaseHandler {
         return RequestStatus.SENT_TO_MODERATOR;
     }
 
- public void createRequest(User user) {
+    public void createRequest(User user) {
         // Define moderators
         Set<String> admins = getUsersAtLeast(UserGroup.CLEARING_ADMIN, user.getDepartment());
         ModerationRequest request = createStubRequest(user, false, user.getId(), admins);
@@ -964,14 +963,18 @@ public class ModerationDatabaseHandler {
         mailUtil.sendMail(request.getModerators(), userEmail,
                 MailConstants.SUBJECT_FOR_NEW_MODERATION_REQUEST,
                 MailConstants.TEXT_FOR_NEW_MODERATION_REQUEST,
-                SW360Constants.NOTIFICATION_CLASS_MODERATION_REQUEST, ModerationRequest._Fields.MODERATORS.toString());
+                SW360Constants.NOTIFICATION_CLASS_MODERATION_REQUEST, ModerationRequest._Fields.MODERATORS.toString(),
+                ThriftEnumUtils.enumToString(request.getDocumentType()),
+                request.getDocumentName());
     }
 
     private void sendMailNotificationsForUpdatedRequest(ModerationRequest request, String userEmail){
         mailUtil.sendMail(request.getModerators(), userEmail,
                 MailConstants.SUBJECT_FOR_UPDATE_MODERATION_REQUEST,
                 MailConstants.TEXT_FOR_UPDATE_MODERATION_REQUEST,
-                SW360Constants.NOTIFICATION_CLASS_MODERATION_REQUEST, ModerationRequest._Fields.MODERATORS.toString());
+                SW360Constants.NOTIFICATION_CLASS_MODERATION_REQUEST, ModerationRequest._Fields.MODERATORS.toString(),
+                ThriftEnumUtils.enumToString(request.getDocumentType()),
+                request.getDocumentName());
     }
 
     private void sendMailToUserForDeclinedRequest(ModerationRequest request){

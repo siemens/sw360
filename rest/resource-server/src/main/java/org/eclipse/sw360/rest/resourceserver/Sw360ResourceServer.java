@@ -10,21 +10,30 @@
 
 package org.eclipse.sw360.rest.resourceserver;
 
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.common.PropertyUtils;
 import org.eclipse.sw360.rest.common.Sw360CORSFilter;
+import org.eclipse.sw360.rest.common.Sw360XssFilter;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationFilter;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -42,10 +51,29 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import java.util.*;
 
 @SpringBootApplication
-@Import(Sw360CORSFilter.class)
+@Import({Sw360CORSFilter.class, Sw360XssFilter.class})
 public class Sw360ResourceServer extends SpringBootServletInitializer {
 
-    private static final String REST_BASE_PATH = "/api";
+    public static final String REST_BASE_PATH = "/api";
+    public static final String EXAMPLE_HEALTH_RESPONSE = """
+            {
+              "status": "UP",
+              "components": {
+                "SW360Rest": {
+                  "status": "UP",
+                  "details": {
+                    "Rest State": {
+                      "isDbReachable": true,
+                      "isThriftReachable": true
+                    }
+                  }
+                },
+                "ping": {
+                  "status": "UP"
+                }
+              }
+            }
+            """;
 
     @Value("${spring.data.rest.default-page-size:10}")
     private int defaultPageSize;
@@ -53,6 +81,8 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     private static final String SW360_PROPERTIES_FILE_PATH = "/sw360.properties";
     private static final String VERSION_INFO_PROPERTIES_FILE = "/restInfo.properties";
     private static final String VERSION_INFO_KEY = "sw360RestVersion";
+    private static final String BUILD_VERSION_KEY = "sw360BuildVersion";
+    private static final String COMMIT_COUNT_KEY = "sw360CommitCount";
     private static final String CURIE_NAMESPACE = "sw360";
     private static final String APPLICATION_ID = "rest";
 
@@ -65,7 +95,6 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     public static final String JWKS_ISSUER_URL;
     public static final String JWKS_ENDPOINT_URL;
     public static final Boolean IS_JWKS_VALIDATION_ENABLED;
-    public static final Boolean IS_FORCE_UPDATE_ENABLED;
     public static final UserGroup CONFIG_WRITE_ACCESS_USERGROUP;
     public static final UserGroup CONFIG_ADMIN_ACCESS_USERGROUP;
     private static final String DEFAULT_WRITE_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
@@ -86,8 +115,6 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
         JWKS_ISSUER_URL = props.getProperty("jwks.issuer.url", null);
         JWKS_ENDPOINT_URL = props.getProperty("jwks.endpoint.url", null);
         IS_JWKS_VALIDATION_ENABLED = Boolean.parseBoolean(props.getProperty("jwks.validation.enabled", "false"));
-        IS_FORCE_UPDATE_ENABLED = Boolean.parseBoolean(
-                System.getProperty("RunRestForceUpdateTest", props.getProperty("rest.force.update.enabled", "false")));
         CONFIG_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", DEFAULT_WRITE_ACCESS_USERGROUP));
         CONFIG_ADMIN_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.admin.access.usergroup", DEFAULT_ADMIN_ACCESS_USERGROUP));
         SERVER_PATH_URL = props.getProperty("backend.url", "http://localhost:8080");
@@ -97,20 +124,15 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
         versionInfo.putAll(properties);
 
         SpringDocUtils.getConfig()
-                .replaceWithClass(org.springframework.data.domain.Pageable.class,
+                .replaceParameterObjectWithClass(org.springframework.data.domain.Pageable.class,
                         OpenAPIPaginationHelper.class)
-                .replaceWithClass(org.springframework.data.domain.PageRequest.class,
+                .replaceParameterObjectWithClass(org.springframework.data.domain.PageRequest.class,
                         OpenAPIPaginationHelper.class);
     }
 
     @Bean
     public CurieProvider curieProvider() {
         return new DefaultCurieProvider(CURIE_NAMESPACE, UriTemplate.of("/docs/{rel}.html"));
-    }
-
-    @Bean
-    public ApiTokenAuthenticationFilter authFilterBean() {
-        return new ApiTokenAuthenticationFilter();
     }
 
     @Bean
@@ -150,11 +172,7 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
         Server server = new Server();
         server.setUrl(SERVER_PATH_URL + APPLICATION_NAME + REST_BASE_PATH);
         server.setDescription("Current instance.");
-        Object restVersion = versionInfo.get(VERSION_INFO_KEY);
-        String restVersionString = "1.0.0";
-        if (restVersion != null) {
-            restVersionString = restVersion.toString();
-        }
+        String restVersionString = getRestVersion();
         return new OpenAPI()
                 .components(new Components()
                         .addSecuritySchemes("tokenAuth",
@@ -168,6 +186,41 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
                 .info(new Info().title("SW360 API").license(new License().name("EPL-2.0")
                                 .url("https://github.com/eclipse-sw360/sw360/blob/main/LICENSE"))
                         .version(restVersionString))
-                .servers(List.of(server));
+                .servers(List.of(server))
+                .path("/health", new PathItem().get(
+                        new Operation().tags(Collections.singletonList("Health"))
+                                .summary("Health endpoint").operationId("health")
+                                .responses(new ApiResponses().addApiResponse("200",
+                                        new ApiResponse().description("OK")
+                                                .content(new Content()
+                                                        .addMediaType("application/json", new MediaType()
+                                                                .example(EXAMPLE_HEALTH_RESPONSE)
+                                                                .schema(new Schema<Health>())
+                                                ))
+                                ))
+                ));
+    }
+
+    /**
+     * Generate version string for REST using git build information.
+     * <ol>
+     *   <li>Check if the build version and commit count exists in properties.</li>
+     *   <li>If the property does not exist, return 1.0.0 as default version.</li>
+     *   <li>Replace the patch version of build version with commit count.</li>
+     *   <li>Return the updated version string.</li>
+     * </ol>
+     * @return Version string for OpenAPI docs.
+     */
+    private String getRestVersion() {
+        Object buildVersion = versionInfo.get(BUILD_VERSION_KEY);
+        Object commitCount = versionInfo.get(COMMIT_COUNT_KEY);
+        String restVersionString = "1.0.0";
+        if (buildVersion != null && commitCount != null) {
+            String[] versionParts = buildVersion.toString().split("\\.");
+            if (versionParts.length == 3) {
+                restVersionString = versionParts[0] + "." + versionParts[1] + "." + commitCount;
+            }
+        }
+        return restVersionString;
     }
 }

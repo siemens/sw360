@@ -12,7 +12,10 @@ package org.eclipse.sw360.cyclonedx;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.function.Predicate;
@@ -32,10 +35,7 @@ import org.cyclonedx.parsers.JsonParser;
 import org.cyclonedx.parsers.Parser;
 import org.cyclonedx.parsers.XmlParser;
 import org.eclipse.sw360.commonIO.AttachmentFrontendUtils;
-import org.eclipse.sw360.datahandler.common.CommonUtils;
-import org.eclipse.sw360.datahandler.common.SW360Constants;
-import org.eclipse.sw360.datahandler.common.SW360Utils;
-import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
+import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.PackageDatabaseHandler;
@@ -60,18 +60,20 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.Repository;
 import org.eclipse.sw360.datahandler.thrift.components.RepositoryType;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
-import org.eclipse.sw360.datahandler.thrift.packages.PackageManager;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.github.jsonldjava.shaded.com.google.common.io.Files;
 import com.github.packageurl.MalformedPackageURLException;
 import com.github.packageurl.PackageURL;
+import com.google.common.io.Files;
 import com.google.common.net.MediaType;
 import com.google.gson.Gson;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
+
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_PACKAGE_PORTLET_ENABLED;
 
 /**
  * CycloneDX BOM import implementation.
@@ -104,8 +106,10 @@ public class CycloneDxBOMImporter {
     private static final String INVALID_PACKAGE = "invalidPkg";
     private static final String PROJECT_ID = "projectId";
     private static final String PROJECT_NAME = "projectName";
-    private static final boolean IS_PACKAGE_PORTLET_ENABLED = SW360Constants.IS_PACKAGE_PORTLET_ENABLED;
+    private static final String REDIRECTED_VCS = "redirectedVCS";
     private static final Predicate<ExternalReference.Type> typeFilter = type -> ExternalReference.Type.VCS.equals(type);
+
+    private Set<String> redirectedUrls = new HashSet<>();
 
     private final ProjectDatabaseHandler projectDatabaseHandler;
     private final ComponentDatabaseHandler componentDatabaseHandler;
@@ -148,6 +152,7 @@ public class CycloneDxBOMImporter {
                         .map(ExternalReference::getUrl)
                         .map(url -> sanitizeVCS(url.toLowerCase()))
                         .filter(url -> CommonUtils.isValidUrl(url))
+                        .map(url -> getFinalURL(url))
                         .map(url -> new AbstractMap.SimpleEntry<>(url, comp)))
                 .collect(Collectors.groupingBy(e -> e.getKey(),
                         Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
@@ -161,9 +166,11 @@ public class CycloneDxBOMImporter {
         String fileExtension = Files.getFileExtension(attachmentContent.getFilename());
         Parser parser;
 
-        if (!SW360Utils.isUserAtleastDesiredRoleInPrimaryOrSecondaryGroup(user, SW360Constants.SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE)) {
+        final UserGroup allowedUserGroup = SW360Utils.readConfig(SW360ConfigKeys.SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE, UserGroup.USER);
+
+        if (!SW360Utils.isUserAtleastDesiredRoleInPrimaryOrSecondaryGroup(user, allowedUserGroup)) {
             log.warn("User does not have permission to import the SBOM: " + user.getEmail());
-            requestSummary.setMessage(SW360Constants.SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE.name());
+            requestSummary.setMessage(allowedUserGroup.name());
             requestSummary.setRequestStatus(RequestStatus.ACCESS_DENIED);
             return requestSummary;
         }
@@ -190,7 +197,7 @@ public class CycloneDxBOMImporter {
             org.cyclonedx.model.Component compMetadata = bomMetadata.getComponent();
             Map<String, List<org.cyclonedx.model.Component>> vcsToComponentMap = new HashMap<>();
 
-            if (!IS_PACKAGE_PORTLET_ENABLED) {
+            if (!SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true)) {
                 vcsToComponentMap.put("", components);
                 requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, projectId, attachmentContent, doNotReplacePackageAndRelease);
             } else {
@@ -287,6 +294,7 @@ public class CycloneDxBOMImporter {
                         // all components does not have VCS, so return & show appropriate error in UI
                         messageMap.put(INVALID_COMPONENT, String.join(JOINER, componentsWithoutVcs));
                         messageMap.put(INVALID_PACKAGE, String.join(JOINER, invalidPackages));
+                        messageMap.put(REDIRECTED_VCS, String.join(JOINER, this.redirectedUrls));
                         messageMap.put(DUPLICATE_PACKAGE, String.join(JOINER, duplicatePackages));
                         messageMap.put(SW360Constants.MESSAGE,
                                 String.format("VCS information is missing for <b>%s</b> / <b>%s</b> Components!",
@@ -416,7 +424,7 @@ public class CycloneDxBOMImporter {
             return summary;
         }
 
-        if (IS_PACKAGE_PORTLET_ENABLED) {
+        if (SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true)) {
             messageMap = importAllComponentsAsPackages(vcsToComponentMap, project, doNotReplacePackageAndRelease);
         } else {
             messageMap = importAllComponentsAsReleases(vcsToComponentMap, project);
@@ -502,11 +510,14 @@ public class CycloneDxBOMImporter {
 
                 // update components specific fields
                 comp = componentDatabaseHandler.getComponent(compAddSummary.getId(), user);
-                if (AddDocumentRequestStatus.SUCCESS.equals(compAddSummary.getRequestStatus()) && (null != bomComp.getType() && null == comp.getCdxComponentType())) {
+                if (null != bomComp.getType() && null == comp.getCdxComponentType()) {
                     comp.setCdxComponentType(getCdxComponentType(bomComp.getType()));
                 }
-                if (AddDocumentRequestStatus.SUCCESS.equals(compAddSummary.getRequestStatus()) && (CommonUtils.isNullEmptyOrWhitespace(comp.getDescription()) && CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription()))) {
-                    comp.setDescription(bomComp.getDescription().trim());
+                StringBuilder description = new StringBuilder();
+                if (CommonUtils.isNullEmptyOrWhitespace(comp.getDescription()) && CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
+                    description.append(bomComp.getDescription().trim());
+                } else if (CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
+                    description.append(" || ").append(bomComp.getDescription().trim());
                 }
                 if (CommonUtils.isNotEmpty(comp.getMainLicenseIds())) {
                     comp.getMainLicenseIds().addAll(licenses);
@@ -522,7 +533,7 @@ public class CycloneDxBOMImporter {
                         comp.setWiki(CommonUtils.nullToEmptyString(extRef.getUrl()));
                     }
                 }
-
+                comp.setDescription(description.toString());
                 RequestStatus updateStatus = componentDatabaseHandler.updateComponent(comp, user, true);
                 if (RequestStatus.SUCCESS.equals(updateStatus)) {
                     log.info("updating component successfull: " + comp.getName());
@@ -572,6 +583,7 @@ public class CycloneDxBOMImporter {
 
             Release release = new Release();
             String relName = "";
+            StringBuilder description = new StringBuilder();
             AddDocumentRequestSummary compAddSummary;
             try {
                 Component dupCompByName = componentDatabaseHandler.getComponentByName(comp.getName());
@@ -627,11 +639,13 @@ public class CycloneDxBOMImporter {
 
                     // update components specific fields
                     comp = componentDatabaseHandler.getComponent(compAddSummary.getId(), user);
-                    if (AddDocumentRequestStatus.SUCCESS.equals(compAddSummary.getRequestStatus()) && (null != bomComp.getType() && null == comp.getCdxComponentType())) {
+                    if (null != bomComp.getType() && null == comp.getCdxComponentType()) {
                         comp.setCdxComponentType(getCdxComponentType(bomComp.getType()));
                     }
-                    if (AddDocumentRequestStatus.SUCCESS.equals(compAddSummary.getRequestStatus()) && (CommonUtils.isNullEmptyOrWhitespace(comp.getDescription()) && CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription()))) {
-                        comp.setDescription(bomComp.getDescription().trim());
+                    if (CommonUtils.isNullEmptyOrWhitespace(comp.getDescription()) && CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
+                        description.append(bomComp.getDescription().trim());
+                    } else if (CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
+                        description.append(" || ").append(bomComp.getDescription().trim());
                     }
                     if (CommonUtils.isNotEmpty(comp.getMainLicenseIds())) {
                         comp.getMainLicenseIds().addAll(licenses);
@@ -650,6 +664,7 @@ public class CycloneDxBOMImporter {
                         }
                     }
 
+                    comp.setDescription(description.toString());
                     RequestStatus updateStatus = componentDatabaseHandler.updateComponent(comp, user, true);
                     if (RequestStatus.SUCCESS.equals(updateStatus)) {
                         log.info("updating component successfull: " + comp.getName());
@@ -708,6 +723,7 @@ public class CycloneDxBOMImporter {
         messageMap.put(DUPLICATE_RELEASE, String.join(JOINER, duplicateReleases));
         messageMap.put(DUPLICATE_PACKAGE, String.join(JOINER, duplicatePackages));
         messageMap.put(INVALID_RELEASE, String.join(JOINER, invalidReleases));
+        messageMap.put(REDIRECTED_VCS, String.join(JOINER, this.redirectedUrls));
         messageMap.put(INVALID_PACKAGE, String.join(JOINER, invalidPackages));
         messageMap.put(PROJECT_ID, project.getId());
         messageMap.put(PROJECT_NAME, SW360Utils.getVersionedName(project.getName(), project.getVersion()));
@@ -800,6 +816,10 @@ public class CycloneDxBOMImporter {
     }
 
     private Project createProject(org.cyclonedx.model.Component compMetadata) {
+        if (compMetadata == null) {
+            log.error("Component metadata is null. Unable to create project.");
+            throw new IllegalArgumentException("Unable to create project due to incorrect metadata");
+        }
         return new Project(CommonUtils.nullToEmptyString(compMetadata.getName()).trim())
                 .setVersion(CommonUtils.nullToEmptyString(compMetadata.getVersion()).trim())
                 .setDescription(CommonUtils.nullToEmptyString(compMetadata.getDescription()).trim()).setType(ThriftEnumUtils.enumToString(ProjectType.PRODUCT))
@@ -1084,5 +1104,62 @@ public class CycloneDxBOMImporter {
             }
         }
         return false;
+    }
+
+    public String getFinalURL(String urlString) {
+        URL url;
+        try {
+            url = new URL(urlString);
+        } catch (MalformedURLException e) {
+            log.error("Invalid URL format: {}", e.getMessage());
+            return urlString;
+        }
+
+        int redirectCount = 0;
+
+        while (redirectCount < SW360Constants.VCS_REDIRECTION_LIMIT) {
+            try {
+                HttpURLConnection connection = openConnection(url);
+                int status = connection.getResponseCode();
+
+                if (status == HttpURLConnection.HTTP_MOVED_PERM || status == 308) {
+                    String newUrl = connection.getHeaderField("Location");
+                    connection.disconnect();
+
+                    // Resolve relative URLs
+                    url = new URL(url, newUrl);
+
+                    if (!"https".equalsIgnoreCase(url.getProtocol())) {
+                        log.error("Insecure redirection to non-HTTPS URL: {}", url);
+                        return urlString;
+                    }
+
+                    redirectCount++;
+                    this.redirectedUrls.add(urlString);
+                } else {
+                    connection.disconnect();
+                    break;
+                }
+            } catch (IOException e) {
+                log.error("Error during redirection handling: {}", e.getMessage());
+                return urlString;
+            }
+        }
+
+        if (redirectCount == 0 || redirectCount == SW360Constants.VCS_REDIRECTION_LIMIT) {
+            if (redirectCount == SW360Constants.VCS_REDIRECTION_LIMIT) {
+                log.error("Exceeded maximum redirect limit. Returning original URL.");
+            }
+            return urlString;
+        }
+        return sanitizeVCS(url.toString());
+    }
+
+    private static HttpURLConnection openConnection(URL url) throws IOException{
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setInstanceFollowRedirects(false);
+        connection.setConnectTimeout(SW360Constants.VCS_REDIRECTION_TIMEOUT_LIMIT);
+        connection.setReadTimeout(SW360Constants.VCS_REDIRECTION_TIMEOUT_LIMIT);
+        return connection;
     }
 }

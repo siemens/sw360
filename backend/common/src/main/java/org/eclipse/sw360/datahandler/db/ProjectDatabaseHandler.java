@@ -22,7 +22,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.common.utils.BackendUtils;
 import org.eclipse.sw360.components.summary.SummaryType;
@@ -82,6 +82,8 @@ import static org.eclipse.sw360.datahandler.common.CommonUtils.*;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertId;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.assertNotNull;
 import static org.eclipse.sw360.datahandler.common.SW360Assert.fail;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_PACKAGE_PORTLET_ENABLED;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.MAINLINE_STATE_ENABLED_FOR_USER;
 import static org.eclipse.sw360.datahandler.common.SW360Utils.getBUFromOrganisation;
 import static org.eclipse.sw360.datahandler.common.SW360Utils.getCreatedOn;
 import static org.eclipse.sw360.datahandler.common.SW360Utils.printName;
@@ -394,7 +396,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return addDocumentRequestSummary;
         }
 
-        if (!isDependenciesExists(project, user) || (SW360Constants.IS_PACKAGE_PORTLET_ENABLED && isLinkedReleasesUpdateFromLinkedPackagesFailed(project, Collections.emptySet()))) {
+        if (!isDependenciesExists(project, user) || (SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true) && isLinkedReleasesUpdateFromLinkedPackagesFailed(project, Collections.emptySet()))) {
             return new AddDocumentRequestSummary()
                     .setRequestStatus(AddDocumentRequestStatus.INVALID_INPUT);
         }
@@ -452,7 +454,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
             return RequestStatus.CLOSED_UPDATE_NOT_ALLOWED;
         } else if (!changePassesSanityCheck(project, actual)){
             return RequestStatus.FAILED_SANITY_CHECK;
-        } else if (!isDependenciesExists(project, user) || (SW360Constants.IS_PACKAGE_PORTLET_ENABLED &&
+        } else if (!isDependenciesExists(project, user) || (SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true) &&
                 isLinkedReleasesUpdateFromLinkedPackagesFailed(project, CommonUtils.nullToEmptySet(actual.getPackageIds())))) {
             return RequestStatus.INVALID_INPUT;
         } else if (isWriteActionAllowedOnProject(actual, user) || forceUpdate) {
@@ -685,7 +687,8 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     private void setReleaseRelations(Project updated, User user, Project current) {
-        boolean isMainlineStateDisabled = !(BackendUtils.MAINLINE_STATE_ENABLED_FOR_USER
+        final boolean isMainLineStateEnabledForUser = SW360Utils.readConfig(MAINLINE_STATE_ENABLED_FOR_USER, false);
+        boolean isMainlineStateDisabled = !(isMainLineStateEnabledForUser
                 || PermissionUtils.isUserAtLeast(UserGroup.CLEARING_ADMIN, user))
                 && updated.getReleaseIdToUsageSize() > 0;
 
@@ -1319,7 +1322,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
         return projects;
     }
-    
+
     public Project fillClearingStateSummaryIncludingSubprojectsForSingleProject(Project project, User user) {
         final Map<String, Project> allProjectsIdMap = getRefreshedAllProjectsIdMap();
 

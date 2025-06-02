@@ -16,7 +16,7 @@
     <parent>
         <groupId>org.eclipse.sw360</groupId>
         <artifactId>clients</artifactId>
-        <version>19.0.0</version>
+        <version>19.2.0</version>
     </parent>
 
     <artifactId>client</artifactId>
@@ -88,8 +88,8 @@
             <artifactId>equalsverifier</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.github.tomakehurst</groupId>
-            <artifactId>wiremock-jre8</artifactId>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.servlet</groupId>

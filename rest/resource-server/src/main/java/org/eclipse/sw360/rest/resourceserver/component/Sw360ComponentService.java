@@ -12,12 +12,10 @@
 
 package org.eclipse.sw360.rest.resourceserver.component;
 
+import com.google.common.collect.ImmutableSet;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TCompactProtocol;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
@@ -27,34 +25,37 @@ import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.components.ClearingReport;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentDTO;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
-import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
-import org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.getSortedMap;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_FORCE_UPDATE_ENABLED;
 
 @Service
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class Sw360ComponentService implements AwareOfRestServices<Component> {
-    @Value("${sw360.thrift-server-url:http://localhost:8080}")
-    private String thriftServerUrl;
 
     @NonNull
     private final RestControllerHelper<Component> rch;
@@ -102,6 +103,16 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         return sw360ComponentClient.getSubscribedComponents(sw360User);
     }
 
+    public RequestStatus subscribeComponent(String componentId, User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.subscribeComponent(componentId, sw360User);
+    }
+
+    public RequestStatus unsubscribeComponent(String componentId, User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.unsubscribeComponent(componentId, sw360User);
+    }
+
     public List<Component> getRecentComponents(User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.getRecentComponentsSummary(5, sw360User);
@@ -137,9 +148,9 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.DUPLICATE) {
             throw new DataIntegrityViolationException("sw360 component with name '" + component.getName() + "' already exists.");
         } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.INVALID_INPUT) {
-            throw new HttpMessageNotReadableException("Dependent document Id/ids not valid.");
+            throw new BadRequestClientException("Dependent document Id/ids not valid.");
         } else if (documentRequestSummary.getRequestStatus() == AddDocumentRequestStatus.NAMINGERROR) {
-            throw new HttpMessageNotReadableException("Component name field cannot be empty or contain only whitespace character");
+            throw new BadRequestClientException("Component name field cannot be empty or contain only whitespace character");
         }
         return null;
     }
@@ -147,15 +158,17 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     public RequestStatus updateComponent(Component component, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         RequestStatus requestStatus;
-        if (Sw360ResourceServer.IS_FORCE_UPDATE_ENABLED) {
+        if (SW360Utils.readConfig(IS_FORCE_UPDATE_ENABLED, false)) {
             requestStatus = sw360ComponentClient.updateComponentWithForceFlag(component, sw360User, true);
         } else {
             requestStatus = sw360ComponentClient.updateComponent(component, sw360User);
         }
         if (requestStatus == RequestStatus.INVALID_INPUT) {
-            throw new HttpMessageNotReadableException("Dependent document Id/ids not valid.");
+            throw new BadRequestClientException("Dependent document Id/ids not valid.");
         } else if (requestStatus == RequestStatus.NAMINGERROR) {
-            throw new HttpMessageNotReadableException("Component name field cannot be empty or contain only whitespace character");
+            throw new BadRequestClientException("Component name field cannot be empty or contain only whitespace character");
+        } else if (requestStatus == RequestStatus.DUPLICATE_ATTACHMENT) {
+            throw new RuntimeException("Multiple attachments with same name or content cannot be present in attachment list.");
         } else if (requestStatus != RequestStatus.SUCCESS && requestStatus != RequestStatus.SENT_TO_MODERATOR) {
             throw new RuntimeException("sw360 component with name '" + component.getName() + " cannot be updated.");
         }
@@ -164,7 +177,7 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
 
     public RequestStatus deleteComponent(String componentId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        if (Sw360ResourceServer.IS_FORCE_UPDATE_ENABLED) {
+        if (SW360Utils.readConfig(IS_FORCE_UPDATE_ENABLED, false)) {
             return sw360ComponentClient.deleteComponentWithForceFlag(componentId, sw360User, true);
         } else {
             return sw360ComponentClient.deleteComponent(componentId, sw360User);
@@ -190,6 +203,9 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
             releaseLink.setName(release.getName());
             releaseLink.setVersion(release.getVersion());
             releaseLink.setClearingState(release.getClearingState());
+
+            //  Added as part of https://github.com/eclipse-sw360/sw360/issues/3161
+            releaseLink.setCreatedBy(release.getCreatedBy());
 
             ClearingReport clearingReport = new ClearingReport();
             Set<Attachment> attachments = getAttachmentForClearingReport(release);
@@ -237,22 +253,14 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     }
 
     private ComponentService.Iface getThriftComponentClient() throws TTransportException {
-        THttpClient thriftClient = new THttpClient(thriftServerUrl + "/components/thrift");
-        TProtocol protocol = new TCompactProtocol(thriftClient);
-        return new ComponentService.Client(protocol);
-    }
-
-    private ProjectService.Iface getThriftProjectClient() throws TTransportException {
-        THttpClient thriftClient = new THttpClient(thriftServerUrl + "/projects/thrift");
-        TProtocol protocol = new TCompactProtocol(thriftClient);
-        return new ProjectService.Client(protocol);
+        return new ThriftClients().makeComponentClient();
     }
 
     public List<Component> getMyComponentsForUser(User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.getMyComponents(sw360User);
     }
-    
+
     public List<VulnerabilityDTO> getVulnerabilitiesByComponent(String componentId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         List<String> releaseIds = sw360ComponentClient.getReleaseIdsFromComponentId(componentId, sw360User);
@@ -278,33 +286,49 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         return sw360ComponentClient.prepareImportBom(user, attachmentContentId);
     }
 
-  public RequestStatus mergeComponents(String componentTargetId, String componentSourceId, Component componentSelection, User user) throws TException {
+    public RequestStatus mergeComponents(String componentTargetId, String componentSourceId,
+                                         Component componentSelection, User user) throws TException {
+        validateComponentMergeSelection(componentSelection);
+
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        RequestStatus requestStatus;
-        requestStatus =  sw360ComponentClient.mergeComponents(componentTargetId, componentSourceId, componentSelection, user);
+        RequestStatus requestStatus = sw360ComponentClient.mergeComponents(
+                componentTargetId, componentSourceId, componentSelection, user);
 
         if (requestStatus == RequestStatus.IN_USE) {
-            throw new HttpMessageNotReadableException("Component already in use.");
+            throw new BadRequestClientException("Component already in use.");
         } else if (requestStatus == RequestStatus.FAILURE) {
-            throw new HttpMessageNotReadableException("Cannot merge these components");
+            throw new BadRequestClientException("Cannot merge these components");
         } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
-            throw new RuntimeException("Access denied");
+            throw new AccessDeniedException("Access denied");
         }
 
         return requestStatus;
-  }
+    }
 
     public RequestStatus splitComponents(Component srcComponent, Component targetComponent, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        RequestStatus requestStatus;
-        requestStatus = sw360ComponentClient.splitComponent(srcComponent, targetComponent, sw360User);
+
+        boolean found = false;
+        try {
+            if (sw360ComponentClient.getComponentById(srcComponent.getId(), sw360User) != null
+                    && sw360ComponentClient.getComponentById(targetComponent.getId(), sw360User) != null) {
+                found = true;
+            }
+        } catch (TException ignored) {
+        }
+
+        if (!found) {
+            throw new ResourceNotFoundException("Source or target component not found");
+        }
+
+        RequestStatus requestStatus = sw360ComponentClient.splitComponent(srcComponent, targetComponent, sw360User);
 
         if (requestStatus == RequestStatus.IN_USE) {
-            throw new HttpMessageNotReadableException("Component already in use.");
+            throw new HttpClientErrorException(HttpStatus.CONFLICT, "Component has Moderation Request Open");
         } else if (requestStatus == RequestStatus.FAILURE) {
-            throw new HttpMessageNotReadableException("Cannot split these components");
+            throw new SW360Exception("Cannot split these components");
         } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
-            throw new RuntimeException("Access denied...!");
+            throw new AccessDeniedException("Access denied!");
         }
 
         return requestStatus;
@@ -327,5 +351,54 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     public List<Component> refineSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.refineSearchAccessibleComponents(null, filterMap, sw360User);
+    }
+
+    /**
+     * Validate if the `componentSelection` object is not null and contains the required fields.
+     * @param componentSelection The component selection object to validate.
+     * @throws BadRequestClientException if the object is null or missing required fields.
+     */
+    private void validateComponentMergeSelection(Component componentSelection) {
+        if (componentSelection == null) {
+            throw new BadRequestClientException("Body for merge cannot be null");
+        }
+        Set<Component._Fields> requiredFields = ImmutableSet.<Component._Fields>builder()
+                .add(Component._Fields.NAME)
+                .add(Component._Fields.CREATED_ON)
+                .add(Component._Fields.CREATED_BY)
+                .build();
+
+        for (Component._Fields field : requiredFields) {
+            if (!componentSelection.isSet(field) || isNullEmptyOrWhitespace((String) componentSelection.getFieldValue(field))) {
+                throw new BadRequestClientException("Merge body is missing field " + field.getFieldName());
+            }
+        }
+    }
+
+    /**
+     * Get the list of releases from ComponentDTO's releaseIds set of string.
+     * @param componentDTO Object to get release IDs from
+     * @return List of Release
+     */
+    public List<Release> getReleasesFromDto(@NotNull ComponentDTO componentDTO, User user) throws TTransportException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+
+        List<Release> releases = new ArrayList<>();
+
+        if (!componentDTO.isSetReleaseIds() || componentDTO.getReleaseIds().isEmpty()) {
+            return releases;
+        }
+
+        for (String releaseId : componentDTO.getReleaseIds()) {
+            Release release;
+            try {
+                release = sw360ComponentClient.getReleaseById(releaseId, user);
+            } catch (TException e) {
+                continue;
+            }
+            releases.add(release);
+        }
+
+        return releases;
     }
 }

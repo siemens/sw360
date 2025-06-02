@@ -10,13 +10,13 @@
 
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
-import org.apache.thrift.TException;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders;
@@ -133,10 +133,10 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_error_internal_error() throws Exception {
-        given(this.projectServiceMock.getProjectForUserById(anyString(), any())).willThrow(new RuntimeException(new TException("Internal error processing getProjectById")));
+        given(this.projectServiceMock.getProjectForUserById(anyString(), any())).willThrow(new ResourceNotFoundException("Requested Project Not Found"));
         this.mockMvc.perform(RestDocumentationRequestBuilders.get("/api/projects/12321")
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().isNotFound())
                 .andDo(this.documentationHandler.document(
                         responseFields(
                                 fieldWithPath("timestamp").description("The timestamp when the error occurred"),
@@ -165,7 +165,7 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("sw360:licenseinfo").description("The <<resources-licenseinfo,Licenseinfo resource>>"),
                                 linkWithRel("sw360:vulnerabilities").description("The <<resources-vulnerabilities,Vulnerabilities resource>>"),
                                 linkWithRel("sw360:vulnerabilities").description("The <<resources-vulnerabilities,Vulnerabilities resource>>"),
-                                linkWithRel("sw360:searchs").description("The <<resources-search,Vulnerabilities resource>>"),
+                                linkWithRel("sw360:searches").description("The <<resources-search,Vulnerabilities resource>>"),
                                 linkWithRel("sw360:changeLogs").description("The <<resources-changelog,Changelog resource>>"),
                                 linkWithRel("sw360:clearingRequests").description("The <<resources-clearingRequest,ClearingRequest resource>>"),
                                 linkWithRel("sw360:obligations").description("The <<resources-obligations,Obligation resource>>"),
@@ -176,6 +176,8 @@ public class ApiSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("sw360:ecc").description("The <<resources-ecc,Ecc resource>>"),
                                 linkWithRel("sw360:attachmentCleanUp").description("The <<resources-attachmentCleanUp,attachmentCleanUp resource>>"),
                                 linkWithRel("sw360:importExport").description("The <<resources-importExport,ImportExport resource>>"),
+                                linkWithRel("sw360:department").description("The <<resources-department,Department resource>>"),
+                                linkWithRel("sw360:configurations").description("The <<resources-configurations,configurations resource>>"),
                                 linkWithRel("curies").description("The Curies for documentation"),
                                 linkWithRel("profile").description("The profiles of the REST resources")
                         ),

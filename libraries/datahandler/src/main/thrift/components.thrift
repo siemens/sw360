@@ -31,7 +31,6 @@ typedef sw360.PaginationData PaginationData
 typedef sw360.ClearingReportStatus ClearingReportStatus
 typedef sw360.ImportBomRequestPreparation ImportBomRequestPreparation
 typedef attachments.Attachment Attachment
-typedef attachments.AttachmentDTO AttachmentDTO
 typedef attachments.FilledAttachment FilledAttachment
 typedef users.User User
 typedef users.RequestedAction RequestedAction
@@ -141,7 +140,7 @@ struct ReleaseClearingStateSummary {
     3: required i32 underClearing,
     4: required i32 reportAvailable,
     5: required i32 approved,
-    6: required i32 scanAvailable, 
+    6: required i32 scanAvailable,
     7: required i32 internalUseScanAvailable,
 }
 
@@ -163,7 +162,7 @@ struct COTSDetails{
     8: optional string clearingDeadline,
     9: optional bool sourceCodeAvailable,
 }
-struct EccInformation{
+struct EccInformation {
     1: optional ECCStatus eccStatus, // Status of ECC assessment
     2: optional string al, // German Ausfuhrliste
     3: optional string eccn, // European control classification number
@@ -172,6 +171,7 @@ struct EccInformation{
     6: optional string eccComment, // comments for ecc information
     7: optional string materialIndexNumber, // six digit material index number, string for convenience
     8: optional string assessmentDate, // Date - YYYY-MM-dd, date of the last editing of ECC information
+    9: optional bool containsCryptography = false, // Indicates if the release contains cryptography
 }
 struct ClearingInformation {
     // supplier / ec info
@@ -234,7 +234,7 @@ struct Release {
     // information from external data sources
     9: optional  map<string, string> externalIds,
     300: optional map<string, string> additionalData,
-    
+
     // Urls for the project
     70: optional string sourceCodeDownloadurl, // URL for download page for this release source code
     71: optional string binaryDownloadurl, // URL for download page for this release binaries
@@ -296,6 +296,7 @@ enum ComponentType {
     INNER_SOURCE = 4, //internal software with source open for customers within own company
     SERVICE = 5,
     CODE_SNIPPET = 6,
+    COTS_TRUSTED_SUPPLIER = 7,
 }
 
 struct Component {
@@ -374,7 +375,7 @@ struct ComponentDTO {
     6: optional string description,
 
     // Additional informations
-    10: optional set<AttachmentDTO> attachmentDTOs,
+    10: optional set<Attachment> attachments,
     11: optional string createdOn, // Creation date YYYY-MM-dd
     12: optional ComponentType componentType,
 
@@ -393,6 +394,7 @@ struct ComponentDTO {
     // information from external data sources
     31: optional  map<string, string> externalIds,
     300: optional map<string, string> additionalData,
+    33: optional set<string> releaseIds,
 
     36: optional Vendor defaultVendor,
     37: optional string defaultVendorId,
@@ -438,7 +440,8 @@ struct ReleaseLink{
     107: optional i32 index,
     108: optional string defaultValue,
     109: optional string projectId,
-    110: optional MainlineState releaseMainLineState
+    110: optional MainlineState releaseMainLineState,
+    112: optional string createdBy // person who created the release
 }
 
 struct ReleaseClearingStatusData {
@@ -542,7 +545,7 @@ service ComponentService {
      * short summary of all accessible releases.
      **/
     list<Release> getAccessibleReleaseSummary(1: User user);
-    
+
     /**
      * search components in database that match subQueryRestrictions
      **/
@@ -799,7 +802,7 @@ service ComponentService {
 
     /**
      * Update the set of releases. Do only use for updating simple fields.
-     */ 
+     */
     RequestSummary updateReleasesDirectly(1: set<Release> releases, 2: User user);
 
     /**
@@ -847,7 +850,7 @@ service ComponentService {
      * get components with accessibility belonging to linked releases of the releases specified by releaseId
      **/
     set <Component> getUsingComponentsWithAccessibilityForComponent(1: set <string> releaseId, 2: User user);
-    
+
     /**
      * get components using the given vendor id
      */
@@ -986,7 +989,7 @@ service ComponentService {
 
     /**
      * Gets releases referencing the given release id
-     */ 
+     */
     list<Release> getReferencingReleases(1: string releaseId);
 
     /**
@@ -1026,7 +1029,7 @@ service ComponentService {
     /*
     * get component report in mail
     */
-    string getComponentReportInEmail(1: User user, 2: bool extendedByReleases) throws (1: SW360Exception exp); 
+    string getComponentReportInEmail(1: User user, 2: bool extendedByReleases) throws (1: SW360Exception exp);
 
     /**
     * Check accessible of release

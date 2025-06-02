@@ -15,7 +15,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.Explode;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -29,16 +28,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
+import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
@@ -51,7 +54,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatus.Series;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
@@ -94,7 +96,11 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @RequestMapping(value = LICENSES_URL, method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel> getLicenses(Pageable pageable, HttpServletRequest request) throws TException, ResourceClassNotFoundException, PaginationParameterException, URISyntaxException {
+    public ResponseEntity<CollectionModel> getLicenses(
+            @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
+            Pageable pageable,
+            HttpServletRequest request
+    ) throws TException, ResourceClassNotFoundException, PaginationParameterException, URISyntaxException {
         List<License> sw360Licenses = licenseService.getLicenses();
         PaginationResult<License> paginationResult = restControllerHelper.createPaginationResult(request, pageable, sw360Licenses, SW360Constants.TYPE_LICENSE);
         List<EntityModel<License>> licenseResources = new ArrayList<>();
@@ -120,7 +126,8 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
     )
     @RequestMapping(value = LICENSES_URL + "/{id}/obligations", method = RequestMethod.GET)
     public ResponseEntity<CollectionModel<EntityModel<Obligation>>> getObligationsByLicenseId(
-            @PathVariable("id") String id) throws TException {
+            @PathVariable("id") String id
+    ) throws TException {
         List<Obligation> obligations = licenseService.getObligationsByLicenseId(id);
         List<EntityModel<Obligation>> obligationResources = new ArrayList<>();
         obligations.forEach(o -> {
@@ -137,8 +144,16 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @RequestMapping(value = LICENSE_TYPES_URL, method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel<EntityModel<LicenseType>>> getLicenseTypes() throws TException {
-        List<LicenseType> sw360LicenseTypes = licenseService.getLicenseTypes();
+    public ResponseEntity<CollectionModel<EntityModel<LicenseType>>> getLicenseTypes(
+            @Parameter(description = "The search license type text.")
+            @RequestParam(value = "search", required = false) String searchElem) throws TException {
+        List<LicenseType> sw360LicenseTypes;
+
+        if (searchElem != null && !searchElem.isEmpty()) {
+            sw360LicenseTypes = licenseService.quickSearchLicenseType(searchElem);
+        } else {
+            sw360LicenseTypes = licenseService.getLicenseTypes();
+        }
 
         List<EntityModel<LicenseType>> licenseTypeResources = new ArrayList<>();
         for (LicenseType sw360LicenseType : sw360LicenseTypes) {
@@ -296,7 +311,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
         Set<String> commonExtIds = Sets.intersection(obligationIdsByLicense, obligationIds);
         Set<String> diffIds = Sets.difference(obligationIdsByLicense, obligationIds);
         if (commonExtIds.size() != obligationIds.size()) {
-            throw new HttpMessageNotReadableException("Obligation Ids not in license!" + license.getShortname());
+            throw new BadRequestClientException("Obligation Ids not in license!" + license.getShortname());
         }
 
         Set<String> obligationIdTrue = licenseService.getIdObligationsContainWhitelist(sw360User, licenseId, diffIds);
@@ -311,7 +326,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             halResource = createHalLicense(licenseUpdate);
             return new ResponseEntity<>(halResource, HttpStatus.OK);
         } else {
-            return new ResponseEntity("Update Whitelist to Obligation Fail!", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new SW360Exception("Update Whitelist to Obligation Fail!");
         }
     }
 
@@ -470,13 +485,13 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "overwriteIfExternalIdMatches", required = false) boolean overwriteIfExternalIdMatches,
             @Parameter(description = "Overwrite if id matches even without external id match.")
             @RequestParam(value = "overwriteIfIdMatchesEvenWithoutExternalIdMatch", required = false) boolean overwriteIfIdMatchesEvenWithoutExternalIdMatch
-    ) throws TException {
+    ) throws SW360Exception {
         try {
             User sw360User = restControllerHelper.getSw360UserFromAuthentication();
             licenseService.uploadLicense(sw360User, file, overwriteIfExternalIdMatches,
                     overwriteIfIdMatchesEvenWithoutExternalIdMatch);
         } catch (Exception e) {
-            throw new TException(e.getMessage());
+            throw new SW360Exception(e.getMessage());
 	    }
        return ResponseEntity.ok(Series.SUCCESSFUL);
      }
@@ -524,5 +539,22 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
         RequestStatus requestStatus = licenseService.addLicenseType(sw360User, licenseType, request);
         HttpStatus status = HttpStatus.OK;
         return new ResponseEntity<>(requestStatus, status);
+    }
+
+    @Operation(
+            summary = "Delete a specific license type.",
+            description = "Delete a specific license type.",
+            tags = {"Licenses"}
+    )
+    @PreAuthorize("hasAuthority('WRITE')")
+    @RequestMapping(value = LICENSE_TYPES_URL + "/{id}", method = RequestMethod.DELETE)
+    public ResponseEntity deleteLicenseType(
+            @Parameter(description = "The id of the license type.")
+            @PathVariable("id") String id
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        RequestStatus status = licenseService.deleteLicenseType(id, sw360User);
+
+        return ResponseEntity.ok("License type deleted successfully: " + status.name());
     }
 }

@@ -19,7 +19,6 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
-import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 
 import java.util.*;
 import java.util.function.Function;
@@ -95,7 +94,8 @@ public class SW360Constants {
     public static final String PLEASE_ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP = "Please enable flexible project " +
             "release relationship configuration to use this function (enable.flexible.project.release.relationship = true)";
 
-    public static final String RDF_FILE_EXTENSION = ".rdf";
+    public static final String RDF_FILE_EXTENSION = "rdf";
+    public static final String SPDX_FILE_EXTENSION = "spdx";
     public static final String MAIN_LICENSE_FILES = "LICENSE.*|License.*|license|license.txt|license.html|COPYING.*|Copying.*|copying|copying.txt|copying.html";
     public static final String LICENSE_PREFIX = "license";
     public static final String CONCLUDED_LICENSE_IDS = "Concluded License Ids";
@@ -108,26 +108,39 @@ public class SW360Constants {
     public static final String TOTAL_FILE_COUNT = "totalFileCount";
     public static final String SVM_COMPONENT_ID;
     public static final String SVM_MONITORINGLIST_ID;
-    public static final Boolean SPDX_DOCUMENT_ENABLED;
     public static final String MAINLINE_COMPONENT_ID;
     public static final String SVM_COMPONENT_ID_KEY;
     public static final String SVM_SHORT_STATUS;
     public static final String SVM_SHORT_STATUS_KEY;
     public static final String SVM_SCHEDULER_EMAIL;
     public static final String DATA_HANDLER_POM_FILE_PATH;
-    public static final UserGroup PACKAGE_PORTLET_WRITE_ACCESS_USER_ROLE;
-    public static final boolean IS_PACKAGE_PORTLET_ENABLED;
-    public static final String TOOL_NAME;
-    public static final String TOOL_VENDOR;
-    public static final UserGroup SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE;
+    public static final Integer VCS_REDIRECTION_LIMIT;
+    public static final Integer VCS_REDIRECTION_TIMEOUT_LIMIT;
     public static final boolean ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP;
     public static final String URL_FORMATS;
     public static final String SRC_ATTACHMENT_UPLOADER_EMAIL;
     public static final String SRC_ATTACHMENT_DOWNLOAD_LOCATION;
     public static final String PREFERRED_CLEARING_DATE_LIMIT;
-    public static final Boolean MAIL_REQUEST_FOR_PROJECT_REPORT;
-    public static final Boolean MAIL_REQUEST_FOR_COMPONENT_REPORT;
+    public static final String COMPONENTS = "components";
+    public static final String PROJECTS = "projects";
+    public static final String LICENSES = "licenses";
+    public static final String PROJECT_RELEASE_SPREADSHEET_WITH_ECCINFO = "projectReleaseSpreadSheetWithEcc";
+    public static final String IMPORT_DEPARTMENT_MANUALLY = "importdepartmentmanually";
+    public static final String ADD_LIST_EMAIL = "listEmail";
+    public static final String DEPARTMENT_KEY = "departmentKey";
+    public static final String DELETE_LIST_EMAIL = "deleteEmail";
+    public static final String SBOM = "sbom";
 
+    public static final String IMPORT_DEPARTMENT_LAST_RUNNING_TIME = "lastRunningTime";
+    public static final String IMPORT_DEPARTMENT_NEXT_RUNNING_TIME = "nextRunningTime";
+    public static final String IMPORT_DEPARTMENT_FOLDER_PATH = "folderPath";
+    public static final String IMPORT_DEPARTMENT_INTERVAL = "interval";
+    public static final String IMPORT_DEPARTMENT_IS_SCHEDULED = "isSchedulerStarted";
+    public static final String DEFAULT_ATTACHMENT_LOCATION = "/opt/sw360tempattachments";
+    public static final int DEFAULT_ATTACHMENT_DELETE_NO_DAY = 30;
+    public static final String DEFAULT_SBOM_TOOL_NAME = "SW360";
+    public static final String DEFAULT_SBOM_TOOL_VENDOR = "Eclipse Foundation";
+    public static final String DEFAULT_DOMAIN_PATTERN_SKIP_FOR_SOURCECODE ="(?i)\\btrusted\\.(com|de|net)\\b" ;
     /**
      * Hashmap containing the name field for each type.
      * Used by the search service to fill the search results
@@ -151,6 +164,8 @@ public class SW360Constants {
             AttachmentType.COMPONENT_LICENSE_INFO_COMBINED, AttachmentType.INITIAL_SCAN_REPORT);
     public static final Collection<AttachmentType> SOURCE_CODE_ATTACHMENT_TYPES = Arrays.asList(AttachmentType.SOURCE, AttachmentType.SOURCE_SELF);
     public static final String CONTENT_TYPE_OPENXML_SPREADSHEET = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public static final String CONTENT_TYPE_XML = "application/xml";
+    public static final String CONTENT_TYPE_JSON = "application/json";
 
     public static final String NOTIFICATION_CLASS_RELEASE = "release";
     public static final String NOTIFICATION_CLASS_MODERATION_REQUEST = "moderation";
@@ -197,6 +212,7 @@ public class SW360Constants {
             .flatMap(Function.identity())
             .collect(Collectors.toList());
 
+
     static final Map<String, Boolean> DEFAULT_NOTIFICATION_PREFERENCES = NOTIFICATION_EVENTS_KEYS.stream().collect(Collectors.toMap(s -> s, s -> Boolean.FALSE));
 
     public static Collection<AttachmentType> allowedAttachmentTypes(String documentType) {
@@ -222,21 +238,15 @@ public class SW360Constants {
         SVM_SHORT_STATUS_KEY = props.getProperty("svm.short.status.key", "");
         SVM_SCHEDULER_EMAIL = props.getProperty("svm.scheduler.email", "");
         SVM_MONITORINGLIST_ID = props.getProperty("svm.monitoringlist.id", "");
-        SPDX_DOCUMENT_ENABLED = Boolean.parseBoolean(props.getProperty("spdx.document.enabled", "false"));
         DATA_HANDLER_POM_FILE_PATH = props.getProperty("datahandler.pom.file.path", "/META-INF/maven/org.eclipse.sw360/datahandler/pom.xml");
-        PACKAGE_PORTLET_WRITE_ACCESS_USER_ROLE = UserGroup.valueOf(props.getProperty("package.portlet.write.access.usergroup", UserGroup.USER.name()));
-        IS_PACKAGE_PORTLET_ENABLED = Boolean.parseBoolean(props.getProperty("package.portlet.enabled", "true"));
-        TOOL_NAME = props.getProperty("sw360.tool.name", "SW360");
-        TOOL_VENDOR = props.getProperty("sw360.tool.vendor", "Eclipse Foundation");
-        SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE = UserGroup.valueOf(props.getProperty("sbom.import.export.access.usergroup", UserGroup.USER.name()));
+        VCS_REDIRECTION_LIMIT = Integer.parseInt(props.getProperty("vcs.redirection.limit","5"));
+        VCS_REDIRECTION_TIMEOUT_LIMIT = Integer.parseInt(props.getProperty("vcs.redirection.timeout.limit","5000"));
         ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP = Boolean.parseBoolean(
                 System.getProperty("RunTestFlexibleRelationship", props.getProperty("enable.flexible.project.release.relationship", "false")));
         URL_FORMATS = props.getProperty("source.download.formats","");
         SRC_ATTACHMENT_UPLOADER_EMAIL = props.getProperty("source.code.attachment.uploader.email", "");
         SRC_ATTACHMENT_DOWNLOAD_LOCATION = props.getProperty("src.attachment.download.location", "");
         PREFERRED_CLEARING_DATE_LIMIT =  props.getProperty("preferred.clearing.date.limit","");
-        MAIL_REQUEST_FOR_PROJECT_REPORT = Boolean.parseBoolean(props.getProperty("send.project.spreadsheet.export.to.mail.enabled", "false"));
-        MAIL_REQUEST_FOR_COMPONENT_REPORT = Boolean.parseBoolean(props.getProperty("send.component.spreadsheet.export.to.mail.enabled", "false"));
     }
 
     private static Map.Entry<String, String> pair(TFieldIdEnum field, String displayName){
