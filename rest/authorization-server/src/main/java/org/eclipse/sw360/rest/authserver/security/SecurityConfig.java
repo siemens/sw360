@@ -68,7 +68,11 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e.authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")))
                 .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher))
                 .getConfigurer(OAuth2AuthorizationServerConfigurer.class).oidc(Customizer.withDefaults());
-
+        
+        OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(httpSecurity);
+        httpSecurity.getConfigurer(OAuth2AuthorizationServerConfigurer.class).oidc(Customizer.withDefaults());
+        httpSecurity.exceptionHandling(e -> e.authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/login")));
+        httpSecurity.logout(Customizer.withDefaults());
         return httpSecurity.build();
     }
 
