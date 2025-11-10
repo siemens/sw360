@@ -100,7 +100,7 @@ public class ComponentSearchHandler {
 
     public Map<PaginationData, List<Component>> searchAccessibleComponents(String text, final Map<String,
             Set<String>> subQueryRestrictions, User user, @Nonnull PaginationData pageData) {
-        String sortColumn = getSortColumnName(pageData);
+        List<String> sortColumn = getSortColumnName(pageData);
         Map<PaginationData, List<Component>> resultComponentList = connector
                 .searchViewWithRestrictions(Component.class,
                         luceneSearchView.getIndexName(), text, subQueryRestrictions,
@@ -132,8 +132,8 @@ public class ComponentSearchHandler {
      * @param pageData Pagination Data from the request.
      * @return Sort column name. Defaults to createdOn
      */
-    private static @Nonnull String getSortColumnName(@Nonnull PaginationData pageData) {
-        return switch (ComponentSortColumn.findByValue(pageData.getSortColumnNumber())) {
+    private static @Nonnull List<String> getSortColumnName(@Nonnull PaginationData pageData) {
+        String sortName = switch (ComponentSortColumn.findByValue(pageData.getSortColumnNumber())) {
             case ComponentSortColumn.BY_NAME -> "name_sort";
             case ComponentSortColumn.BY_VENDOR -> "vendorNames_sort";
             case ComponentSortColumn.BY_MAINLICENSE -> "mainLicenseIds_sort";
@@ -141,5 +141,6 @@ public class ComponentSearchHandler {
             case null -> "createdOn";
             default -> "createdOn";
         };
+        return List.of(sortName);
     }
 }

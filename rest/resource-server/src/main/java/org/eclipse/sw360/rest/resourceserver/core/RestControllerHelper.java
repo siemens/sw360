@@ -98,7 +98,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -230,6 +229,18 @@ public class RestControllerHelper<T> {
                 paginationOptions, totalCount);
     }
 
+    public PaginationResult<T> paginationResultFromPaginatedListNoSort(
+            HttpServletRequest request, Pageable pageable, List<T> resources, int totalCount
+    ) throws PaginationParameterException {
+        if (!requestContainsPaging(request)) {
+            request.setAttribute(PAGINATION_PARAM_PAGE, pageable.getPageNumber());
+            request.setAttribute(PAGINATION_PARAM_PAGE_ENTRIES, pageable.getPageSize());
+        }
+        PaginationOptions<T> paginationOptions = paginationOptionsFromPageableNoSort(pageable);
+        return resourceListController.getPaginationResultFromPaginatedList(resources,
+                paginationOptions, totalCount);
+    }
+
     private boolean requestContainsPaging(HttpServletRequest request) {
         return request.getParameterMap().containsKey(PAGINATION_PARAM_PAGE) || request.getParameterMap().containsKey(PAGINATION_PARAM_PAGE_ENTRIES);
     }
@@ -293,6 +304,10 @@ public class RestControllerHelper<T> {
     private PaginationOptions<T> paginationOptionsFromPageable(Pageable pageable, String resourceClassName) throws ResourceClassNotFoundException {
         Comparator<T> comparator = this.comparatorFromPageable(pageable, resourceClassName);
         return new PaginationOptions<>(pageable.getPageNumber(), pageable.getPageSize(), comparator);
+    }
+
+    private PaginationOptions<T> paginationOptionsFromPageableNoSort(Pageable pageable) {
+        return new PaginationOptions<>(pageable.getPageNumber(), pageable.getPageSize(), null);
     }
 
     private Comparator<T> comparatorFromPageable(Pageable pageable,  String resourceClassName) throws ResourceClassNotFoundException {

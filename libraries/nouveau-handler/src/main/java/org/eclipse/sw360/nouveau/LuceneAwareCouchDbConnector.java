@@ -15,6 +15,7 @@ import com.ibm.cloud.cloudant.common.SdkCommon;
 import com.ibm.cloud.cloudant.v1.Cloudant;
 import com.ibm.cloud.cloudant.v1.model.DocumentResult;
 import com.ibm.cloud.cloudant.v1.model.PutDesignDocumentOptions;
+import com.ibm.cloud.sdk.core.http.HttpMediaType;
 import com.ibm.cloud.sdk.core.http.RequestBuilder;
 import com.ibm.cloud.sdk.core.http.ResponseConverter;
 import com.ibm.cloud.sdk.core.http.ServiceCall;
@@ -82,10 +83,10 @@ public class LuceneAwareCouchDbConnector {
                 builder.header(stringStringEntry.getKey(), stringStringEntry.getValue());
             }
 
-            builder.header("Accept", "application/json");
-            builder.header("Content-Type", "application/json");
+            builder.header("Accept", HttpMediaType.APPLICATION_JSON);
+            builder.header("Content-Type", HttpMediaType.APPLICATION_JSON);
 
-            builder.bodyContent(query.buildQuery(this.gson), "application/json");
+            builder.bodyContent(query.buildQuery(this.gson), HttpMediaType.APPLICATION_JSON);
             ResponseConverter<NouveauResult> responseConverter = ResponseConverterUtils.getValue((new TypeToken<NouveauResult>() {
             }).getType());
             return this.createServiceCall(builder.build(), responseConverter);
@@ -108,8 +109,8 @@ public class LuceneAwareCouchDbConnector {
                 builder.header(stringStringEntry.getKey(), stringStringEntry.getValue());
             }
 
-            builder.header("Accept", "application/json");
-            builder.header("Content-Type", "application/json");
+            builder.header("Accept", HttpMediaType.APPLICATION_JSON);
+            builder.header("Content-Type", HttpMediaType.APPLICATION_JSON);
 
             builder.query("latest", String.valueOf(true));
 

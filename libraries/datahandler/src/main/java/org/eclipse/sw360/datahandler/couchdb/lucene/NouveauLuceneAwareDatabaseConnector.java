@@ -123,7 +123,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
      */
     public <T> Map<PaginationData, List<T>> searchView(
             Class<T> type, String indexName, String queryString,
-            PaginationData pageData, String sortColumn, boolean sortAscending
+            PaginationData pageData, List<String> sortColumn, boolean sortAscending
     ) {
         Map<PaginationData, List<String>> idMap = searchIds(type, indexName, queryString,
                 pageData, sortColumn, sortAscending);
@@ -147,7 +147,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
      */
     public <T> Map<PaginationData, List<String>> searchIds(
             Class<T> type, String indexName, String queryString,
-            PaginationData pageData, String sortColumn, boolean sortAscending
+            PaginationData pageData, List<String> sortColumn, boolean sortAscending
     ) {
         NouveauResult queryNouveauResult = searchView(indexName, queryString,
                 false, pageData, sortColumn, sortAscending);
@@ -222,7 +222,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
      * Search with lucene with pagination support
      */
     private @Nullable NouveauResult searchView(String indexName, String queryString, boolean includeDocs,
-                                               PaginationData pageData, String sortColumn,
+                                               PaginationData pageData, List<String> sortColumn,
                                                boolean sortAscending) {
         if (isNullOrEmpty(queryString)) {
             return null;
@@ -246,7 +246,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
     }
 
     private @Nullable NouveauResult callLuceneDirectly(String indexName, String queryString, boolean includeDocs,
-                                                       @NotNull PaginationData pageData, String sortColumn,
+                                                       @NotNull PaginationData pageData, List<String> sortColumn,
                                                        boolean sortAscending) {
         final int limit = pageData.getRowsPerPage() > 0 ? pageData.getRowsPerPage() : DatabaseSettings.LUCENE_SEARCH_LIMIT;
         final int requiredPage = pageData.getDisplayStart() / limit;
@@ -254,7 +254,13 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
         NouveauQuery query = new NouveauQuery(queryString);
         query.setIncludeDocs(includeDocs);
         if (sortColumn != null && !sortColumn.isEmpty()) {
-            query.setSort(sortAscending ? sortColumn : "-" + sortColumn);
+            List<String> sort;
+            if (!sortAscending) {
+                sort = sortColumn.stream().map(s -> "-" + s).toList();
+            } else {
+                sort = new ArrayList<>(sortColumn);
+            }
+            query.setSort(sort);
         } else {
             query.setSort(null);
         }
@@ -332,7 +338,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
     public <T> Map<PaginationData, List<T>> searchViewWithRestrictions(
             Class<T> type, String indexName, String text,
             final @NotNull Map<String, Set<String>> subQueryRestrictions,
-            PaginationData pageData, String sortColumn, boolean sortAscending
+            PaginationData pageData, List<String> sortColumn, boolean sortAscending
     ) {
         String query = convertToRestrictiveQuery(type, text, subQueryRestrictions);
         return searchView(type, indexName, query, pageData, sortColumn, sortAscending);

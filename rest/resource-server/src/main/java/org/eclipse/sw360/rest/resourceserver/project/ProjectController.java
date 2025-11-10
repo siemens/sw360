@@ -345,8 +345,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             sw360Projects.addAll(paginatedProjects.values().iterator().next());
             int totalCount = Math.toIntExact(paginatedProjects.keySet().stream()
                     .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
-            paginationResult = restControllerHelper.paginationResultFromPaginatedList(
-                    request, pageable, sw360Projects, SW360Constants.TYPE_PROJECT, totalCount);
+            paginationResult = restControllerHelper.paginationResultFromPaginatedListNoSort(
+                    request, pageable, sw360Projects, totalCount);
         } else {
             paginationResult = restControllerHelper.createPaginationResult(request, pageable,
                     sw360Projects, SW360Constants.TYPE_PROJECT);

@@ -110,7 +110,7 @@ public class UserSearchHandler {
     }
 
     public Map<PaginationData, List<User>> search(String text, final Map<String, Set<String>> subQueryRestrictions, @Nonnull PaginationData pageData) {
-        String sortColumn = getSortColumnName(pageData);
+        List<String> sortColumn = getSortColumnName(pageData);
         return connector.searchViewWithRestrictions(User.class,
                 luceneUserSearchView.getIndexName(), text, subQueryRestrictions,
                 pageData, sortColumn, pageData.isAscending());
@@ -122,8 +122,8 @@ public class UserSearchHandler {
      * @param pageData Pagination Data from the request.
      * @return Sort column name. Defaults to givenname_sort
      */
-    private static @Nonnull String getSortColumnName(@Nonnull PaginationData pageData) {
-        return switch (UserSortColumn.findByValue(pageData.getSortColumnNumber())) {
+    private static @Nonnull List<String> getSortColumnName(@Nonnull PaginationData pageData) {
+        String sortName = switch (UserSortColumn.findByValue(pageData.getSortColumnNumber())) {
             case UserSortColumn.BY_LASTNAME -> "lastname_sort";
             case UserSortColumn.BY_EMAIL -> "email_sort";
             case UserSortColumn.BY_STATUS -> "deactivated";
@@ -132,5 +132,6 @@ public class UserSearchHandler {
             case null -> "givenname_sort";
             default -> "givenname_sort";
         };
+        return List.of(sortName);
     }
 }

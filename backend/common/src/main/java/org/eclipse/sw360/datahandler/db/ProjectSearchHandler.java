@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.common.utils.SearchUtils.OBJ_ARRAY_TO_STRING_INDEX;
+import static org.eclipse.sw360.common.utils.SearchUtils.STRING_TO_ASCII_DOUBLE;
 import static org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector.prepareWildcardQuery;
 import static org.eclipse.sw360.nouveau.LuceneAwareCouchDbConnector.DEFAULT_DESIGN_PREFIX;
 
@@ -46,6 +47,7 @@ public class ProjectSearchHandler {
             new NouveauIndexFunction(
                 "function(doc) {" +
                 OBJ_ARRAY_TO_STRING_INDEX +
+                STRING_TO_ASCII_DOUBLE +
                 "    if(!doc.type || doc.type != 'project') return;" +
                 "    if(doc.businessUnit !== undefined && doc.businessUnit != null && doc.businessUnit.length >0) {" +
                 "      index('text', 'businessUnit', doc.businessUnit, {'store': true});" +
@@ -68,6 +70,7 @@ public class ProjectSearchHandler {
                 "    }" +
                 "    if(doc.version !== undefined && doc.version != null && doc.version.length >0) {" +
                 "      index('string', 'version', doc.version, {'store': true});" +
+                "      index('double', 'version_sort', stringToAsciiDouble(doc.version));" +
                 "    }" +
                 "    if(doc.state !== undefined && doc.state != null && doc.state.length >0) {" +
                 "      index('text', 'state', doc.state, {'store': true});" +
@@ -109,7 +112,7 @@ public class ProjectSearchHandler {
     }
 
     public Map<PaginationData, List<Project>> search(String text, final Map<String, Set<String>> subQueryRestrictions, User user, PaginationData pageData) {
-        String sortColumn = getSortColumnName(pageData);
+        List<String> sortColumn = getSortColumnName(pageData);
         Map<PaginationData, List<Project>> resultProjectList = connector
                 .searchViewWithRestrictions(Project.class,
                         luceneSearchView.getIndexName(), text, subQueryRestrictions,
@@ -173,17 +176,17 @@ public class ProjectSearchHandler {
      * @param pageData Pagination Data from the request.
      * @return Sort column name. Defaults to name_sort
      */
-    private static @Nonnull String getSortColumnName(@Nonnull PaginationData pageData) {
+    private static @Nonnull List<String> getSortColumnName(@Nonnull PaginationData pageData) {
         return switch (ProjectSortColumn.findByValue(pageData.getSortColumnNumber())) {
-            case ProjectSortColumn.BY_CREATEDON -> "createdOn";
+            case ProjectSortColumn.BY_CREATEDON -> List.of("createdOn");
 //            case ProjectSortColumn.BY_VENDOR -> "vendor_sort";
 //            case ProjectSortColumn.BY_MAINLICENSE -> "license_sort";
-            case ProjectSortColumn.BY_TYPE -> "projectType_sort";
-            case ProjectSortColumn.BY_DESCRIPTION -> "description_sort";
-            case ProjectSortColumn.BY_RESPONSIBLE -> "projectResponsible_sort";
-            case ProjectSortColumn.BY_STATE -> "state_sort";
-            case null -> "name_sort";
-            default -> "name_sort";
+            case ProjectSortColumn.BY_TYPE -> List.of("projectType_sort");
+            case ProjectSortColumn.BY_DESCRIPTION -> List.of("description_sort");
+            case ProjectSortColumn.BY_RESPONSIBLE -> List.of("projectResponsible_sort");
+            case ProjectSortColumn.BY_STATE -> List.of("state_sort");
+            case null -> List.of("name_sort", "version_sort");
+            default -> List.of("name_sort", "version_sort");
         };
     }
 }

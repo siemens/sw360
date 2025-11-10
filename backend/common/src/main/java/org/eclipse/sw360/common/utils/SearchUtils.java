@@ -64,4 +64,17 @@ public class SearchUtils {
             "      index('string', indexName + '_sort', result.trim());" +
             "    }" +
             "  }";
+
+    /*
+     * This function takes a string and convert it into ascii number.
+     */
+    public static final String STRING_TO_ASCII_DOUBLE = """
+            function stringToAsciiDouble(version) {
+              let asciiValues = [];
+              for (let i = 0; i < version.length; i++) {
+                asciiValues.push(version.charCodeAt(i));
+              }
+              return Number(asciiValues.join(''));
+            }
+            """;
 }
