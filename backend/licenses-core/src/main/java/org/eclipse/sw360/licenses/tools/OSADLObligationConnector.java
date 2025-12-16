@@ -22,6 +22,7 @@ package org.eclipse.sw360.licenses.tools;
 import java.util.*;
 import java.net.*;
 import java.io.*;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
@@ -104,7 +105,9 @@ public class OSADLObligationConnector extends ObligationConnector {
 				continue;
 			}
 			int currentLevel = getLevel(arraylines[i]);
-			String lineWithLevel = "{ 'id': '" + i + "', 'text': '" + arraylines[i].replace("\t","") + "', 'level': '" + currentLevel + "', 'path': '-1'}";
+			// Decode HTML entities from the text before processing
+			String cleanedText = StringEscapeUtils.unescapeHtml4(arraylines[i].replace("\t",""));
+			String lineWithLevel = "{ 'id': '" + i + "', 'text': '" + cleanedText + "', 'level': '" + currentLevel + "', 'path': '-1'}";
 			refinedLines.add(lineWithLevel);
 		}
 		return refinedLines;

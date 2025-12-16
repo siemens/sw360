@@ -12,6 +12,7 @@ package org.eclipse.sw360.licenses.db;
 
 import com.ibm.cloud.cloudant.v1.model.DocumentResult;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.components.summary.SummaryType;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
@@ -1242,9 +1243,9 @@ public class LicenseDatabaseHandler {
         }
         if (jsonArray.getString(0).equals("Obligation")) {
             ObligationElement obligationElement = new ObligationElement();
-            obligationElement.setLangElement(jsonArray.getString(1));
-            obligationElement.setAction(jsonArray.getString(2));
-            obligationElement.setObject(jsonArray.getString(3));
+            obligationElement.setLangElement(StringEscapeUtils.unescapeHtml4(jsonArray.getString(1)));
+            obligationElement.setAction(StringEscapeUtils.unescapeHtml4(jsonArray.getString(2)));
+            obligationElement.setObject(StringEscapeUtils.unescapeHtml4(jsonArray.getString(3)));
             if (jsonArray.getString(4).equals(ObligationElementStatus.UNDEFINED.toString())) {
                 obligationElement.setStatus(ObligationElementStatus.UNDEFINED);
             } else {
@@ -1257,8 +1258,8 @@ public class LicenseDatabaseHandler {
             return addObligationNodes(obligationNode, user);
         } else {
             ObligationNode obligationNode = new ObligationNode();
-            obligationNode.setNodeType(jsonArray.getString(0));
-            obligationNode.setNodeText(jsonArray.getString(1));
+            obligationNode.setNodeType(StringEscapeUtils.unescapeHtml4(jsonArray.getString(0)));
+            obligationNode.setNodeText(StringEscapeUtils.unescapeHtml4(jsonArray.getString(1)));
             return addObligationNodes(obligationNode, user);
         }
     }
@@ -1287,9 +1288,16 @@ public class LicenseDatabaseHandler {
             if (!obligationNode.getNodeType().equals("ROOT")) {
                 if (obligationNode.getNodeType().equals("Obligation")) {
                     ObligationElement obligationElement = getObligationElementById(obligationNode.getOblElementId());
-                    obligationTextNode = prefix.toString() + obligationElement.getLangElement() + " " + obligationElement.getAction() + " " + obligationElement.getObject();
+                    // Decode HTML entities from obligation elements
+                    String langElement = StringEscapeUtils.unescapeHtml4(obligationElement.getLangElement());
+                    String action = StringEscapeUtils.unescapeHtml4(obligationElement.getAction());
+                    String object = StringEscapeUtils.unescapeHtml4(obligationElement.getObject());
+                    obligationTextNode = prefix.toString() + langElement + " " + action + " " + object;
                 } else {
-                    obligationTextNode = prefix.toString() + obligationNode.getNodeType() +" "+ obligationNode.getNodeText();
+                    // Decode HTML entities from node text
+                    String nodeType = StringEscapeUtils.unescapeHtml4(obligationNode.getNodeType());
+                    String nodeText = StringEscapeUtils.unescapeHtml4(obligationNode.getNodeText());
+                    obligationTextNode = prefix.toString() + nodeType +" "+ nodeText;
                 }
                 obligationText = obligationText + "\n" + obligationTextNode;
             }
@@ -1303,7 +1311,9 @@ public class LicenseDatabaseHandler {
                 buildObligationText(contactObject, level+1);
             }
         }
-        return obligationText.replaceFirst("\n","");
+        // Final decode of the complete obligation text to catch any remaining HTML entities
+        String finalText = obligationText.replaceFirst("\n","");
+        return StringEscapeUtils.unescapeHtml4(finalText);
     }
 
     public List<LicenseType> searchByLicenseType(String licenseType) {

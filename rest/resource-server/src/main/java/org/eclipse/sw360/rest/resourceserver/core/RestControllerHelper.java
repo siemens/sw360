@@ -13,6 +13,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TBase;
@@ -1089,12 +1090,21 @@ public class RestControllerHelper<T> {
 
     public Obligation convertToEmbeddedObligation(Obligation obligation) {
         Obligation embeddedObligation = new Obligation();
-        embeddedObligation.setTitle(obligation.getTitle());
+        String title = obligation.getTitle();
+        String text = obligation.getText();
+        if (title != null) {
+            title = StringEscapeUtils.unescapeHtml4(title);
+        }
+        if (text != null) {
+            text = StringEscapeUtils.unescapeHtml4(text);
+        }
+
+        embeddedObligation.setTitle(title);
+        embeddedObligation.setText(text);
         embeddedObligation.setObligationType(obligation.getObligationType());
         embeddedObligation.setObligationLevel(obligation.getObligationLevel());
         embeddedObligation.setId(obligation.getId());
         embeddedObligation.setWhitelist(obligation.getWhitelist());
-        embeddedObligation.setText(obligation.getText());
         embeddedObligation.setType(null);
         return embeddedObligation;
     }

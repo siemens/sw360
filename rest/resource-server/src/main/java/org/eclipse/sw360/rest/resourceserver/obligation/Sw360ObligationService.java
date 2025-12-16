@@ -23,11 +23,14 @@ import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
+import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -39,7 +42,10 @@ public class Sw360ObligationService {
     public List<Obligation> getObligations() {
         try {
             LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
-            return sw360LicenseClient.getObligations();
+            List<Obligation> obligations = sw360LicenseClient.getObligations();
+            // Decode HTML entities when retrieving obligations
+            obligations.forEach(this::decodeHtmlEntities);
+            return obligations;
         } catch (TException e) {
             throw new RuntimeException(e);
         }
@@ -48,7 +54,10 @@ public class Sw360ObligationService {
     public Obligation getObligationById(String obligationId) {
         try {
             LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
-            return sw360LicenseClient.getObligationsById(obligationId);
+            Obligation obligation = sw360LicenseClient.getObligationsById(obligationId);
+            // Decode HTML entities when retrieving obligation
+            decodeHtmlEntities(obligation);
+            return obligation;
         } catch (TException e) {
             throw new RuntimeException(e);
         }
@@ -56,6 +65,14 @@ public class Sw360ObligationService {
 
     public Obligation createObligation(Obligation obligation, User sw360User) {
         try {
+            // Decode HTML entities from text and title before processing
+            if (obligation.getText() != null) {
+                obligation.setText(StringEscapeUtils.unescapeHtml4(obligation.getText()));
+            }
+            if (obligation.getTitle() != null) {
+                obligation.setTitle(StringEscapeUtils.unescapeHtml4(obligation.getTitle()));
+            }
+            
             if (obligation.getTitle() != null && !obligation.getTitle().trim().isEmpty()
             && obligation.getText() != null && !obligation.getText().trim().isEmpty()
             && obligation.getObligationLevel() != null) {
@@ -86,6 +103,14 @@ public class Sw360ObligationService {
         if (CommonUtils.isNotNullEmptyOrWhitespace(obligation.getTitle())
                 || CommonUtils.isNotNullEmptyOrWhitespace(obligation.getText())) {
             try {
+                // Decode HTML entities from text and title before updating
+                if (obligation.getText() != null) {
+                    obligation.setText(StringEscapeUtils.unescapeHtml4(obligation.getText()));
+                }
+                if (obligation.getTitle() != null) {
+                    obligation.setTitle(StringEscapeUtils.unescapeHtml4(obligation.getTitle()));
+                }
+                
                 LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
                 sw360LicenseClient.updateObligation(obligation, sw360User);
                 return obligation;
@@ -94,6 +119,33 @@ public class Sw360ObligationService {
             }
         } else {
             throw new BadRequestClientException("Obligation Title, Text are required. Obligation Title, Text cannot contain only space character.");
+        }
+    }
+
+    /**
+     * Helper method to decode HTML entities from obligation text and title.
+     * Only performs HTML entity decoding, preserves all user content exactly as entered.
+     */
+    private void decodeHtmlEntities(Obligation obligation) {
+        if (obligation != null) {
+            if (obligation.getText() != null) {
+                // Only decode HTML entities, preserve all user content
+                if (obligation.getText().contains("&#34;") || obligation.getText().contains("&quot;") || 
+                    obligation.getText().contains("&lt;") || obligation.getText().contains("&gt;") || 
+                    obligation.getText().contains("&amp;")) {
+                    String decodedText = StringEscapeUtils.unescapeHtml4(obligation.getText());
+                    obligation.setText(decodedText);
+                }
+            }
+            if (obligation.getTitle() != null) {
+                // Only decode HTML entities in title
+                if (obligation.getTitle().contains("&#34;") || obligation.getTitle().contains("&quot;") || 
+                    obligation.getTitle().contains("&lt;") || obligation.getTitle().contains("&gt;") || 
+                    obligation.getTitle().contains("&amp;")) {
+                    String decodedTitle = StringEscapeUtils.unescapeHtml4(obligation.getTitle());
+                    obligation.setTitle(decodedTitle);
+                }
+            }
         }
     }
 

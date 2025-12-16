@@ -11,6 +11,7 @@ package org.eclipse.sw360.datahandler.thrift;
 
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
+import org.apache.commons.text.StringEscapeUtils;
 
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.components.*;
@@ -55,6 +56,15 @@ public class ThriftValidate {
         assertNotEmpty(oblig.getText());
         assertNotNull(oblig.getTitle());
         assertNotNull(oblig.getObligationLevel());
+        if (oblig.getText() != null) {
+            String decodedText = StringEscapeUtils.unescapeHtml4(oblig.getText());
+            oblig.setText(decodedText);
+        }
+
+        if (oblig.getTitle() != null) {
+            String decodedTitle = StringEscapeUtils.unescapeHtml4(oblig.getTitle());
+            oblig.setTitle(decodedTitle);
+        }
 
         if (oblig.whitelist == null) {
             oblig.setWhitelist(Collections.emptySet());

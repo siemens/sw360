@@ -34,6 +34,7 @@ import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.MultiStatus;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
@@ -158,6 +159,9 @@ public class ObligationController implements RepresentationModelProcessor<Reposi
             @Parameter(description = "The obligation to be created.")
             @RequestBody Obligation obligation
     ) {
+        // Validate and clean only HTML entities if present
+        validateObligationText(obligation);
+
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         obligation = obligationService.createObligation(obligation, sw360User);
         HalResource<Obligation> halResource = createHalObligation(obligation);
@@ -225,6 +229,8 @@ public class ObligationController implements RepresentationModelProcessor<Reposi
             @Parameter(description = "The obligation details to be updated.")
             @RequestBody Obligation obligation
     ) throws SW360Exception {
+        validateObligationText(obligation);
+
         if (CommonUtils.isNullEmptyOrWhitespace(obligation.getTitle())
                 || CommonUtils.isNullEmptyOrWhitespace(obligation.getText())
         ) {
@@ -257,6 +263,27 @@ public class ObligationController implements RepresentationModelProcessor<Reposi
     public RepositoryLinksResource process(RepositoryLinksResource resource) {
         resource.add(linkTo(ObligationController.class).slash("api" + OBLIGATION_URL).withRel("obligations"));
         return resource;
+    }
+
+    private void validateObligationText(Obligation obligation) {
+        String text = obligation.getText();
+        String title = obligation.getTitle();
+
+        if (text != null) {
+            // Only clean HTML entities, but preserve user content exactly as entered
+            // Do not apply JSON cleaning to user-provided content
+            if (text.contains("&#34;") || text.contains("&quot;") || text.contains("&lt;") || text.contains("&gt;") || text.contains("&amp;")) {
+                log.debug("Decoding HTML entities in obligation text");
+                obligation.setText(StringEscapeUtils.unescapeHtml4(text));
+            }
+        }
+        if (title != null) {
+            // Only clean HTML entities in title
+            if (title.contains("&#34;") || title.contains("&quot;") || title.contains("&lt;") || title.contains("&gt;") || title.contains("&amp;")) {
+                log.debug("Decoding HTML entities in obligation title");
+                obligation.setTitle(StringEscapeUtils.unescapeHtml4(title));
+            }
+        }
     }
 
     private HalResource<Obligation> createHalObligation(Obligation sw360Obligation) {
