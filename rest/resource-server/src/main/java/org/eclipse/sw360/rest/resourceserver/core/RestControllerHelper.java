@@ -21,7 +21,9 @@ import org.apache.thrift.TFieldIdEnum;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationOptions;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
@@ -29,7 +31,6 @@ import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundExceptio
 import org.eclipse.sw360.datahandler.resourcelists.ResourceComparatorGenerator;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceListController;
 import org.eclipse.sw360.datahandler.thrift.Comment;
-import org.eclipse.sw360.datahandler.thrift.ClearingRequestSize;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.Quadratic;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
@@ -46,8 +47,10 @@ import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.ClearingRequest;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectClearingState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectDTO;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectState;
 import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.*;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxdocument.SPDXDocument;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
@@ -56,7 +59,6 @@ import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.*;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentController;
-import org.eclipse.sw360.rest.resourceserver.clearingrequest.Sw360ClearingRequestService;
 import org.eclipse.sw360.rest.resourceserver.component.ComponentController;
 import org.eclipse.sw360.rest.resourceserver.license.LicenseController;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
@@ -65,8 +67,10 @@ import org.eclipse.sw360.rest.resourceserver.moderationrequest.ModerationRequest
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService;
 import org.eclipse.sw360.rest.resourceserver.obligation.Sw360ObligationService;
 import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProject;
+import org.eclipse.sw360.rest.resourceserver.security.basic.Sw360UserDetails;
 import org.jetbrains.annotations.NotNull;
 import org.eclipse.sw360.rest.resourceserver.project.EmbeddedProjectDTO;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.eclipse.sw360.rest.resourceserver.project.ProjectController;
 import org.eclipse.sw360.rest.resourceserver.obligation.ObligationController;
@@ -79,11 +83,9 @@ import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.eclipse.sw360.rest.resourceserver.user.UserController;
 import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
 import org.eclipse.sw360.rest.resourceserver.vendor.VendorController;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
@@ -92,6 +94,7 @@ import org.springframework.hateoas.server.core.EmbeddedWrapper;
 import org.springframework.hateoas.server.core.EmbeddedWrappers;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -113,6 +116,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -123,13 +127,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @Service
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class RestControllerHelper<T> {
 
     @NonNull
@@ -143,9 +146,6 @@ public class RestControllerHelper<T> {
 
     @NonNull
     private final Sw360ObligationService obligationService;
-
-    @NonNull
-    private final Sw360ClearingRequestService clearingRequestService;
 
     @NonNull
     private final ResourceComparatorGenerator<T> resourceComparatorGenerator = new ResourceComparatorGenerator<>();
@@ -167,8 +167,28 @@ public class RestControllerHelper<T> {
 
     @NonNull
     private final com.fasterxml.jackson.databind.Module sw360Module;
-    public static final ImmutableSet<ProjectReleaseRelationship._Fields> SET_OF_PROJECTRELEASERELATION_FIELDS_TO_IGNORE = ImmutableSet
-            .of(ProjectReleaseRelationship._Fields.CREATED_ON, ProjectReleaseRelationship._Fields.CREATED_BY);
+    public static final Set<ProjectReleaseRelationship._Fields> SET_OF_PROJECTRELEASERELATION_FIELDS_TO_IGNORE = EnumSet.of(
+            ProjectReleaseRelationship._Fields.CREATED_ON,
+            ProjectReleaseRelationship._Fields.CREATED_BY
+    );
+    private static final Set<Project._Fields> IMMUTABLE_PROJECT_FIELDS = EnumSet.of(
+            Project._Fields.ID,
+            Project._Fields.TYPE,
+            Project._Fields.CREATED_ON,
+            Project._Fields.CREATED_BY
+    );
+    private static final Set<Component._Fields> IMMUTABLE_COMPONENT_FIELDS = EnumSet.of(
+            Component._Fields.ID,
+            Component._Fields.TYPE,
+            Component._Fields.CREATED_ON,
+            Component._Fields.CREATED_BY
+    );
+    private static final Set<Release._Fields> IMMUTABLE_RELEASE_FIELDS = EnumSet.of(
+            Release._Fields.ID,
+            Release._Fields.TYPE,
+            Release._Fields.CREATED_ON,
+            Release._Fields.CREATED_BY
+    );
     private static final ImmutableMap<Release._Fields,String> mapOfReleaseFieldsTobeEmbedded = ImmutableMap.of(
             Release._Fields.MODERATORS, "sw360:moderators",
             Release._Fields.ATTACHMENTS, "sw360:attachments",
@@ -178,8 +198,18 @@ public class RestControllerHelper<T> {
 
     public User getSw360UserFromAuthentication() {
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null) {
+                throw new AuthenticationServiceException("Could not load user from authentication.");
+            }
+
+            Object authenticationDetails = authentication.getDetails();
+            if (authenticationDetails instanceof User cachedUser) {
+                return cachedUser;
+            }
+
             String userId = null;
-            Object principle = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            Object principle = authentication.getPrincipal();
             if (principle instanceof Jwt jwt) {
                 if (jwt.getClaims().containsKey("resource_access") || !jwt.getClaims().containsKey("user_name")) {
                     userId = jwt.getClaim("email");
@@ -193,11 +223,20 @@ public class RestControllerHelper<T> {
                         return userService.getUserByEmailOrExternalId(userId);
                     }
                 }
+            } else if (principle instanceof Sw360UserDetails sw360UserDetails) {
+                return sw360UserDetails.getSw360User();
+            } else if (principle instanceof User cachedUser) {
+                return cachedUser;
             } else if (principle instanceof String) {
                 userId = principle.toString();
-            } else {
-                org.springframework.security.core.userdetails.User user = (org.springframework.security.core.userdetails.User) principle;
+            } else if (principle instanceof org.springframework.security.core.userdetails.User user) {
                 userId = user.getUsername();
+            } else {
+                throw new AuthenticationServiceException("Could not load user from authentication.");
+            }
+
+            if (isNullEmptyOrWhitespace(userId)) {
+                throw new AuthenticationServiceException("Could not load user from authentication.");
             }
             return userService.getUserByEmailOrExternalId(userId);
         } catch (RuntimeException e) {
@@ -218,7 +257,7 @@ public class RestControllerHelper<T> {
 
     public PaginationResult<T> paginationResultFromPaginatedList(HttpServletRequest request, Pageable pageable,
                                                                  List<T> resources, String resourceType, int totalCount)
-            throws ResourceClassNotFoundException {
+            throws ResourceClassNotFoundException, PaginationParameterException {
         if (!requestContainsPaging(request)) {
             request.setAttribute(PAGINATION_PARAM_PAGE, pageable.getPageNumber());
             request.setAttribute(PAGINATION_PARAM_PAGE_ENTRIES, pageable.getPageSize());
@@ -328,23 +367,32 @@ public class RestControllerHelper<T> {
     }
 
     public User getUserByEmail(String emailId) {
+        if (CommonUtils.isNullEmptyOrWhitespace(emailId)) {
+            LOGGER.debug("Sent empty/null emailId");
+            User sw360User = new User();
+            sw360User.setId(emailId).setEmail(emailId);
+            return sw360User;
+        }
         User sw360User;
         try {
             sw360User = userService.getUserByEmail(emailId);
         } catch (RuntimeException e) {
             sw360User = new User();
             sw360User.setId(emailId).setEmail(emailId);
-            LOGGER.debug("Could not get user object from backend with email: " + emailId);
+            LOGGER.debug("Could not get user object from backend with email: {}", emailId, e);
         }
         return sw360User;
     }
 
     public User getUserByEmailOrNull(String emailId) {
+        if (CommonUtils.isNullEmptyOrWhitespace(emailId)) {
+            return null;
+        }
         User sw360User;
         try {
             sw360User = userService.getUserByEmail(emailId);
         } catch (RuntimeException e) {
-            LOGGER.debug("Could not get user object from backend with email: " + emailId);
+            LOGGER.debug("Could not get user object from backend with email: {}", emailId);
             return null;
         }
         return sw360User;
@@ -423,8 +471,12 @@ public class RestControllerHelper<T> {
             Sw360ReleaseService sw360ReleaseService,
             User user) throws TException {
         for (String releaseId : releases) {
-            final Release release = sw360ReleaseService.getReleaseForUserById(releaseId, user);
-            addEmbeddedRelease(halResource, release);
+            try {
+                final Release release = sw360ReleaseService.getReleaseForUserById(releaseId, user);
+                addEmbeddedRelease(halResource, release);
+            } catch (ResourceNotFoundException e) {
+                LOGGER.warn("Unable to find a release while adding embedded release. ID = {}", releaseId, e);
+            }
         }
     }
 
@@ -471,6 +523,9 @@ public class RestControllerHelper<T> {
     }
 
     public void addEmbeddedUser(HalResource halResource, User user, String relation) {
+        if (user == null) {
+            return;
+        }
         User embeddedUser = convertToEmbeddedUser(user);
         EntityModel<User> embeddedUserResource = EntityModel.of(embeddedUser);
         try {
@@ -548,14 +603,17 @@ public class RestControllerHelper<T> {
     }
 
     public Set<String> getObligationIdsFromRequestWithValueTrue(Map<String, Boolean> reqBodyMaps) {
-        Map<String, Boolean> obligationIdsRequest = reqBodyMaps.entrySet().stream()
-                .filter(reqBodyMap-> reqBodyMap.getValue().equals(true))
-                .collect(Collectors.toMap(reqBodyMap-> reqBodyMap.getKey(),reqBodyMap -> reqBodyMap.getValue()));
-        return obligationIdsRequest.keySet();
+        return reqBodyMaps.entrySet().stream()
+                .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
     }
 
     public boolean checkDuplicateLicense(List<License> licenses, String licenseId) {
-        return licenses.stream().anyMatch(licenseCheck -> licenseCheck.getShortname().equalsIgnoreCase(licenseId));
+        if (licenseId == null) {
+            return true;
+        }
+        return licenses.stream().anyMatch(licenseCheck -> licenseId.equalsIgnoreCase(licenseCheck.getShortname()));
     }
 
     private HalResource<License> addEmbeddedLicense(String licenseId) {
@@ -569,19 +627,15 @@ public class RestControllerHelper<T> {
             Link licenseSelfLink = linkTo(UserController.class)
                     .slash("api" + LicenseController.LICENSES_URL + "/" + licenseById.getId()).withSelfRel();
             halLicense.add(licenseSelfLink);
-            return halLicense;
-        } catch (ResourceNotFoundException rne) {
-            LOGGER.error("cannot create a self link for license with id" + licenseId);
+        } catch (Exception e) {
+            LOGGER.error("cannot create a self link for license with id {}", licenseId);
             embeddedLicense.setShortname(licenseId);
             embeddedLicense.setOSIApproved(Quadratic.NA);
             embeddedLicense.setFSFLibre(Quadratic.NA);
             embeddedLicense.setChecked(false);
             embeddedLicense.setFullname(null);
-            return halLicense;
-        } catch (Exception e) {
-            LOGGER.error("cannot create self link for license with id: " + licenseId);
         }
-        return null;
+        return halLicense;
     }
 
     public LicenseType convertToEmbeddedLicenseType(LicenseType licenseType) {
@@ -663,6 +717,9 @@ public class RestControllerHelper<T> {
     public Project updateProject(Project projectToUpdate, Project requestBodyProject, Map<String, Object> reqBodyMap,
             ImmutableMap<Project._Fields, String> mapOfProjectFieldsToRequestBody) {
         for (Project._Fields field : Project._Fields.values()) {
+            if (IMMUTABLE_PROJECT_FIELDS.contains(field)) {
+                continue;
+            }
             Object fieldValue = requestBodyProject.getFieldValue(field);
             if (fieldValue != null) {
                 String reqBodyStr = field.getFieldName();
@@ -681,6 +738,9 @@ public class RestControllerHelper<T> {
     public Component updateComponent(Component componentToUpdate, ComponentDTO requestBodyComponent) {
         Component component = convertToComponent(requestBodyComponent);
         for(Component._Fields field:Component._Fields.values()) {
+            if (IMMUTABLE_COMPONENT_FIELDS.contains(field)) {
+                continue;
+            }
             Object fieldValue = component.getFieldValue(field);
             if(fieldValue != null) {
                 componentToUpdate.setFieldValue(field, fieldValue);
@@ -770,12 +830,16 @@ public class RestControllerHelper<T> {
         component.setWiki(componentDTO.getWiki());
         component.setBlog(componentDTO.getBlog());
         component.setAttachments(componentDTO.getAttachments());
+        component.setVcs(componentDTO.getVcs());
 
         return component;
     }
 
     public Release updateRelease(Release releaseToUpdate, Release requestBodyRelease) {
         for (Release._Fields field : Release._Fields.values()) {
+            if (IMMUTABLE_RELEASE_FIELDS.contains(field)) {
+                continue;
+            }
             Object fieldValue = requestBodyRelease.getFieldValue(field);
             if (fieldValue != null) {
                 switch (field) {
@@ -805,19 +869,32 @@ public class RestControllerHelper<T> {
     }
 
     private void isLicenseValid(Set<String> licenses) {
-        List <String> licenseIncorrect = new ArrayList<>();
+        List<String> licenseIncorrect = new ArrayList<>();
         if (CommonUtils.isNotEmpty(licenses)) {
             for (String licenseId : licenses) {
                 try {
                     licenseService.getLicenseById(licenseId);
                 } catch (Exception e) {
-                    licenseIncorrect.add(licenseId);
+                    try {
+                        createMissingLicense(licenseId);
+                    } catch (Exception createException) {
+                        licenseIncorrect.add(licenseId);
+                    }
                 }
             }
         }
         if (!licenseIncorrect.isEmpty()) {
-            throw new BadRequestClientException("License with ids " + licenseIncorrect + " does not exist in SW360 database.");
+            throw new BadRequestClientException("License with ids " + licenseIncorrect + " does not exist in SW360 database and could not be created automatically.");
         }
+    }
+
+    private void createMissingLicense(String licenseId) throws Exception {
+        License newLicense = new License();
+        newLicense.setId(licenseId);
+        newLicense.setShortname(licenseId);
+        newLicense.setFullname(licenseId);
+        User user = getSw360UserFromAuthentication();
+        licenseService.createLicense(newLicense, user);
     }
 
     public License mapLicenseRequestToLicense(License licenseRequestBody, License licenseUpdate) {
@@ -841,7 +918,7 @@ public class RestControllerHelper<T> {
         if (CommonUtils.isNotEmpty(obligationIds)) {
             for (String obligationId : obligationIds) {
                 try {
-                    obligationService.getObligationById(obligationId);
+                    obligationService.getObligationById(obligationId, null);
                 } catch (Exception e) {
                     obligationIncorrect.add(obligationId);
                 }
@@ -871,14 +948,19 @@ public class RestControllerHelper<T> {
         embeddedProject.setDescription(project.getDescription());
         embeddedProject.setProjectResponsible(project.getProjectResponsible());
         embeddedProject.setProjectOwner(project.getProjectOwner());
-	embeddedProject.setProjectType(project.getProjectType());
+        embeddedProject.setProjectType(project.getProjectType());
         embeddedProject.setState(project.getState());
         embeddedProject.setClearingState(project.getClearingState());
         embeddedProject.setVersion(project.getVersion());
         embeddedProject.setVisbility(project.getVisbility());
         embeddedProject.setBusinessUnit(project.getBusinessUnit());
         embeddedProject.setEnableSvm(project.isEnableSvm());
+        embeddedProject.setTag(project.getTag());
         embeddedProject.setType(null);
+        embeddedProject.setClearingRequestId(project.getClearingRequestId());
+        if (project.isSetLinkedProjects()) {
+            embeddedProject.setLinkedProjects(project.getLinkedProjects());
+        }
         return embeddedProject;
     }
 
@@ -886,6 +968,8 @@ public class RestControllerHelper<T> {
         Project embeddedProject = new EmbeddedProject();
         embeddedProject.setName(project.getName());
         embeddedProject.setId(project.getId());
+        embeddedProject.setDescription(project.getDescription());
+        embeddedProject.setProjectResponsible(project.getProjectResponsible());
         embeddedProject.setProjectType(project.getProjectType());
         embeddedProject.setState(project.getState());
         embeddedProject.setClearingState(project.getClearingState());
@@ -1003,6 +1087,7 @@ public class RestControllerHelper<T> {
     public License convertToEmbeddedLicense(License license) {
         License embeddedLicense = new License();
         embeddedLicense.setId(license.getId());
+        embeddedLicense.setShortname(license.getShortname());
         embeddedLicense.setFullname(license.getFullname());
         embeddedLicense.setChecked(license.isChecked());
         embeddedLicense.setLicenseType(license.getLicenseType());
@@ -1146,11 +1231,11 @@ public class RestControllerHelper<T> {
                     if (vulnerability.getFieldValue(field) == null) {
                         break;
                     }
-                    if (field.equals(Vulnerability._Fields.CVSS)) {
+                    if (Vulnerability._Fields.CVSS.equals(field)) {
                         vulnerabilityApiDTO.setCvss(String.valueOf(vulnerability.getCvss()));
-                    } else if (field.equals(Vulnerability._Fields.IS_SET_CVSS)) {
+                    } else if (Vulnerability._Fields.IS_SET_CVSS.equals(field)) {
                         vulnerabilityApiDTO.setIsSetCvss(String.valueOf(vulnerability.isIsSetCvss()));
-                    } else if (field.equals(Vulnerability._Fields.CVE_REFERENCES)) {
+                    } else if (Vulnerability._Fields.CVE_REFERENCES.equals(field)) {
                         Set<CVEReference> cveReferences = vulnerability.getCveReferences();
                         if (cveReferences.size() > 0) {
                             vulnerabilityApiDTO.setCveReferences(convertCVEReferenceString(cveReferences));
@@ -1178,7 +1263,7 @@ public class RestControllerHelper<T> {
 
     public boolean setDataForVulnerability(VulnerabilityApiDTO vulnerabilityApiDTO, Vulnerability vulnerability) {
         for (Vulnerability._Fields field : Vulnerability._Fields.values()) {
-            if (field.equals(Vulnerability._Fields.REVISION) || field.equals(Vulnerability._Fields.ID) || field.equals(Vulnerability._Fields.TYPE)) {
+            if (Vulnerability._Fields.REVISION.equals(field) || Vulnerability._Fields.ID.equals(field) || Vulnerability._Fields.TYPE.equals(field)) {
                 continue;
             }
             for (VulnerabilityApiDTO._Fields fieldDTO : VulnerabilityApiDTO._Fields.values()) {
@@ -1186,17 +1271,17 @@ public class RestControllerHelper<T> {
                     if (vulnerabilityApiDTO.getFieldValue(fieldDTO) == null) {
                         break;
                     }
-                    if (fieldDTO.equals(VulnerabilityApiDTO._Fields.CVSS)) {
+                    if (VulnerabilityApiDTO._Fields.CVSS.equals(fieldDTO)) {
                         if (!setDataCVSS(vulnerabilityApiDTO.getCvss(), vulnerability)) {
                             throw new RuntimeException(new SW360Exception("Invalid cvss: property 'cvss' should be a valid cvss.")
                                     .setErrorCode(org.apache.hc.core5.http.HttpStatus.SC_BAD_REQUEST));
                         }
-                    } else if (fieldDTO.equals(VulnerabilityApiDTO._Fields.IS_SET_CVSS)) {
+                    } else if (VulnerabilityApiDTO._Fields.IS_SET_CVSS.equals(fieldDTO)) {
                         if(!setDataIsSetCvss(vulnerabilityApiDTO.getIsSetCvss(), vulnerability)) {
                             throw new RuntimeException(new SW360Exception("Invalid isSetCvss: property 'isSetCvss' should be a valid isSetCvss.")
                                     .setErrorCode(org.apache.hc.core5.http.HttpStatus.SC_BAD_REQUEST));
                         }
-                    } else if (fieldDTO.equals(VulnerabilityApiDTO._Fields.CVE_REFERENCES)) {
+                    } else if (VulnerabilityApiDTO._Fields.CVE_REFERENCES.equals(fieldDTO)) {
                         setDataCveReferences(vulnerabilityApiDTO.getCveReferences(), vulnerability);
                     } else {
                         vulnerability.setFieldValue(field, vulnerabilityApiDTO.getFieldValue(fieldDTO));
@@ -1399,7 +1484,6 @@ public class RestControllerHelper<T> {
         embeddedClearingRequest.setType(null);
         embeddedClearingRequest.setClearingType(clearingRequest.getClearingType());
         embeddedClearingRequest.setTimestamp(clearingRequest.getTimestamp());
-        embeddedClearingRequest.setClearingSize(clearingRequest.getClearingSize());
         return embeddedClearingRequest;
     }
 
@@ -1516,14 +1600,24 @@ public class RestControllerHelper<T> {
         embeddedProject.setVersion(project.getVersion());
         embeddedProject.setVisbility(project.getVisbility());
         embeddedProject.setType(null);
+        embeddedProject.setState(project.getState());
+        embeddedProject.setClearingState(project.getClearingState());
+        embeddedProject.setBusinessUnit(project.getBusinessUnit());
+        embeddedProject.setTag(project.getTag());
+        embeddedProject.setClearingRequestId(project.getClearingRequestId());
         return embeddedProject;
     }
 
     public void addEmbeddedCotsDetails(HalResource halResource, Release release) {
-        if (null != release.getCotsDetails() && release.getComponentType().equals(ComponentType.COTS)) {
+        if (null != release.getCotsDetails() && ComponentType.COTS.equals(release.getComponentType())) {
             HalResource<COTSDetails> cotsDetailsHalResource = new HalResource<>(release.getCotsDetails());
             if (CommonUtils.isNotNullEmptyOrWhitespace(release.getCotsDetails().getCotsResponsible())) {
-                User sw360User = userService.getUserByEmail(release.getCotsDetails().getCotsResponsible());
+                User sw360User;
+                try {
+                    sw360User = userService.getUserByEmail(release.getCotsDetails().getCotsResponsible());
+                } catch (RuntimeException e) {
+                    sw360User = null;
+                }
                 if (null != sw360User) {
                     addEmbeddedUser(cotsDetailsHalResource, sw360User, "sw360:cotsResponsible");
                 }
@@ -1541,17 +1635,15 @@ public class RestControllerHelper<T> {
 
     public void addEmbeddedSecurityResponsibles (HalResource<Project> halResource, Set<String> securityResponsibles) {
         for (String securityResponsible : securityResponsibles) {
+            if (isNullEmptyOrWhitespace(securityResponsible)) {
+                LOGGER.debug("Skipping empty security responsible entry");
+                continue;
+            }
             User sw360User = getUserByEmail(securityResponsible);
             if(sw360User!=null) {
                 addEmbeddedUser(halResource, sw360User, "securityResponsibles");
             }
         }
-    }
-
-    public void addEmbeddedClearingTeam(HalResource<Project> userHalResource, String clearingTeam, String resource) {
-        User sw360User = getUserByEmail(clearingTeam);
-        if(sw360User!=null)
-            addEmbeddedUser(userHalResource, sw360User, resource);
     }
 
     public void addEmbeddedOtherLicenses(HalResource<Release> halRelease, Set<String> licenseIds) {
@@ -1569,9 +1661,21 @@ public class RestControllerHelper<T> {
         halClearingRequest.addEmbeddedResource("requestClosedOn", humanReadableDate);
     }
 
+    @org.springframework.beans.factory.annotation.Value("${sw360.base-url:http://localhost:8080}")
+    private String configuredBaseUrl;
+
+    /**
+     * Returns the configured base URL for generating hyperlinks in emails.
+     * <p>
+     * This method uses a hardcoded configuration value instead of deriving
+     * the URL from the HTTP request to prevent HTTP header injection
+     * attacks via X-Forwarded-Host or similar headers.
+     *
+     * @param request the HTTP request (ignored, kept for API compatibility)
+     * @return the configured base URL
+     */
     public String getBaseUrl(HttpServletRequest request) {
-        String requestURL = request.getRequestURL().toString();
-        return requestURL.substring(0, requestURL.indexOf(request.getRequestURI()));
+        return configuredBaseUrl;
     }
 
     public VulnerabilitySummary convertToEmbeddedVulnerabilitySumm(VulnerabilitySummary sw360Vul) {
@@ -1594,7 +1698,8 @@ public class RestControllerHelper<T> {
     public void addEmbeddedDatesClearingRequest(HalResource<ClearingRequest> halClearingRequest, ClearingRequest clearingRequest, boolean isSingleRequest) {
         halClearingRequest.addEmbeddedResource("createdOn", SW360Utils.convertEpochTimeToDate(clearingRequest.getTimestamp()));
         if (isSingleRequest) {
-            halClearingRequest.addEmbeddedResource("lastUpdatedOn", SW360Utils.convertEpochTimeToDate(clearingRequest.getModifiedOn()));
+            long lastUpdatedOn = clearingRequest.getModifiedOn() > 0 ? clearingRequest.getModifiedOn() : clearingRequest.getTimestamp();
+            halClearingRequest.addEmbeddedResource("lastUpdatedOn", SW360Utils.convertEpochTimeToDate(lastUpdatedOn));
         }
     }
 
@@ -1642,21 +1747,60 @@ public class RestControllerHelper<T> {
         release.unsetAttachments();
         return halRelease;
     }
-    public ClearingRequest updateCRSize(ClearingRequest clearingRequest, Project project, User sw360User) throws TException {
-        int openReleaseCount = SW360Utils.getOpenReleaseCount(project.getReleaseClearingStateSummary());
-        ClearingRequestSize currentSize = SW360Utils.determineCRSize(openReleaseCount);
-        ClearingRequestSize initialSize = clearingRequest.getClearingSize();
-        if(initialSize == null) return clearingRequest;
-        if(!initialSize.equals(ClearingRequestSize.VERY_LARGE)) {
-            int limit = SW360Utils.CLEARING_REQUEST_SIZE_MAP.get(initialSize);
-            if(openReleaseCount > limit){
-                clearingRequestService.updateClearingRequestForChangeInClearingSize(clearingRequest.getId(), currentSize);
-            }
-        }
-        return clearingRequestService.getClearingRequestById(clearingRequest.getId(), sw360User);
-    }
 
     public boolean isWriteActionAllowed(Object object, User user) {
         return makePermission(object, user).isActionAllowed(RequestedAction.WRITE);
+    }
+
+    public void throwIfSecurityUser(User user) {
+        if (PermissionUtils.isSecurityUser(user)) {
+            throw new AccessDeniedException("User is not allowed to access this resource.");
+        }
+    }
+
+    public static void throwIfNotAdmin(User sw360User) throws AccessDeniedException {
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not allowed to access this resource.");
+        }
+    }
+
+    /**
+     * Convert parameters passed to projects endpoint and return it as a filter map for CouchDB.
+     * @return Filter Map based on parameters passed.
+     */
+    public static Map<String, Set<String>> getFilterMapForProject(
+            String tag, String projectType, String group, String version, String projectResponsible,
+            ProjectState projectState, ProjectClearingState projectClearingState, String additionalData,
+            String attachmentAuthor
+    ) {
+        Map<String, Set<String>> filterMap = new HashMap<>();
+        if (CommonUtils.isNotNullEmptyOrWhitespace(tag)) {
+            filterMap.put(Project._Fields.TAG.getFieldName(), CommonUtils.splitToSet(tag));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(projectType)) {
+            filterMap.put(Project._Fields.PROJECT_TYPE.getFieldName(), CommonUtils.splitToSet(projectType));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(group)) {
+            filterMap.put(Project._Fields.BUSINESS_UNIT.getFieldName(), CommonUtils.splitToSet(group));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(version)) {
+            filterMap.put(Project._Fields.VERSION.getFieldName(), CommonUtils.splitToSet(version));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(projectResponsible)) {
+            filterMap.put(Project._Fields.PROJECT_RESPONSIBLE.getFieldName(), CommonUtils.splitToSet(projectResponsible));
+        }
+        if (projectState!=null && CommonUtils.isNotNullEmptyOrWhitespace(projectState.name())) {
+            filterMap.put(Project._Fields.STATE.getFieldName(), CommonUtils.splitToSet(projectState.name()));
+        }
+        if (projectClearingState!=null && CommonUtils.isNotNullEmptyOrWhitespace(projectClearingState.name())) {
+            filterMap.put(Project._Fields.CLEARING_STATE.getFieldName(), CommonUtils.splitToSet(projectClearingState.name()));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(additionalData)) {
+            filterMap.put(Project._Fields.ADDITIONAL_DATA.getFieldName(), CommonUtils.splitToSet(additionalData));
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(attachmentAuthor)) {
+            filterMap.put(SW360Constants.PROJECT_FILTER_KEY_ATTACHMENT_CREATED_BY, Collections.singleton(attachmentAuthor));
+        }
+        return filterMap;
     }
 }

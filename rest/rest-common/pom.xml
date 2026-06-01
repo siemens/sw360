@@ -15,11 +15,15 @@
     <parent>
         <artifactId>rest</artifactId>
         <groupId>org.eclipse.sw360</groupId>
-        <version>19.2.0</version>
+        <version>20.1.0-rc-2</version>
     </parent>
 
     <artifactId>rest-common</artifactId>
     <packaging>jar</packaging>
+
+    <properties>
+        <artifact.deploy.dir>${jars.deploy.dir}</artifact.deploy.dir>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -47,10 +51,32 @@
             <artifactId>encoder</artifactId>
             <version>${org.owasp.encoder.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>compile</scope>
+        </dependency>
 
     </dependencies>
     <build>
-        <finalName>rest-common</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

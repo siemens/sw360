@@ -44,9 +44,11 @@ import java.util.stream.Stream;
 import static org.eclipse.sw360.datahandler.common.DatabaseSettingsTest.COUCH_DB_CONFIG;
 import static org.eclipse.sw360.datahandler.common.DatabaseSettings.getConfiguredClient;
 import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -117,7 +119,7 @@ public class FossologyHandlerLocalhostIntegrationTest {
         RequestStatus actual = uut.setFossologyConfig(newConfig);
 
         // then:
-        assertThat(actual, is(RequestStatus.SUCCESS));
+        assertEquals(RequestStatus.SUCCESS, actual);
     }
 
     @Test
@@ -128,14 +130,14 @@ public class FossologyHandlerLocalhostIntegrationTest {
         ConfigContainer actual = uut.getFossologyConfig();
 
         // then:
-        assertThat(actual, notNullValue(ConfigContainer.class));
-        assertThat(actual.getConfigKeyToValues().keySet(), Matchers.containsInAnyOrder("url", "token", "folderId"));
-        assertThat(actual.getConfigKeyToValues().get("url").size(), is(1));
-        assertThat(actual.getConfigKeyToValues().get("token").size(), is(1));
-        assertThat(actual.getConfigKeyToValues().get("folderId").size(), is(1));
-        assertThat(actual.getConfigKeyToValues().get("url").iterator().next(), is(CONFIG_URL_VALUE));
-        assertThat(actual.getConfigKeyToValues().get("token").iterator().next(), is(CONFIG_TOKEN_VALUE));
-        assertThat(actual.getConfigKeyToValues().get("folderId").iterator().next(), is(CONFIG_FOLDER_ID_VALUE));
+        assertTrue(notNullValue(ConfigContainer.class).matches(actual));
+        assertTrue(Matchers.containsInAnyOrder("url", "token", "folderId").matches(actual.getConfigKeyToValues().keySet()));
+        assertEquals(1, actual.getConfigKeyToValues().get("url").size());
+        assertEquals(1, actual.getConfigKeyToValues().get("token").size());
+        assertEquals(1, actual.getConfigKeyToValues().get("folderId").size());
+        assertEquals(CONFIG_URL_VALUE, actual.getConfigKeyToValues().get("url").iterator().next());
+        assertEquals(CONFIG_TOKEN_VALUE, actual.getConfigKeyToValues().get("token").iterator().next());
+        assertEquals(CONFIG_FOLDER_ID_VALUE, actual.getConfigKeyToValues().get("folderId").iterator().next());
     }
 
     @Test
@@ -146,14 +148,8 @@ public class FossologyHandlerLocalhostIntegrationTest {
         RequestStatus actual = uut.checkConnection();
 
         // then:
-        assertThat(actual, is(RequestStatus.SUCCESS));
+        assertEquals(RequestStatus.SUCCESS, actual);
     }
-
-    // FIXME:
-    // test preconditions in normal test (only mocks needed, no integration):
-    // - more than one fossology process
-    // - more than one source attachment
-    // - new source attachment, different from existing fossology process
 
     private void prepareValidPreconditions(User user) throws FileNotFoundException, TException {
         Attachment sourceAttachment = new Attachment("84", "commons-lang3-3.5-sources.jar");
@@ -185,10 +181,10 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(1));
-        assertThat(actual.getProcessSteps().get(0).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_UPLOAD));
-        assertThat(actual.getProcessSteps().get(0).getStepStatus(), is(ExternalToolProcessStatus.DONE));
-        assertThat(actual.getProcessSteps().get(0).getResult(), not(isEmptyString()));
+        assertEquals(1, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_UPLOAD, actual.getProcessSteps().get(0).getStepName());
+        assertEquals(ExternalToolProcessStatus.DONE, actual.getProcessSteps().get(0).getStepStatus());
+        assertFalse(actual.getProcessSteps().get(0).getResult().isEmpty());
 
         // prepare next test:
         sharedRelease.setExternalToolProcesses(Stream.of(actual).collect(Collectors.toSet()));
@@ -212,9 +208,9 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(2));
-        assertThat(actual.getProcessSteps().get(1).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN));
-        assertThat(actual.getProcessSteps().get(1).getStepStatus(), is(ExternalToolProcessStatus.IN_WORK));
+        assertEquals(2, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN, actual.getProcessSteps().get(1).getStepName());
+        assertEquals(ExternalToolProcessStatus.IN_WORK, actual.getProcessSteps().get(1).getStepStatus());
         assertNull(actual.getProcessSteps().get(1).getResult());
 
         // prepare next test:
@@ -232,9 +228,9 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(2));
-        assertThat(actual.getProcessSteps().get(1).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN));
-        assertThat(actual.getProcessSteps().get(1).getStepStatus(), is(ExternalToolProcessStatus.IN_WORK));
+        assertEquals(2, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN, actual.getProcessSteps().get(1).getStepName());
+        assertEquals(ExternalToolProcessStatus.IN_WORK, actual.getProcessSteps().get(1).getStepStatus());
         assertNull(actual.getProcessSteps().get(1).getResult());
 
         // prepare next test:
@@ -257,10 +253,10 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(2));
-        assertThat(actual.getProcessSteps().get(1).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN));
-        assertThat(actual.getProcessSteps().get(1).getStepStatus(), is(ExternalToolProcessStatus.DONE));
-        assertThat(actual.getProcessSteps().get(1).getResult(), not(isEmptyString()));
+        assertEquals(2, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_SCAN, actual.getProcessSteps().get(1).getStepName());
+        assertEquals(ExternalToolProcessStatus.DONE, actual.getProcessSteps().get(1).getStepStatus());
+        assertFalse(actual.getProcessSteps().get(1).getResult().isEmpty());
 
         // prepare next test:
         sharedRelease.setExternalToolProcesses(Stream.of(actual).collect(Collectors.toSet()));
@@ -277,9 +273,9 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(3));
-        assertThat(actual.getProcessSteps().get(2).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT));
-        assertThat(actual.getProcessSteps().get(2).getStepStatus(), is(ExternalToolProcessStatus.IN_WORK));
+        assertEquals(3, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT, actual.getProcessSteps().get(2).getStepName());
+        assertEquals(ExternalToolProcessStatus.IN_WORK, actual.getProcessSteps().get(2).getStepStatus());
         assertNull(actual.getProcessSteps().get(2).getResult());
 
         // prepare next test:
@@ -297,9 +293,9 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(3));
-        assertThat(actual.getProcessSteps().get(2).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT));
-        assertThat(actual.getProcessSteps().get(2).getStepStatus(), is(ExternalToolProcessStatus.IN_WORK));
+        assertEquals(3, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT, actual.getProcessSteps().get(2).getStepName());
+        assertEquals(ExternalToolProcessStatus.IN_WORK, actual.getProcessSteps().get(2).getStepStatus());
         assertNull(actual.getProcessSteps().get(2).getResult());
 
         // prepare next test:
@@ -331,10 +327,10 @@ public class FossologyHandlerLocalhostIntegrationTest {
 
         // then:
         assertNotNull(actual);
-        assertThat(actual.getProcessSteps(), hasSize(3));
-        assertThat(actual.getProcessSteps().get(2).getStepName(), is(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT));
-        assertThat(actual.getProcessSteps().get(2).getStepStatus(), is(ExternalToolProcessStatus.DONE));
-        assertThat(actual.getProcessSteps().get(2).getResult(), is(attachmentContentId));
+        assertEquals(3, actual.getProcessSteps().size());
+        assertEquals(FossologyUtils.FOSSOLOGY_STEP_NAME_REPORT, actual.getProcessSteps().get(2).getStepName());
+        assertEquals(ExternalToolProcessStatus.DONE, actual.getProcessSteps().get(2).getStepStatus());
+        assertEquals(attachmentContentId, actual.getProcessSteps().get(2).getResult());
 
         verify(attachmentConnector, times(1)).uploadAttachment(any(), any());
 
@@ -342,7 +338,7 @@ public class FossologyHandlerLocalhostIntegrationTest {
                 .filter(a -> attachmentContentId.equals(a.getAttachmentContentId())).collect(Collectors.toList());
         // source attachments has only been mocked in service calls, so only resulting
         // attachment should be here
-        assertThat(actualAttachments, hasSize(1));
-        assertThat(actualAttachments.get(0).getAttachmentType(), is(AttachmentType.COMPONENT_LICENSE_INFO_XML));
+        assertEquals(1, actualAttachments.size());
+        assertEquals(AttachmentType.COMPONENT_LICENSE_INFO_XML, actualAttachments.get(0).getAttachmentType());
     }
 }

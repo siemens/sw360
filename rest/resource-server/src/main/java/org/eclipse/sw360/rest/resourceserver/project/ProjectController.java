@@ -56,17 +56,22 @@ import org.eclipse.sw360.datahandler.thrift.ClearingRequestPriority;
 import org.eclipse.sw360.datahandler.thrift.ClearingRequestState;
 import org.eclipse.sw360.datahandler.thrift.ClearingRequestType;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.ProjectPackageRelationship;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.Source;
+import org.eclipse.sw360.datahandler.thrift.ThriftClients;
+import org.eclipse.sw360.datahandler.thrift.ObligationStatus;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentUsage;
 import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
+import org.eclipse.sw360.datahandler.thrift.attachments.LicenseInfoUsage;
 import org.eclipse.sw360.datahandler.thrift.attachments.UsageData;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
@@ -76,6 +81,8 @@ import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.OutputFormatVariant;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
+import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.projects.ObligationList;
@@ -100,6 +107,7 @@ import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.eclipse.sw360.rest.resourceserver.core.RestExceptionHandler.ErrorMessage;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.licenseinfo.Sw360LicenseInfoService;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService;
@@ -112,7 +120,6 @@ import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.VulnerabilityController;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.json.GsonJsonParser;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
@@ -130,16 +137,17 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.util.FileCopyUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
-import org.eclipse.sw360.datahandler.thrift.attachments.LicenseInfoUsage;
 import org.eclipse.sw360.datahandler.thrift.attachments.SourcePackageUsage;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -166,7 +174,7 @@ import static org.eclipse.sw360.rest.resourceserver.Sw360ResourceServer.REPORT_F
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -177,9 +185,9 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     public static final String PROJECTS_URL = "/projects";
     public static final String SW360_ATTACHMENT_USAGES = "sw360:attachmentUsages";
     private static final Logger log = LogManager.getLogger(ProjectController.class);
+    private static final Gson GSON = new Gson();
     private static final TSerializer THRIFT_JSON_SERIALIZER = getJsonSerializer();
     private static final ImmutableMap<Project._Fields, String> mapOfFieldsTobeEmbedded = ImmutableMap.<Project._Fields, String>builder()
-            .put(Project._Fields.CLEARING_TEAM, "clearingTeam")
             .put(Project._Fields.EXTERNAL_URLS, "externalUrls")
             .put(Project._Fields.MODERATORS, "sw360:moderators")
             .put(Project._Fields.CONTRIBUTORS,"sw360:contributors")
@@ -243,7 +251,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "List all of the service's projects with various filters.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Projects successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No content - no projects found matching the criteria",
+                content = @Content)
+    })
+    @GetMapping(value = PROJECTS_URL)
     public ResponseEntity<CollectionModel<EntityModel<Project>>> getProjectsForUser(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -251,9 +264,11 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "name", required = false) String name,
             @Parameter(description = "The type of the project")
             @RequestParam(value = "type", required = false) String projectType,
-            @Parameter(description = "The group of the project")
+            @Parameter(description = "The group of the project. Use '__EMPTY__' to search for projects with null, " +
+                    "empty, or missing businessUnit.")
             @RequestParam(value = "group", required = false) String group,
-            @Parameter(description = "The tag of the project")
+            @Parameter(description = "The tag of the project. Use '__EMPTY__' to search for projects with null, " +
+                    "empty, or missing tag.")
             @RequestParam(value = "tag", required = false) String tag,
             @Parameter(description = "Flag to get projects with all details.")
             @RequestParam(value = "allDetails", required = false) boolean allDetails,
@@ -267,80 +282,65 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "clearingStatus", required = false) ProjectClearingState projectClearingState,
             @Parameter(description = "The additionalData of the project")
             @RequestParam(value = "additionalData", required = false) String additionalData,
+            @Parameter(description = "Filter by attachment author email (createdBy field of attachments)")
+            @RequestParam(value = "attachmentAuthor", required = false) String attachmentAuthor,
             @Parameter(description = "List project by lucene search")
             @RequestParam(value = "luceneSearch", required = false) boolean luceneSearch,
             HttpServletRequest request
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        boolean isSearchByName = name != null && !name.isEmpty();
         List<Project> sw360Projects = new ArrayList<>();
+        Map<PaginationData, List<Project>> paginatedProjects = null;
 
-        if (luceneSearch) {
-            Map<String, Set<String>> filterMap = getFilterMap(tag, projectType, group, version, projectResponsible, projectState, projectClearingState,
-                    additionalData);
+        Map<String, Set<String>> filterMap = RestControllerHelper.getFilterMapForProject(
+                tag, projectType, group, version, projectResponsible, projectState, projectClearingState, additionalData, attachmentAuthor);
+        if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
+            Set<String> values = Collections.singleton(name);
+            filterMap.put(Project._Fields.NAME.getFieldName(), values);
+        }
 
-            if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
-                Set<String> values = CommonUtils.splitToSet(name);
-                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+        if (luceneSearch && !filterMap.isEmpty()) {
+            if (filterMap.containsKey(Project._Fields.NAME.getFieldName())) {
+                Set<String> values = filterMap.get(Project._Fields.NAME.getFieldName()).stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
                         .collect(Collectors.toSet());
                 filterMap.put(Project._Fields.NAME.getFieldName(), values);
             }
-
-            sw360Projects.addAll(projectService.refineSearch(filterMap, sw360User));
-        } else {
-            if (isSearchByName) {
-                sw360Projects.addAll(projectService.searchProjectByName(name, sw360User));
-            } else {
-                sw360Projects.addAll(projectService.getProjectsSummaryForUserWithoutPagination(sw360User));
+            if (filterMap.containsKey(SW360Constants.PROJECT_FILTER_KEY_ATTACHMENT_CREATED_BY)) {
+                Set<String> values = filterMap.get(SW360Constants.PROJECT_FILTER_KEY_ATTACHMENT_CREATED_BY).stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+                filterMap.put(SW360Constants.PROJECT_FILTER_KEY_ATTACHMENT_CREATED_BY, values);
             }
-            Map<String, Set<String>> restrictions = getFilterMap(tag, projectType, group, version, projectResponsible, projectState, projectClearingState,
-                    additionalData);
-            if (!restrictions.isEmpty()) {
-                sw360Projects = new ArrayList<>(sw360Projects.stream()
-                        .filter(filterProjectMap(restrictions)).toList());
+
+            paginatedProjects = projectService.refineSearch(filterMap, sw360User, pageable);
+        } else {
+            if (filterMap.isEmpty()) {
+                paginatedProjects = projectService.getProjectsForUser(sw360User, pageable);
+            } else {
+                paginatedProjects = projectService.searchAccessibleProjectByExactValues(filterMap, sw360User, pageable);
             }
         }
         return getProjectResponse(pageable, allDetails, request, sw360User,
-                sw360Projects);
-    }
-
-    private Map<String, Set<String>> getFilterMap(String tag, String projectType, String group, String version, String projectResponsible,
-                                                  ProjectState projectState, ProjectClearingState projectClearingState, String additionalData) {
-        Map<String, Set<String>> filterMap = new HashMap<>();
-        if (CommonUtils.isNotNullEmptyOrWhitespace(tag)) {
-            filterMap.put(Project._Fields.TAG.getFieldName(), CommonUtils.splitToSet(tag));
-        }
-        if (CommonUtils.isNotNullEmptyOrWhitespace(projectType)) {
-            filterMap.put(Project._Fields.PROJECT_TYPE.getFieldName(), CommonUtils.splitToSet(projectType));
-        }
-        if (CommonUtils.isNotNullEmptyOrWhitespace(group)) {
-            filterMap.put(Project._Fields.BUSINESS_UNIT.getFieldName(), CommonUtils.splitToSet(group));
-        }
-        if (CommonUtils.isNotNullEmptyOrWhitespace(version)) {
-            filterMap.put(Project._Fields.VERSION.getFieldName(), CommonUtils.splitToSet(version));
-        }
-        if (CommonUtils.isNotNullEmptyOrWhitespace(projectResponsible)) {
-            filterMap.put(Project._Fields.PROJECT_RESPONSIBLE.getFieldName(), CommonUtils.splitToSet(projectResponsible));
-        }
-        if (projectState!=null && CommonUtils.isNotNullEmptyOrWhitespace(projectState.name())) {
-            filterMap.put(Project._Fields.STATE.getFieldName(), CommonUtils.splitToSet(projectState.name()));
-        }
-        if (projectClearingState!=null && CommonUtils.isNotNullEmptyOrWhitespace(projectClearingState.name())) {
-            filterMap.put(Project._Fields.CLEARING_STATE.getFieldName(), CommonUtils.splitToSet(projectClearingState.name()));
-        }
-        if (CommonUtils.isNotNullEmptyOrWhitespace(additionalData)) {
-            filterMap.put(Project._Fields.ADDITIONAL_DATA.getFieldName(), CommonUtils.splitToSet(additionalData));
-        }
-        return filterMap;
+                sw360Projects, paginatedProjects);
     }
 
     @NotNull
     private ResponseEntity<CollectionModel<EntityModel<Project>>> getProjectResponse(
             Pageable pageable, boolean allDetails, HttpServletRequest request, User sw360User,
-            List<Project> sw360Projects
+            List<Project> sw360Projects, Map<PaginationData, List<Project>> paginatedProjects
     ) throws ResourceClassNotFoundException, PaginationParameterException, URISyntaxException {
-        PaginationResult<Project> paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-                sw360Projects, SW360Constants.TYPE_PROJECT);
+        PaginationResult<Project> paginationResult;
+        if (paginatedProjects != null) {
+            sw360Projects.addAll(paginatedProjects.values().iterator().next());
+            int totalCount = Math.toIntExact(paginatedProjects.keySet().stream()
+                    .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+            paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                    request, pageable, sw360Projects, SW360Constants.TYPE_PROJECT, totalCount);
+        } else {
+            paginationResult = restControllerHelper.createPaginationResult(request, pageable,
+                    sw360Projects, SW360Constants.TYPE_PROJECT);
+        }
 
         List<EntityModel<Project>> projectResources = new ArrayList<>();
         Consumer<Project> consumer = p -> {
@@ -357,7 +357,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             projectResources.add(embeddedProjectResource);
         };
 
-        paginationResult.getResources().stream().forEach(consumer);
+        paginationResult.getResources().forEach(consumer);
 
         CollectionModel resources;
         if (projectResources.isEmpty()) {
@@ -374,7 +374,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "List all projects associated to the user.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/myprojects", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Projects successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No content - no projects found for the user",
+                content = @Content)
+    })
+    @GetMapping(value = PROJECTS_URL + "/myprojects")
     public ResponseEntity<CollectionModel<EntityModel<Project>>> getProjectsFilteredForUser(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -424,14 +429,19 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         sw360Projects = projectService.getWithFilledClearingStatus(sw360Projects, clearingState);
 
         return getProjectResponse(pageable, allDetails, request, sw360User,
-                sw360Projects);
+                sw360Projects, null);
     }
 
     @Operation(
             description = "Get all releases of license clearing.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseClearing", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License clearing information successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenseClearing")
     public ResponseEntity<HalResource<Project>> licenseClearing(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
@@ -446,16 +456,17 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     ) throws TException {
 
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
 
         //check the below condition when releaseRelation is not null
-        if (releaseRelation != null) {
+        if (releaseRelation != null && sw360Project.getReleaseIdToUsage() != null) {
             Map<String, ProjectReleaseRelationship> filteredReleaseIdToUsage = sw360Project.getReleaseIdToUsage().entrySet().stream()
-                .filter(entry -> entry.getValue().getReleaseRelation() == releaseRelation)
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    Map.Entry::getValue
-                ));
+                    .filter(entry -> entry.getValue().getReleaseRelation() == releaseRelation)
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            Map.Entry::getValue
+                    ));
             sw360Project.setReleaseIdToUsage(filteredReleaseIdToUsage);
         }
 
@@ -464,20 +475,29 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
         // Extract all release IDs from the provided list
         Set<String> validReleaseIds = releases.stream()
-            .map(Release::getId)
-            .collect(Collectors.toSet());
+                .map(Release::getId)
+                .collect(Collectors.toSet());
 
         // Filter the releaseIdToUsage map
-        Map<String, ProjectReleaseRelationship> filteredReleaseIdData = sw360Project.getReleaseIdToUsage().entrySet().stream()
-            .filter(entry -> validReleaseIds.contains(entry.getKey()))
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                Map.Entry::getValue
-            ));
-        sw360Project.setReleaseIdToUsage(filteredReleaseIdData);
+        if (sw360Project.getReleaseIdToUsage() != null) {
+            Map<String, ProjectReleaseRelationship> filteredReleaseIdData = sw360Project.getReleaseIdToUsage().entrySet().stream()
+                    .filter(entry -> validReleaseIds.contains(entry.getKey()))
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            Map.Entry::getValue
+                    ));
+            sw360Project.setReleaseIdToUsage(filteredReleaseIdData);
+        }
 
+        Map<String, ProjectReleaseRelationship> releaseIdToUsageMap = sw360Project.getReleaseIdToUsage();
         List<EntityModel<Release>> releaseList = releases.stream().map(sw360Release -> wrapTException(() -> {
             final Release embeddedRelease = restControllerHelper.convertToEmbeddedLinkedRelease(sw360Release);
+            if (releaseIdToUsageMap != null) {
+                ProjectReleaseRelationship relationship = releaseIdToUsageMap.get(sw360Release.getId());
+                if (relationship != null) {
+                    embeddedRelease.setProjectMainlineState(relationship.getMainlineState());
+                }
+            }
             final HalResource<Release> releaseResource = restControllerHelper.addEmbeddedReleaseLinks(embeddedRelease);
             return releaseResource;
         })).collect(Collectors.toList());
@@ -490,7 +510,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Project successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}")
     public ResponseEntity<EntityModel<Project>> getProject(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id
@@ -505,7 +530,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get a package with project id.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/packages", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Packages successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/packages")
     public ResponseEntity<List<HalResource<Project>>> getPackagesByProjectId(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id
@@ -514,7 +544,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         List<HalResource<Package>> halPackages = new ArrayList<>();
         if (sw360Project.getPackageIdsSize() > 0) {
-            for (String packageId : sw360Project.getPackageIds()) {
+            for (Map.Entry<String, ProjectPackageRelationship> entry : sw360Project.getPackageIds().entrySet()) {
+                String packageId = entry.getKey();
                 Package sw360Package = packageService.getPackageForUserById(packageId);
                 HalResource<Package> halPackage = createHalPackage(sw360Package, sw360User);
                 halPackages.add(halPackage);
@@ -525,10 +556,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
     private HalResource<Package> createHalPackage(Package sw360Package, User sw360User) throws TException {
         HalResource<Package> halPackage = new HalResource<>(sw360Package);
-        User packageCreator = restControllerHelper.getUserByEmail(sw360Package.getCreatedBy());
         String linkedRelease = sw360Package.getReleaseId();
 
-        restControllerHelper.addEmbeddedUser(halPackage, packageCreator, "createdBy");
+        if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Package.getCreatedBy())) {
+            User packageCreator = restControllerHelper.getUserByEmail(sw360Package.getCreatedBy());
+            restControllerHelper.addEmbeddedUser(halPackage, packageCreator, "createdBy");
+        }
         if (CommonUtils.isNotNullEmptyOrWhitespace(linkedRelease)) {
             Release release = releaseService.getReleaseForUserById(linkedRelease, sw360User);
 
@@ -557,59 +590,72 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get linked projects of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/linkedProjects", method = RequestMethod.GET)
-	public ResponseEntity<CollectionModel<EntityModel>> getLinkedProject(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Linked projects successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No linked projects found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/linkedProjects")
+    public ResponseEntity<CollectionModel<EntityModel>> getLinkedProject(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
-			@Parameter(description = "Project ID", example = "376576")
+            @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
-            @RequestParam(value = "transitive", required = false) String transitive,
+            @RequestParam(value = "transitive", required = false) boolean isTransitive,
             HttpServletRequest request
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
 
-		User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-		Project sw360Proj = projectService.getProjectForUserById(id, sw360User);
-		final Set<String> projectIdsInBranch = new HashSet<>();
-		boolean isTransitive = Boolean.parseBoolean(transitive);
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Project sw360Proj = projectService.getProjectForUserById(id, sw360User);
+        final Set<String> projectIdsInBranch = new HashSet<>();
 
-		Map<String, ProjectProjectRelationship> linkedProjects = sw360Proj.getLinkedProjects();
+        Map<String, ProjectProjectRelationship> linkedProjects = sw360Proj.getLinkedProjects();
         List<String> keys = linkedProjects != null ? new ArrayList<>(linkedProjects.keySet()) : new ArrayList<>();
-		List<Project> projects = keys.stream().map(projId -> wrapTException(() -> {
-			final Project sw360Project = projectService.getProjectForUserById(projId, sw360User);
-			return sw360Project;
-		})).collect(Collectors.toList());
+        List<Project> projects = keys.stream().map(projId -> wrapTException(() -> {
+            final Project sw360Project = projectService.getProjectForUserById(projId, sw360User);
+            return sw360Project;
+        })).collect(Collectors.toList());
 
-		PaginationResult<Project> paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-				projects, SW360Constants.TYPE_PROJECT);
+        PaginationResult<Project> paginationResult = restControllerHelper.createPaginationResult(request, pageable,
+                projects, SW360Constants.TYPE_PROJECT);
 
-		final List<EntityModel<Project>> projectResources = paginationResult.getResources().stream()
-				.map(sw360Project -> wrapTException(() -> {
-					final Project embeddedProject = restControllerHelper.convertToEmbeddedLinkedProject(sw360Project);
-					final HalResource<Project> projectResource = new HalResource<>(embeddedProject);
-					if (isTransitive) {
-					    projectService.addEmbeddedLinkedProject(sw360Project, sw360User, projectResource,
-							projectIdsInBranch);
-					}
-					return projectResource;
-				})).collect(Collectors.toList());
+        final List<EntityModel<Project>> projectResources = paginationResult.getResources().stream()
+                .map(sw360Project -> wrapTException(() -> {
+                    final Project embeddedProject = restControllerHelper.convertToEmbeddedLinkedProject(sw360Project);
+                    final HalResource<Project> projectResource = new HalResource<>(embeddedProject);
+                    if (isTransitive) {
+                        projectService.addEmbeddedLinkedProject(sw360Project, sw360User, projectResource,
+                                projectIdsInBranch);
+                    }
+                    return projectResource;
+                })).collect(Collectors.toList());
 
-		CollectionModel resources;
-		if (projectResources.size() == 0) {
-			resources = restControllerHelper.emptyPageResource(Project.class, paginationResult);
-		} else {
-			resources = restControllerHelper.generatePagesResource(paginationResult, projectResources);
-		}
+        CollectionModel resources;
+        if (projectResources.size() == 0) {
+            resources = restControllerHelper.emptyPageResource(Project.class, paginationResult);
+        } else {
+            resources = restControllerHelper.generatePagesResource(paginationResult, projectResources);
+        }
 
-		HttpStatus status = resources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
-		return new ResponseEntity<>(resources, status);
-	}
+        HttpStatus status = resources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
+        return new ResponseEntity<>(resources, status);
+    }
 
     @Operation(
             description = "Get releases of linked projects of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/linkedProjects/releases", method = RequestMethod.GET)
-	public ResponseEntity<CollectionModel<EntityModel<Release>>> getReleasesOfLinkedProject(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Releases successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No releases found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/linkedProjects/releases")
+    public ResponseEntity<CollectionModel<EntityModel<Release>>> getReleasesOfLinkedProject(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
             HttpServletRequest request,
@@ -635,11 +681,11 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         PaginationResult<Release> paginationResult = restControllerHelper.createPaginationResult(request, pageable, releases, SW360Constants.TYPE_RELEASE);
 
         final List<EntityModel<Release>> releaseResources = paginationResult.getResources().stream()
-            .map(sw360Release -> wrapTException(() -> {
-                final Release embeddedRelease = restControllerHelper.convertToEmbeddedLinkedProjectsReleases(sw360Release);
-                final HalResource<Release> releaseResource = new HalResource<>(embeddedRelease);
-                return releaseResource;
-            })).collect(Collectors.toList());
+                .map(sw360Release -> wrapTException(() -> {
+                    final Release embeddedRelease = restControllerHelper.convertToEmbeddedLinkedProjectsReleases(sw360Release);
+                    final HalResource<Release> releaseResource = new HalResource<>(embeddedRelease);
+                    return releaseResource;
+                })).collect(Collectors.toList());
 
         CollectionModel resources = restControllerHelper.generatePagesResource(paginationResult, releaseResources);;
         HttpStatus status = resources == null ? HttpStatus.NO_CONTENT : HttpStatus.OK;
@@ -671,7 +717,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     )
             }
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}", method = RequestMethod.DELETE)
+    @PreAuthorize("hasAuthority('WRITE')")
+    @DeleteMapping(value = PROJECTS_URL + "/{id}")
     public ResponseEntity deleteProject(
             @Parameter(description = "Project ID")
             @PathVariable("id") String id,
@@ -685,16 +732,61 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         if (!isWriteAllowed && (comment == null || comment.isBlank())) {
             return ResponseEntity.badRequest().body(RESPONSE_BODY_FOR_MODERATION_REQUEST_WITH_COMMIT);
         }
+
+        // Fetch the clearing request before deletion attempt, but do NOT delete it yet.
+        // The CR must only be removed after confirming the project deletion succeeded;
+        // deleting it first and then discovering the project is IN_USE causes permanent
+        // data loss — the project remains but its clearing history is gone.
+        ThriftClients thriftClients = new ThriftClients();
+        ModerationService.Iface moderationClient = thriftClients.makeModerationClient();
+        ClearingRequest clearingRequest = null;
+
+        try {
+            clearingRequest = moderationClient.getClearingRequestByProjectId(id, sw360User);
+        } catch (TException e) {
+            log.info("No clearing request found for project: " + id + " (exception: " + e.getMessage() + ")");
+        }
+
+        // Delete the project first. If this fails the clearing request is left
+        // completely untouched — no data loss.
         RequestStatus requestStatus = projectService.deleteProject(id, sw360User);
-        if (requestStatus == RequestStatus.SUCCESS) {
-            return new ResponseEntity<>(HttpStatus.OK);
-        } else if (requestStatus == RequestStatus.IN_USE) {
+        if (requestStatus == RequestStatus.IN_USE) {
             return new ResponseEntity<>(HttpStatus.CONFLICT);
         } else if (requestStatus == RequestStatus.SENT_TO_MODERATOR) {
             return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
-        } else {
+        } else if (requestStatus != RequestStatus.SUCCESS) {
             throw new SW360Exception("Something went wrong.");
         }
+
+        // Project is gone. Now remove the open clearing request if one existed.
+        // The backend already orphaned it during project cleanup, so deleting by ID
+        // is still safe at this point.
+        if (clearingRequest != null && !isClosedClearingRequest(clearingRequest)) {
+            try {
+                RequestStatus crStatus = moderationClient.deleteClearingRequest(clearingRequest.getId(), sw360User);
+                if (crStatus != RequestStatus.SUCCESS) {
+                    log.warn("Project {} deleted but clearing request {} could not be removed",
+                            id, clearingRequest.getId());
+                    return ResponseEntity.ok()
+                            .body("Project deleted successfully, but the associated clearing request could not be removed.");
+                }
+                log.info("Clearing request {} deleted after project {}", clearingRequest.getId(), id);
+            } catch (TException e) {
+                log.warn("Project {} deleted but clearing request cleanup threw an exception", id, e);
+                return ResponseEntity.ok()
+                        .body("Project deleted successfully, but the associated clearing request could not be removed.");
+            }
+        }
+
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    private boolean isClosedClearingRequest(ClearingRequest clearingRequest) {
+        if (clearingRequest == null) {
+            return true;
+        }
+        ClearingRequestState state = clearingRequest.getClearingState();
+        return state == ClearingRequestState.CLOSED || state == ClearingRequestState.REJECTED;
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
@@ -702,7 +794,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Create a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL, method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Project successfully created"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to create projects",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL)
     public ResponseEntity createProject(
             @Parameter(schema = @Schema(implementation = Project.class))
             @RequestBody Map<String, Object> reqBodyMap
@@ -742,7 +839,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Create a duplicate project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/duplicate/{id}", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Project successfully duplicated"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to duplicate projects",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/duplicate/{id}")
     public ResponseEntity<EntityModel<Project>> createDuplicateProject(
             @Parameter(description = "Project ID to copy.")
             @PathVariable("id") String id,
@@ -783,15 +885,22 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass an array of release ids to be linked as request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/releases", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Releases successfully linked"),
+        @ApiResponse(responseCode = "202", description = "Accepted - linking requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/{id}/releases")
     public ResponseEntity linkReleases(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
             @Parameter(description = "Array of release IDs to be linked.",
                     examples = {
-                            @ExampleObject(value = "[\"3765276512\",\"5578999\",\"3765276513\"]"),
-                            @ExampleObject(value = "[\"/releases/5578999\"]")
-                            // TODO: Add example for MAP value
+                            @ExampleObject(name = "Array of IDs", value = "[\"3765276512\",\"5578999\",\"3765276513\"]"),
+                            @ExampleObject(name = "Array of paths", value = "[\"/releases/5578999\"]"),
+                            @ExampleObject(name = "Map with usage", value = "{\"releaseId1\":{\"releaseRelation\":\"DYNAMICALLY_LINKED\",\"mainlineState\":\"MAINLINE\"},\"releaseId2\":{\"releaseRelation\":\"STATICALLY_LINKED\"}}")
                     }
             )
             @RequestBody Object releasesInRequestBody,
@@ -817,14 +926,21 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass an array of project ids to be linked as request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/linkProjects", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Projects successfully linked"),
+        @ApiResponse(responseCode = "202", description = "Accepted - linking requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/{id}/linkProjects")
     public ResponseEntity linkToProjects(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
             @Parameter(description = "Array of project IDs",
                     examples = {
-                            @ExampleObject(value = "[\"3765276512\",\"5578999\",\"3765276513\"]")
-                            // TODO: Add example for MAP value
+                            @ExampleObject(name = "Array of IDs", value = "[\"3765276512\",\"5578999\",\"3765276513\"]"),
+                            @ExampleObject(name = "Map with relation", value = "{\"projectId1\":\"CONTAINED\",\"projectId2\":\"REFERRED\"}")
                     }
             )
             @RequestBody List<String> projectIdsInRequestBody,
@@ -834,7 +950,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         Project sourceProj = projectService.getProjectForUserById(id, sw360User);
         Map<String, String> responseMap = new HashMap<>();
-        HttpStatus status = null;
+        if (projectIdsInRequestBody == null || projectIdsInRequestBody.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+        HttpStatus status = HttpStatus.OK;
         Set<String> alreadyLinkedIds = new HashSet<>();
         Set<String> idsSentToModerator = new HashSet<>();
         Set<String> idsWithCyclicPath = new HashSet<>();
@@ -866,14 +985,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                         continue;
                     }
 
-                  RequestStatus updatedstatus = projectService.updateProject(proj, sw360User);
-                  if (updatedstatus == RequestStatus.SUCCESS) {
-                      linkedProjectIds.add(projId);
-                  }
+                    RequestStatus updatedstatus = projectService.updateProject(proj, sw360User);
+                    if (updatedstatus == RequestStatus.SUCCESS) {
+                        linkedProjectIds.add(projId);
+                    }
 
-                  if (updatedstatus == RequestStatus.SENT_TO_MODERATOR) {
-                      idsSentToModerator.add(projId);
-                  }
+                    if (updatedstatus == RequestStatus.SENT_TO_MODERATOR) {
+                        idsSentToModerator.add(projId);
+                    }
                 }
             }
 
@@ -917,34 +1036,41 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass an array of release ids or a map of release id to usage to be linked as request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/releases", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Releases successfully updated"),
+        @ApiResponse(responseCode = "202", description = "Accepted - update requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/releases")
     public ResponseEntity patchReleases(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
             @Parameter(description = "Array of release IDs to be linked.",
                     examples = {
-                            @ExampleObject(value = "[\"3765276512\",\"5578999\",\"3765276513\"]"),
-                            @ExampleObject(value = "[\"/releases/5578999\"]")
-                            // TODO: Add example for MAP value
+                            @ExampleObject(name = "Array of IDs", value = "[\"3765276512\",\"5578999\",\"3765276513\"]"),
+                            @ExampleObject(name = "Array of paths", value = "[\"/releases/5578999\"]"),
+                            @ExampleObject(name = "Map with usage", value = "{\"releaseId1\":{\"releaseRelation\":\"DYNAMICALLY_LINKED\",\"mainlineState\":\"MAINLINE\"},\"releaseId2\":{\"releaseRelation\":\"STATICALLY_LINKED\"}}")
                     }
             )
             @RequestBody Object releaseURIs,
             @Parameter(description = "Comment message.")
             @RequestParam(value = "comment", required = false) String comment
-	) throws URISyntaxException, TException {
-		final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-		Project project = projectService.getProjectForUserById(id, sw360User);
-		if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
+    ) throws URISyntaxException, TException {
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Project project = projectService.getProjectForUserById(id, sw360User);
+        if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
             throw new BadRequestClientException(RESPONSE_BODY_FOR_MODERATION_REQUEST_WITH_COMMIT.toString());
-		} else {
-		    sw360User.setCommentMadeDuringModerationRequest(comment);
-			RequestStatus patchReleasesStatus = addOrPatchReleasesToProject(id, releaseURIs, true);
-			if (patchReleasesStatus == RequestStatus.SENT_TO_MODERATOR) {
-				return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
-			}
-			return new ResponseEntity<>(HttpStatus.CREATED);
-		}
-	}
+        } else {
+            sw360User.setCommentMadeDuringModerationRequest(comment);
+            RequestStatus patchReleasesStatus = addOrPatchReleasesToProject(id, releaseURIs, true);
+            if (patchReleasesStatus == RequestStatus.SENT_TO_MODERATOR) {
+                return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+            }
+            return new ResponseEntity<>(HttpStatus.CREATED);
+        }
+    }
 
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
@@ -956,7 +1082,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             },
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/link/packages", method = RequestMethod.PATCH)
+    @PatchMapping(value = PROJECTS_URL + "/{id}/link/packages")
     public ResponseEntity<?> linkPackages(
             @Parameter(description = "Project ID.", example = "376576")
             @PathVariable("id") String id,
@@ -966,23 +1092,23 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestBody Set<String> packagesInRequestBody,
             @Parameter(description = "Comment message.", example = "This is new MR.")
             @RequestParam(value = "comment", required = false) String comment
-	) throws TException {
-		if (!packageService.validatePackageIds(packagesInRequestBody)) {
+    ) throws TException {
+        if (!packageService.validatePackageIds(packagesInRequestBody)) {
             throw new ResourceNotFoundException("Package ID invalid!");
-		}
-		final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-		Project project = projectService.getProjectForUserById(id, sw360User);
-		sw360User.setCommentMadeDuringModerationRequest(comment);
-		if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
+        }
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Project project = projectService.getProjectForUserById(id, sw360User);
+        sw360User.setCommentMadeDuringModerationRequest(comment);
+        if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
             throw new BadRequestClientException(RESPONSE_BODY_FOR_MODERATION_REQUEST_WITH_COMMIT.toString());
-		} else {
-			RequestStatus linkPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, true);
-			if (linkPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
-				return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
-			}
-			return new ResponseEntity<>(HttpStatus.CREATED);
-		}
-	}
+        } else {
+            RequestStatus linkPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, true, comment);
+            if (linkPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
+                return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+            }
+            return new ResponseEntity<>(HttpStatus.CREATED);
+        }
+    }
 
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
@@ -994,7 +1120,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             },
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/unlink/packages", method = RequestMethod.PATCH)
+    @PatchMapping(value = PROJECTS_URL + "/{id}/unlink/packages")
     public ResponseEntity<?> patchPackages(
             @Parameter(description = "Project ID.", example = "376576")
             @PathVariable("id") String id,
@@ -1004,29 +1130,29 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestBody Set<String> packagesInRequestBody,
             @Parameter(description = "Comment message.")
             @RequestParam(value = "comment", required = false) String comment
-	) throws TException {
-		if (!packageService.validatePackageIds(packagesInRequestBody)) {
+    ) throws TException {
+        if (!packageService.validatePackageIds(packagesInRequestBody)) {
             throw new ResourceNotFoundException("Package ID invalid!");
-		}
-		final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-		Project project = projectService.getProjectForUserById(id, sw360User);
-		sw360User.setCommentMadeDuringModerationRequest(comment);
-		if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
+        }
+        final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        Project project = projectService.getProjectForUserById(id, sw360User);
+        sw360User.setCommentMadeDuringModerationRequest(comment);
+        if (!restControllerHelper.isWriteActionAllowed(project, sw360User) && comment == null) {
             throw new BadRequestClientException(RESPONSE_BODY_FOR_MODERATION_REQUEST_WITH_COMMIT.toString());
-		} else {
-			RequestStatus patchPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, false);
-			if (patchPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
-				return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
-			}
-			return new ResponseEntity<>(HttpStatus.CREATED);
-		}
-	}
+        } else {
+            RequestStatus patchPackageStatus = linkOrUnlinkPackages(id, packagesInRequestBody, false, comment);
+            if (patchPackageStatus == RequestStatus.SENT_TO_MODERATOR) {
+                return new ResponseEntity<>(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+            }
+            return new ResponseEntity<>(HttpStatus.CREATED);
+        }
+    }
 
     @Operation(
             description = "Get releases of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/releases", method = RequestMethod.GET)
+    @GetMapping(value = PROJECTS_URL + "/{id}/releases")
     public ResponseEntity<CollectionModel<EntityModel<Release>>> getProjectReleases(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -1075,7 +1201,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get releases of multiple projects.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/releases", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Releases successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No releases found",
+                content = @Content)
+    })
+    @GetMapping(value = PROJECTS_URL + "/releases")
     public ResponseEntity<CollectionModel<EntityModel<Release>>> getProjectsReleases(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -1126,7 +1257,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get all releases with ECC information of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/releases/ecc", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "ECC information successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No ECC information found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/releases/ecc")
     public ResponseEntity<CollectionModel<EntityModel<Release>>> getECCsOfReleases(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -1138,6 +1276,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
 
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         List<Release> releases = new ArrayList<>();
         final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
         for (final String releaseId : releaseIds) {
@@ -1170,7 +1309,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             tags = {"Projects"}
     )
 
-    @RequestMapping(value = PROJECTS_URL + "/{id}/vulnerabilitySummary", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vulnerability summary successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No vulnerability summary found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/vulnerabilitySummary")
     public ResponseEntity<CollectionModel<EntityModel<VulnerabilitySummary>>> getAllVulnerabilities(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -1187,7 +1333,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         String parentProjectKey = sw360Project.getName() + " " + sw360Project.getVersion();
         vulnerabilitiesMap.put(parentProjectKey, parentProjectVulnerabilities);
 
-        if (!sw360Project.getLinkedProjects().isEmpty()) {
+        if (sw360Project.getLinkedProjects() != null && !sw360Project.getLinkedProjects().isEmpty()) {
             for (String linkedProjectId : sw360Project.getLinkedProjects().keySet()) {
                 Project linkedProject = projectService.getProjectForUserById(linkedProjectId, sw360User);
                 List<VulnerabilityDTO> linkedProjectVulnerabilities = vulnerabilityService.getVulnerabilitiesByProjectId(linkedProjectId, sw360User);
@@ -1263,7 +1409,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get vulnerabilities of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/vulnerabilities", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vulnerabilities successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No vulnerabilities found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/vulnerabilities")
     public ResponseEntity<CollectionModel<EntityModel<VulnerabilityDTO>>> getVulnerabilitiesOfReleases(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -1338,7 +1491,16 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Patch vulnerabilities of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/vulnerabilities", method = RequestMethod.PATCH, consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vulnerabilities successfully updated"),
+        @ApiResponse(responseCode = "202", description = "Accepted - update requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "204", description = "No content",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/vulnerabilities", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<CollectionModel<EntityModel<VulnerabilityDTO>>> updateVulnerabilitiesOfReleases(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
@@ -1397,7 +1559,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass a map of release id to usage to be linked as request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/release/{releaseId}", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Release usage successfully updated"),
+        @ApiResponse(responseCode = "202", description = "Accepted - release update requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/release/{releaseId}")
     public ResponseEntity<EntityModel<ProjectReleaseRelationship>> patchProjectReleaseUsage(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
@@ -1482,17 +1651,25 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get license of releases of a single project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenses", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Licenses successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No licenses found",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenses")
     public ResponseEntity<CollectionModel<EntityModel<License>>> getLicensesOfReleases(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project project = projectService.getProjectForUserById(id, sw360User);
         final List<EntityModel<License>> licenseResources = new ArrayList<>();
         final Set<String> allLicenseIds = new HashSet<>();
 
-        final Set<String> releaseIdToUsage = project.getReleaseIdToUsage().keySet();
+        final Set<String> releaseIdToUsage = CommonUtils.nullToEmptyMap(project.getReleaseIdToUsage()).keySet();
         for (final String releaseId : releaseIdToUsage) {
             final Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
             final Set<String> licenseIds = sw360Release.getMainLicenseIds();
@@ -1514,11 +1691,24 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
     @Operation(
             summary = "Download license info for the project.",
-            description = "Set the request parameter `&template=<TEMPLATE_NAME>` for variant `REPORT` to choose " +
-                    "specific template.",
+            description = """
+                    Set the request parameter `&template=<TEMPLATE_NAME>` for variant `REPORT` to choose \
+                    specific template.
+
+                    Combination of `generatorClassName` and `variant` possible are:
+
+                    When `variant` is `DISCLOSURE`, `generatorClassName` can be one of: \
+                    `TextGenerator`, `XhtmlGenerator` or `DISCLOSURE`.
+                    When `variant` is `REPORT`, `generatorClassName` can be one of: \
+                    `DocxGenerator`.""",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseinfo", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License info successfully generated and downloaded"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenseinfo")
     public void downloadLicenseInfo(
             @Parameter(description = "Project ID.", example = "376576")
             @PathVariable("id") String id,
@@ -1538,21 +1728,24 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "includeAllAttachments", required = false ) boolean includeAllAttachments,
             @Parameter(description = "Exclude release version from the license info file")
             @RequestParam(value = "excludeReleaseVersion", required = false, defaultValue = "false") boolean excludeReleaseVersion,
+            @Parameter(description = "Include subprojects")
+            @RequestParam(value = "includeSubprojects", required = false, defaultValue = "true") boolean includeSubprojects,
             HttpServletResponse response
     ) throws TException, IOException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         List<ProjectLink> mappedProjectLinks = new ArrayList<>();
 
         if (includeAllAttachments) {
             mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
-                    projectService.filterAndSortAllAttachments(SW360Constants.INITIAL_LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
+                    projectService.filterAndSortAllAttachments(SW360Constants.INITIAL_LICENSE_INFO_ATTACHMENT_TYPES), true, includeSubprojects, sw360User);
         } else {
             mappedProjectLinks = projectService.createLinkedProjects(sw360Project,
-                projectService.filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES), true, sw360User);
+                    projectService.filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES), true, includeSubprojects, sw360User);
         }
 
-        List<AttachmentUsage> attchmntUsg = attachmentService.getAttachemntUsages(id);
+        List<AttachmentUsage> attchmntUsg = attachmentService.getAttachmentUsages(id);
 
         Map<Source, Set<String>> releaseIdToExcludedLicenses = attchmntUsg.stream()
                 .collect(Collectors.toMap(AttachmentUsage::getOwner,
@@ -1562,7 +1755,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 .collect(Collectors.toMap(AttachmentUsage::getAttachmentContentId, attUsage -> {
                     if (attUsage.isSetUsageData()
                             && attUsage.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO)) {
-                        return Boolean.valueOf(attUsage.getUsageData().getLicenseInfo().isIncludeConcludedLicense());
+                        return attUsage.getUsageData().getLicenseInfo().isIncludeConcludedLicense();
                     }
                     return Boolean.FALSE;
                 }, (li1, li2) -> li1));
@@ -1573,30 +1766,31 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
         mappedProjectLinks.forEach(projectLink -> wrapTException(() ->
                 projectLink.getLinkedReleases().stream().filter(ReleaseLink::isSetAttachments).forEach(releaseLink -> {
-            String releaseLinkId = releaseLink.getId();
-            Set<String> excludedLicenseIds = releaseIdToExcludedLicenses.get(Source.releaseId(releaseLinkId));
+                    String releaseLinkId = releaseLink.getId();
+                    Set<String> excludedLicenseIds = releaseIdToExcludedLicenses.
+                            getOrDefault(Source.releaseId(releaseLinkId),new HashSet<>());
 
-            if (!selectedReleaseAndAttachmentIds.containsKey(releaseLinkId)) {
-                selectedReleaseAndAttachmentIds.put(releaseLinkId, new HashMap<>());
-            }
-            final List<Attachment> attachments = nullToEmptyList(releaseLink.getAttachments());
-            Release release = componentService.getReleaseById(releaseLinkId, sw360User);
-            for (final Attachment attachment : attachments) {
-                String attachemntContentId = attachment.getAttachmentContentId();
-                if (includeAllAttachments) {
-                    selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId,
-                            false);
-                } else {
-                    if (usedAttachmentContentIds.containsKey(attachemntContentId)) {
-                            boolean includeConcludedLicense = usedAttachmentContentIds.get(attachemntContentId);
-                            List<LicenseInfoParsingResult> licenseInfoParsingResult = licenseInfoService
-                                    .getLicenseInfoForAttachment(release, sw360User, attachemntContentId, includeConcludedLicense);
-                            excludedLicensesPerAttachments.put(attachemntContentId, getExcludedLicenses(excludedLicenseIds, licenseInfoParsingResult));
-                            selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId, includeConcludedLicense);
+                    if (!selectedReleaseAndAttachmentIds.containsKey(releaseLinkId)) {
+                        selectedReleaseAndAttachmentIds.put(releaseLinkId, new HashMap<>());
                     }
-                }
-            }
-        })));
+                    final List<Attachment> attachments = nullToEmptyList(releaseLink.getAttachments());
+                    Release release = componentService.getReleaseById(releaseLinkId, sw360User);
+                    for (final Attachment attachment : attachments) {
+                        String attachemntContentId = attachment.getAttachmentContentId();
+                        if (includeAllAttachments) {
+                            selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId,
+                                    false);
+                        } else {
+                            if (usedAttachmentContentIds.containsKey(attachemntContentId)) {
+                                boolean includeConcludedLicense = usedAttachmentContentIds.get(attachemntContentId);
+                                List<LicenseInfoParsingResult> licenseInfoParsingResult = licenseInfoService
+                                        .getLicenseInfoForAttachment(release, sw360User, attachemntContentId, includeConcludedLicense);
+                                excludedLicensesPerAttachments.put(attachemntContentId, getExcludedLicenses(excludedLicenseIds, licenseInfoParsingResult));
+                                selectedReleaseAndAttachmentIds.get(releaseLinkId).put(attachemntContentId, includeConcludedLicense);
+                            }
+                        }
+                    }
+                })));
 
         final String projectName = sw360Project.getName();
         final String projectVersion = sw360Project.getVersion();
@@ -1604,8 +1798,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         String outputGeneratorClassNameWithVariant = generatorClassName+"::"+variant;
         final OutputFormatInfo outputFormatInfo = licenseInfoService.getOutputFormatInfoForGeneratorClass(generatorClassName);
         final String filename = String.format("%s-%s%s-%s.%s", Strings.nullToEmpty(variant).equals("DISCLOSURE") ? "LicenseInfo" : "ProjectClearingReport", projectName,
-			StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
-			outputFormatInfo.getFileExtension());
+                StringUtils.isBlank(projectVersion) ? "" : "-" + projectVersion, timestamp,
+                outputFormatInfo.getFileExtension());
 
         String fileName = "";
         if (CommonUtils.isNotNullEmptyOrWhitespace(template) && CommonUtils.isNotNullEmptyOrWhitespace(REPORT_FILENAME_MAPPING)) {
@@ -1638,12 +1832,18 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get all attachment information of a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/attachments", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Attachments successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/attachments")
     public ResponseEntity<CollectionModel<EntityModel<Attachment>>> getProjectAttachments(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final CollectionModel<EntityModel<Attachment>> resources = attachmentService.getAttachmentResourcesFromList(sw360User, sw360Project.getAttachments(), Source.projectId(id));
         return new ResponseEntity<>(resources, HttpStatus.OK);
@@ -1654,7 +1854,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Update and attachment usage for project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/attachment/{attachmentId}", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Attachment successfully updated"),
+        @ApiResponse(responseCode = "202", description = "Accepted - update requires moderation",
+                content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"message\": \"Moderation request is created\"}"))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/attachment/{attachmentId}")
     public ResponseEntity<EntityModel<Attachment>> patchProjectAttachmentInfo(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
@@ -1689,7 +1896,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             ),
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{projectId}/attachments/{attachmentId}", method = RequestMethod.GET, produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @GetMapping(value = PROJECTS_URL + "/{projectId}/attachments/{attachmentId}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public void downloadAttachmentFromProject(
             @Parameter(description = "Project ID.")
             @PathVariable("projectId") String projectId,
@@ -1698,6 +1905,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             HttpServletResponse response
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project project = projectService.getProjectForUserById(projectId, sw360User);
         this.attachmentService.downloadAttachmentWithContext(project, attachmentId, response, sw360User);
     }
@@ -1709,13 +1917,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             ),
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{projectId}/attachments/clearingReports", method = RequestMethod.GET, produces = "application/zip")
+    @GetMapping(value = PROJECTS_URL + "/{projectId}/attachments/clearingReports", produces = "application/zip")
     public void downloadClearingReports(
             @Parameter(description = "Project ID.")
             @PathVariable("projectId") String projectId,
             HttpServletResponse response
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project project = projectService.getProjectForUserById(projectId, sw360User);
         final String filename = "Clearing-Reports-" + project.getName() + ".zip";
 
@@ -1741,7 +1950,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Update a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = PROJECTS_URL + "/{id}")
     public ResponseEntity<EntityModel<Project>> patchProject(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
@@ -1750,6 +1959,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     ) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
         Project sw360Project = projectService.getProjectForUserById(id, user);
+
         boolean editPermitted = PermissionUtils.checkEditablePermission(sw360Project.getClearingState().name(), user, reqBodyMap, sw360Project);
         if (!editPermitted) {
             log.error("No write permission for project");
@@ -1757,6 +1967,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         }
         Project updateProject = convertToProject(reqBodyMap);
         updateProject.unsetReleaseRelationNetwork();
+        if (updateProject.getAttachments() != null && !updateProject.getAttachments().isEmpty()) {
+            attachmentService.preserveImmutableAttachmentFields(
+                    updateProject.getAttachments(), sw360Project.getAttachments(), user);
+        }
         String comment = (String) reqBodyMap.get("comment");
         user.setCommentMadeDuringModerationRequest(comment);
         if (!restControllerHelper.isWriteActionAllowed(sw360Project, user) && comment == null) {
@@ -1785,7 +1999,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Add attachments to a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{projectId}/attachments", method = RequestMethod.POST, consumes = {"multipart/mixed", "multipart/form-data"})
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Attachments successfully added"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/{projectId}/attachments", consumes = {"multipart/mixed", "multipart/form-data"})
     public ResponseEntity<HalResource> addAttachmentToProject(
             @Parameter(description = "Project ID.")
             @PathVariable("projectId") String projectId,
@@ -1834,6 +2053,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 attachment = attachmentService.uploadAttachment(file, attachment, sw360User);
                 uploadedAttachments.add(attachment);
                 project.addToAttachments(attachment);
+            } catch (ResourceNotFoundException e) {
+                throw e;
+            } catch (AccessDeniedException e) {
+                throw e;
             } catch (Exception e) {
                 log.error("Failed to upload attachment: {}", filename, e);
                 throw new SW360Exception("Failed to upload attachment: " + filename);
@@ -1870,6 +2093,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             }
             return ResponseEntity.ok(halResource);
 
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (BadRequestClientException e) {
+            throw e;
+        } catch (DataIntegrityViolationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error updating project attachments", e);
             throw new SW360Exception("Error updating project attachments");
@@ -1902,7 +2133,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     "values). It's possible to search for projects only by the external id key by leaving the value.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/searchByExternalIds", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Projects successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No content - no projects found matching external IDs",
+                content = @Content)
+    })
+    @GetMapping(value = PROJECTS_URL + "/searchByExternalIds")
     public ResponseEntity searchByExternalIds(
             @Parameter(description = "External ID map for filter.",
                     example = "{\"project-ext\": \"515432\", \"project-ext\": \"7657\", \"portal-id\": \"13319-XX3\"}"
@@ -1918,7 +2154,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get all the projects where the project is used.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/usedBy/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Projects successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No content - no projects found using this project",
+                content = @Content)
+    })
+    @GetMapping(value = PROJECTS_URL + "/usedBy/{id}")
     public ResponseEntity<CollectionModel<EntityModel<Project>>> getUsedByProjectDetails(
             @Parameter(description = "Project ID to search.")
             @PathVariable("id") String id
@@ -1937,10 +2178,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         return new ResponseEntity<>(resources, status);
     }
 
+
+
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
-            summary = "Save attachment usages",
-			description = "Pass an array of string in request body.",
+            summary = "Save attachment usages and ignored licenses",
+            description = "Pass an array of string in request body along with optional ignored license data.",
             tags = {"Projects"}
     )
     @ApiResponses(value = {
@@ -1978,11 +2221,18 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     }
             )
     })
-    @RequestMapping(value = PROJECTS_URL + "/{id}/saveAttachmentUsages", method = RequestMethod.POST)
+    @PostMapping(value = PROJECTS_URL + "/{id}/saveAttachmentUsages")
     public ResponseEntity<?> saveAttachmentUsages(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
-			@Parameter(description = "Map of key-value pairs where each key is associated with a list of strings.",
+            @Parameter(
+                    description = "Map of key-value pairs where keys are one of `selected`, `deselected`, " +
+                            "`selectedConcludedUsages`, `deselectedConcludedUsages`, or `ignoredLicenses`. The values are list of strings " +
+                            "in format `<release_id>_<usage_type>_<attachment_content_id>`. If the usage is of type " +
+                            "`licenseInfo`, you need to prepend `projectPath` with a `-`. For `ignoredLicenses`, " +
+                            "provide a map with `<project_path>-<release_id>_<attachment_content_id>` as keys and an array of license IDs as values. " +
+                            "The project path supports hierarchy using colon separator (e.g., `parent:child:grandchild`). " +
+                            "If the project path doesn't start with the parent project ID (from URL path), it will be automatically prepended.",
                     schema = @Schema(
                             example = """
                             {
@@ -1993,20 +2243,26 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                                     "de213309ba0842ac8a7251bf27ea8f36_manuallySet_eec66c3465f64f0292dfc2564215c681", "value2"
                                 ],
                                 "selectedConcludedUsages": [
-                                    "de213309ba0842ac8a7251bf27ea8f36_licenseInfo_eec66c3465f64f0292dfc2564215c681", "value2"
+                                    "<project_id>-de213309ba0842ac8a7251bf27ea8f36_licenseInfo_eec66c3465f64f0292dfc2564215c681",
+                                    "<parent_proj>:<sub_proj>:<sub_sub_proj>-<release_id>_licenseInfo_<attachment_content_id>",
+                                    "value3"
                                 ],
                                 "deselectedConcludedUsages": [
-                                    "ade213309ba0842ac8a7251bf27ea8f36_licenseInfo_aeec66c3465f64f0292dfc2564215c681", "value2"
-                                ]
+                                    "b43a13409ba08b1ac8a7471bf27eb1f3c-ade213309ba0842ac8a7251bf27ea8f36_licenseInfo_aeec66c3465f64f0292dfc2564215c681", "value2"
+                                ],
+                                "ignoredLicenses": {
+                                    "<project_id>-<release_id>_<attachment_content_id>": ["MIT", "Apache-2.0"],
+                                    "<project_id>:<sub_proj>:<sub_sub_proj>-<release_id>_<attachment_content_id>": ["GPL-2.0"]
+                                }
                             }
                             """
                     )
             )
-			@RequestBody Map<String, List<String>> allUsages
+            @RequestBody Map<String, Object> allUsages
     ) throws TException {
         final User user = restControllerHelper.getSw360UserFromAuthentication();
-	    final Project project = projectService.getProjectForUserById(id, user);
-	    try {
+        final Project project = projectService.getProjectForUserById(id, user);
+        try {
             if (PermissionUtils.makePermission(project, user).isActionAllowed(RequestedAction.WRITE)) {
                 Source usedBy = Source.projectId(id);
                 List<String> selectedUsages = new ArrayList<>();
@@ -2014,24 +2270,45 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 List<String> selectedConcludedUsages = new ArrayList<>();
                 List<String> deselectedConcludedUsages = new ArrayList<>();
                 List<String> changedUsages = new ArrayList<>();
-                for (Map.Entry<String, List<String>> entry : allUsages.entrySet()) {
+                Map<String, List<String>> ignoredLicensesData = new HashMap<>();
+
+                for (Map.Entry<String, Object> entry : allUsages.entrySet()) {
                     String key = entry.getKey();
-                    List<String> list = entry.getValue();
+                    Object value = entry.getValue();
+
                     switch (key) {
-                        case "selected" -> selectedUsages.addAll(list);
-                        case "deselected" -> deselectedUsages.addAll(list);
-                        case "selectedConcludedUsages" -> selectedConcludedUsages.addAll(list);
-                        case "deselectedConcludedUsages" -> deselectedConcludedUsages.addAll(list);
+                        case "selected" -> selectedUsages.addAll((List<String>) value);
+                        case "deselected" -> deselectedUsages.addAll((List<String>) value);
+                        case "selectedConcludedUsages" -> selectedConcludedUsages.addAll((List<String>) value);
+                        case "deselectedConcludedUsages" -> deselectedConcludedUsages.addAll((List<String>) value);
+                        case "ignoredLicenses" -> ignoredLicensesData = (Map<String, List<String>>) value;
                     }
                 }
                 Set<String> totalReleaseIds = projectService.getReleaseIds(id, user, true);
                 changedUsages.addAll(selectedUsages);
                 changedUsages.addAll(deselectedUsages);
-                boolean valid = projectService.validate(changedUsages, user, releaseService, totalReleaseIds);
-                if (!valid) {
-                    throw new DataIntegrityViolationException("Not a valid attachment type OR release does not belong to project");
-                }
+                List<String> validationWarnings = projectService.validate(changedUsages, user, releaseService, totalReleaseIds);
+                // Also remove invalid entries from selectedUsages and deselectedUsages
+                selectedUsages.retainAll(changedUsages);
+                deselectedUsages.retainAll(changedUsages);
                 List<AttachmentUsage> allUsagesByProject = projectService.getUsedAttachments(usedBy, null);
+
+                // Self-healing: delete stale attachment usages from DB that reference
+                // releases no longer belonging to this project or its sub-projects.
+                // This ensures warnings only appear once — subsequent saves will be clean.
+                List<AttachmentUsage> staleUsages = allUsagesByProject.stream()
+                        .filter(usage -> {
+                            String releaseId = usage.getOwner().isSetReleaseId()
+                                    ? usage.getOwner().getReleaseId() : null;
+                            return releaseId != null && !totalReleaseIds.contains(releaseId);
+                        })
+                        .collect(Collectors.toList());
+                if (!staleUsages.isEmpty()) {
+                    log.info("Removing {} stale attachment usages for project {} (releases no longer linked)",
+                             staleUsages.size(), id);
+                    projectService.deleteAttachmentUsages(staleUsages);
+                    allUsagesByProject.removeAll(staleUsages);
+                }
                 List<String> savedUsages = projectService.savedUsages(allUsagesByProject);
                 savedUsages.removeAll(deselectedUsages);
                 deselectedUsages.addAll(selectedUsages);
@@ -2055,7 +2332,26 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 if (!usagesToCreate.isEmpty()) {
                     projectService.makeAttachmentUsages(usagesToCreate);
                 }
-                return new ResponseEntity<>("AttachmentUsages Saved Successfully", HttpStatus.CREATED);
+
+                // Handle ignored licenses if provided
+                List<String> ignoredLicenseWarnings = Collections.emptyList();
+                if (!ignoredLicensesData.isEmpty()) {
+                    ignoredLicenseWarnings = projectService.handleIgnoredLicenses(id, ignoredLicensesData, project, user);
+                }
+
+                // Combine all warnings
+                List<String> allWarnings = new ArrayList<>(validationWarnings);
+                allWarnings.addAll(ignoredLicenseWarnings);
+
+                if (allWarnings.isEmpty()) {
+                    return new ResponseEntity<>("AttachmentUsages Saved Successfully", HttpStatus.CREATED);
+                } else {
+                    Map<String, Object> responseBody = Map.of(
+                        "message", "AttachmentUsages Saved Successfully",
+                        "warnings", allWarnings
+                    );
+                    return new ResponseEntity<>(responseBody, HttpStatus.CREATED);
+                }
             } else {
                 throw new AccessDeniedException("No write permission for project");
             }
@@ -2063,14 +2359,17 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             log.error(e);
             throw new SW360Exception("Saving attachment usages for project " + id + " failed");
         }
-	}
+    }
+
+
+
 
     public Map<String, Integer> countMap(Collection<AttachmentType> attachmentTypes, UsageData filter, Project project, User sw360User, String id) throws TException {
-        boolean projectWithSubProjects = !project.getLinkedProjects().isEmpty();
+        boolean projectWithSubProjects = project.getLinkedProjects() != null && !project.getLinkedProjects().isEmpty();
         List<ProjectLink> mappedProjectLinks =
                 (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP)
                         ? projectService.createLinkedProjects(project,
-                        projectService.filterAndSortAttachments(attachmentTypes), true, sw360User)
+                        projectService.filterAndSortAttachments(attachmentTypes), true, true, sw360User)
                         : projectService.createLinkedProjectsWithAllReleases(project,
                         projectService.filterAndSortAttachments(attachmentTypes), true, sw360User);
 
@@ -2087,7 +2386,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get all attachmentUsages of the projects.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/attachmentUsage", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Attachment usages successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/attachmentUsage")
     public ResponseEntity attachmentUsages(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
@@ -2099,10 +2403,11 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             )
             @RequestParam(value = "filter", required = false) String filter,
             @Parameter(description = "Get the transitive releases.")
-            @RequestParam(value = "transitive", required = true) boolean transitive
+            @RequestParam(value = "transitive", required = false, defaultValue = "false") boolean transitive
     ) throws TException {
 
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final Set<String> releaseIds = projectService.getReleaseIds(id, sw360User, transitive);
         List<Release> releases = null;
@@ -2116,9 +2421,9 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             })).collect(Collectors.toList());
         }
         List<EntityModel<Release>> releaseList = releases.stream().map(sw360Release -> wrapTException(() -> {
-                final Release embeddedRelease = restControllerHelper.convertToEmbeddedReleaseAttachments(sw360Release);
-                final HalResource<Release> releaseResource = restControllerHelper.addEmbeddedReleaseLinks(embeddedRelease);
-                return releaseResource;
+            final Release embeddedRelease = restControllerHelper.convertToEmbeddedReleaseAttachments(sw360Release);
+            final HalResource<Release> releaseResource = restControllerHelper.addEmbeddedReleaseLinks(embeddedRelease);
+            return releaseResource;
         })).collect(Collectors.toList());
 
         List<AttachmentUsage> attachmentUsages = attachmentService.getAllAttachmentUsage(id);
@@ -2170,28 +2475,28 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         return new ResponseEntity<>(userHalResource, HttpStatus.OK);
     }
 
-	private List<Map<String, Object>> getReleaseObjectMapper(List<EntityModel<Release>> releaseList, Map<String, Integer> count) {
-		ObjectMapper oMapper = new ObjectMapper();
-		List<Map<String, Object>> modifiedList = new ArrayList<>();
-		for (EntityModel<Release> rel : releaseList) {
-			Map<String, Object> relMap = oMapper.convertValue(rel, Map.class);
-			if (relMap.get(ATTACHMENTS) != null) {
-				for (Object attach : (ArrayList<?>) relMap.get(ATTACHMENTS)) {
-					Map<String, Object> attachmentMap = (Map<String, Object>) attach;
-					AttachmentType type = AttachmentType.valueOf((String) attachmentMap.get(ATTACHMENT_TYPE));
-					attachmentMap.replace(ATTACHMENT_TYPE, attachmentMap.get(ATTACHMENT_TYPE),
-							ThriftEnumUtils.MAP_ATTACHMENT_TYPE_SHORT_STRING.get(type));
-				}
-			}
-			final ImmutableSet<String> fieldsToKeep = ImmutableSet.of("name", "version", "componentType", "clearingState", ATTACHMENTS);
-			Map<String, Object> valueToKeep = new LinkedHashMap<>();
-			Link releaseLink = null;
-			if (relMap != null) {
-				for (Map.Entry<String, Object> entry : relMap.entrySet()) {
-					if (entry != null && entry.getKey().equals("id")) {
-						releaseLink = linkTo(ReleaseController.class).slash("api/releases/" + entry.getValue())
-								.withSelfRel();
-					} else if (entry != null && fieldsToKeep.contains(entry.getKey())) {
+    private List<Map<String, Object>> getReleaseObjectMapper(List<EntityModel<Release>> releaseList, Map<String, Integer> count) {
+        ObjectMapper oMapper = new ObjectMapper();
+        List<Map<String, Object>> modifiedList = new ArrayList<>();
+        for (EntityModel<Release> rel : releaseList) {
+            Map<String, Object> relMap = oMapper.convertValue(rel, Map.class);
+            if (relMap.get(ATTACHMENTS) != null) {
+                for (Object attach : (ArrayList<?>) relMap.get(ATTACHMENTS)) {
+                    Map<String, Object> attachmentMap = (Map<String, Object>) attach;
+                    AttachmentType type = AttachmentType.valueOf((String) attachmentMap.get(ATTACHMENT_TYPE));
+                    attachmentMap.replace(ATTACHMENT_TYPE, attachmentMap.get(ATTACHMENT_TYPE),
+                            ThriftEnumUtils.MAP_ATTACHMENT_TYPE_SHORT_STRING.get(type));
+                }
+            }
+            final ImmutableSet<String> fieldsToKeep = ImmutableSet.of("name", "version", "componentType", "clearingState", ATTACHMENTS);
+            Map<String, Object> valueToKeep = new LinkedHashMap<>();
+            Link releaseLink = null;
+            if (relMap != null) {
+                for (Map.Entry<String, Object> entry : relMap.entrySet()) {
+                    if (entry != null && entry.getKey().equals("id")) {
+                        releaseLink = linkTo(ReleaseController.class).slash("api/releases/" + entry.getValue())
+                                .withSelfRel();
+                    } else if (entry != null && fieldsToKeep.contains(entry.getKey())) {
                         if (entry.getKey().equals(ATTACHMENTS) && null != entry.getValue()) {
                             List<Map<String, Object>> attList = new ArrayList<>();
                             for (LinkedHashMap att : ((List<LinkedHashMap>) entry.getValue())) {
@@ -2225,15 +2530,15 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                             valueToKeep.put(entry.getKey(), entry.getValue());
                         }
                     }
-				}
-			}
-			Map<String, Object> linksValeToKeep = new LinkedHashMap<>();
-			linksValeToKeep.put("self", releaseLink);
-			valueToKeep.put("_links", linksValeToKeep);
-			modifiedList.add(valueToKeep);
-		}
-		return modifiedList;
-	}
+                }
+            }
+            Map<String, Object> linksValeToKeep = new LinkedHashMap<>();
+            linksValeToKeep.put("self", releaseLink);
+            valueToKeep.put("_links", linksValeToKeep);
+            modifiedList.add(valueToKeep);
+        }
+        return modifiedList;
+    }
 
     public List<Release> filterReleases(User sw360User, String filter, Set<String> releaseIds) {
         List<Release> releasesSrc = new ArrayList<>();
@@ -2241,75 +2546,75 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         switch (filter) {
             case "withSourceAttachment":
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    List<Attachment> sourceAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
-                        .filter(attachment ->
-                                attachment.getAttachmentType() == AttachmentType.SOURCE ||
-                                        attachment.getAttachmentType() == AttachmentType.SOURCE_SELF)
-                        .toList();
-                    Set<Attachment> sourceAttachmentsSet = new HashSet<>(sourceAttachments);
-                    sw360Release.setAttachments(sourceAttachmentsSet);
-                    return sourceAttachmentsSet.isEmpty() ? null : sw360Release;
-                }))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            List<Attachment> sourceAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
+                                    .filter(attachment ->
+                                            attachment.getAttachmentType() == AttachmentType.SOURCE ||
+                                                    attachment.getAttachmentType() == AttachmentType.SOURCE_SELF)
+                                    .toList();
+                            Set<Attachment> sourceAttachmentsSet = new HashSet<>(sourceAttachments);
+                            sw360Release.setAttachments(sourceAttachmentsSet);
+                            return sourceAttachmentsSet.isEmpty() ? null : sw360Release;
+                        }))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
                 break;
             case "withoutSourceAttachment":
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    List<Attachment> withoutSourceAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
-                        .filter(attachment ->
-                                attachment.getAttachmentType() != AttachmentType.SOURCE &&
-                                        attachment.getAttachmentType() != AttachmentType.SOURCE_SELF)
-                        .toList();
-                    Set<Attachment> withoutSourceAttachmentsSet = new HashSet<>(withoutSourceAttachments);
-                    sw360Release.setAttachments(withoutSourceAttachmentsSet);
-                    return withoutSourceAttachmentsSet.isEmpty() ? null : sw360Release;
-                }))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            List<Attachment> withoutSourceAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
+                                    .filter(attachment ->
+                                            attachment.getAttachmentType() != AttachmentType.SOURCE &&
+                                                    attachment.getAttachmentType() != AttachmentType.SOURCE_SELF)
+                                    .toList();
+                            Set<Attachment> withoutSourceAttachmentsSet = new HashSet<>(withoutSourceAttachments);
+                            sw360Release.setAttachments(withoutSourceAttachmentsSet);
+                            return withoutSourceAttachmentsSet.isEmpty() ? null : sw360Release;
+                        }))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
                 break;
             case "withoutAttachment":
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    return nullToEmptySet(sw360Release.getAttachments()).isEmpty() ? sw360Release : null;
-                }))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            return nullToEmptySet(sw360Release.getAttachments()).isEmpty() ? sw360Release : null;
+                        }))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
                 break;
             case "withAttachment":
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    return nullToEmptySet(sw360Release.getAttachments()).isEmpty() ? null : sw360Release;
-                }))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            return nullToEmptySet(sw360Release.getAttachments()).isEmpty() ? null : sw360Release;
+                        }))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
                 break;
             case "withCliAttachment":
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    List<Attachment> cliAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
-                        .filter(attachment -> attachment.getAttachmentType() == AttachmentType.COMPONENT_LICENSE_INFO_XML || attachment.getAttachmentType() == AttachmentType.COMPONENT_LICENSE_INFO_COMBINED)
-                        .toList();
-                    Set<Attachment> cliAttachmentsSet = new HashSet<>(cliAttachments);
-                    sw360Release.setAttachments(cliAttachmentsSet);
-                    return cliAttachmentsSet.isEmpty() ? null : sw360Release;
-                }))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            List<Attachment> cliAttachments = nullToEmptySet(sw360Release.getAttachments()).stream()
+                                    .filter(attachment -> attachment.getAttachmentType() == AttachmentType.COMPONENT_LICENSE_INFO_XML || attachment.getAttachmentType() == AttachmentType.COMPONENT_LICENSE_INFO_COMBINED)
+                                    .toList();
+                            Set<Attachment> cliAttachmentsSet = new HashSet<>(cliAttachments);
+                            sw360Release.setAttachments(cliAttachmentsSet);
+                            return cliAttachmentsSet.isEmpty() ? null : sw360Release;
+                        }))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
                 break;
             default:
                 releasesSrc = releaseIds.stream().map(relId -> wrapTException(() -> {
-                    final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
-                    releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
-                    return sw360Release;
-                }))
-                .collect(Collectors.toList());
+                            final Release sw360Release = releaseService.getReleaseForUserById(relId, sw360User);
+                            releaseService.setComponentDependentFieldsInRelease(sw360Release, sw360User);
+                            return sw360Release;
+                        }))
+                        .collect(Collectors.toList());
                 break;
         }
 
@@ -2318,7 +2623,6 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
     private HalResource attachmentUsageReleases(Project sw360Project, List<Map<String, Object>> releases, List<Map<String, Object>> attachmentUsageMap) {
         ObjectMapper oMapper = new ObjectMapper();
-        Map<String, ProjectReleaseRelationship> releaseIdToUsages = sw360Project.getReleaseIdToUsage();
         Map<String, Object> projectMap = oMapper.convertValue(sw360Project, Map.class);
         Map<String, Object> resultMap = new HashMap<>();
         resultMap.put("linkedProjects", projectMap.get("linkedProjects"));
@@ -2336,9 +2640,9 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 }
             }
         }
-        HalResource halProject = new HalResource(resultMap);
+        HalResource halProject = new HalResource<>(resultMap);
 
-        if (releaseIdToUsages != null) {
+        if (sw360Project.getReleaseIdToUsage() != null || (releases != null && !releases.isEmpty())) {
             restControllerHelper.addEmbeddedProjectAttachmentUsage(halProject, releases, attachmentUsageMap);
         }
         return halProject;
@@ -2349,7 +2653,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Import SBOM in SPDX format.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/import/SBOM", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Project successfully created from SBOM"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to create projects",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/import/SBOM", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> importSBOM(
             @Parameter(description = "Type of SBOM", example = "SPDX")
             @RequestParam(value = "type", required = true) String type,
@@ -2391,7 +2700,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             }
 
             String jsonMessage = requestSummary.getMessage();
-            messageMap = new Gson().fromJson(jsonMessage, Map.class);
+            messageMap = GSON.fromJson(jsonMessage, Map.class);
             projectId = messageMap.get("projectId");
 
             if (requestSummary.getRequestStatus() == RequestStatus.DUPLICATE) {
@@ -2430,7 +2739,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             },
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/import/SBOM", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping(value = PROJECTS_URL + "/{id}/import/SBOM", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> importSBOMonProject(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable(value = "id", required = true) String id,
@@ -2461,7 +2770,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         }
 
         String jsonMessage = requestSummary.getMessage();
-        messageMap = new Gson().fromJson(jsonMessage, Map.class);
+        messageMap = GSON.fromJson(jsonMessage, Map.class);
         projectId = messageMap.get("projectId");
 
         if (requestSummary.getRequestStatus() == RequestStatus.DUPLICATE) {
@@ -2500,7 +2809,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             },
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}", method = RequestMethod.GET)
+    @GetMapping(value = PROJECTS_URL + "/network/{id}")
     public ResponseEntity<?> getProjectWithNetwork(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id
@@ -2520,7 +2829,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             summary = "Create a project with dependencies network.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL+ "/network", method = RequestMethod.POST)
+    @PostMapping(value = PROJECTS_URL+ "/network")
     public ResponseEntity createProjectWithNetwork(
             @Parameter(description = "Project with `dependencyNetwork` set.",
                     schema = @Schema(implementation = Project.class))
@@ -2559,7 +2868,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             summary = "Update a project with dependencies network.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = PROJECTS_URL + "/network/{id}")
     public ResponseEntity<?> patchProjectWithNetwork(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
@@ -2612,51 +2921,52 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     }
 
     private HalResource<Project> createHalLicenseClearing(Project sw360Project, List<EntityModel<Release>> releases) {
-		Project sw360 = new Project();
-		Map<String, ProjectReleaseRelationship> releaseIdToUsage = sw360Project.getReleaseIdToUsage();
-		sw360.setReleaseIdToUsage(sw360Project.getReleaseIdToUsage());
-		sw360.setLinkedProjects(sw360Project.getLinkedProjects());
-		sw360.setId(sw360Project.getId());
-		sw360.unsetState();
-		sw360.unsetProjectType();
-		sw360.unsetVisbility();
-		sw360.unsetSecurityResponsibles();
-		HalResource<Project> halProject = new HalResource<>(sw360);
-		if (releaseIdToUsage != null) {
-		    restControllerHelper.addEmbeddedProjectReleases(halProject, releases);
-		}
-		return halProject;
-	}
+        Project sw360 = new Project();
+        sw360.setReleaseIdToUsage(sw360Project.getReleaseIdToUsage());
+        sw360.setLinkedProjects(sw360Project.getLinkedProjects());
+        sw360.setId(sw360Project.getId());
+        sw360.unsetState();
+        sw360.unsetProjectType();
+        sw360.unsetVisbility();
+        sw360.unsetSecurityResponsibles();
+        HalResource<Project> halProject = new HalResource<>(sw360);
+        if (sw360Project.getReleaseIdToUsage() != null || (releases != null && !releases.isEmpty())) {
+            restControllerHelper.addEmbeddedProjectReleases(halProject, releases);
+        }
+        return halProject;
+    }
 
     private HalResource<Project> createHalProject(Project sw360Project, User sw360User) throws TException {
         HalResource<Project> halProject = new HalResource<>(sw360Project);
-        User projectCreator = restControllerHelper.getUserByEmail(sw360Project.getCreatedBy());
-        restControllerHelper.addEmbeddedUser(halProject, projectCreator, CREATED_BY);
+        if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getCreatedBy())) {
+            User projectCreator = restControllerHelper.getUserByEmail(sw360Project.getCreatedBy());
+            restControllerHelper.addEmbeddedUser(halProject, projectCreator, CREATED_BY);
+        }
 
         Map<String, ProjectReleaseRelationship> releaseIdToUsage = sw360Project.getReleaseIdToUsage();
-        if (releaseIdToUsage != null) {
+        if (!CommonUtils.isNullOrEmptyMap(releaseIdToUsage)) {
             restControllerHelper.addEmbeddedReleases(halProject, releaseIdToUsage.keySet(), releaseService, sw360User);
         }
 
         Map<String, ProjectProjectRelationship> linkedProjects = sw360Project.getLinkedProjects();
-        if (linkedProjects != null) {
+        if (!CommonUtils.isNullOrEmptyMap(linkedProjects)) {
             restControllerHelper.addEmbeddedProject(halProject, linkedProjects.keySet(), projectService, sw360User);
         }
 
-        if (sw360Project.getModerators() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getModerators())) {
             Set<String> moderators = sw360Project.getModerators();
             restControllerHelper.addEmbeddedModerators(halProject, moderators);
         }
 
-        if (sw360Project.getAttachments() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getAttachments())) {
             restControllerHelper.addEmbeddedAttachments(halProject, sw360Project.getAttachments());
         }
 
-        if(sw360Project.getLeadArchitect() != null) {
+        if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getLeadArchitect())) {
             restControllerHelper.addEmbeddedLeadArchitect(halProject, sw360Project.getLeadArchitect());
         }
 
-        if (sw360Project.getContributors() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getContributors())) {
             Set<String> contributors = sw360Project.getContributors();
             restControllerHelper.addEmbeddedContributors(halProject, contributors);
         }
@@ -2668,8 +2978,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             sw360Project.setVendor(null);
         }
 
-        if (sw360Project.getPackageIdsSize() > 0) {
-            restControllerHelper.addEmbeddedPackages(halProject, sw360Project.getPackageIds(), packageService);
+        if (!CommonUtils.isNullOrEmptyMap(sw360Project.getPackageIds())) {
+            restControllerHelper.addEmbeddedPackages(halProject, sw360Project.getPackageIds().keySet(), packageService);
         }
 
         return halProject;
@@ -2709,7 +3019,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 } else {
                     actualProjectReleaseRelationship = new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED,
                             MainlineState.OPEN).setCreatedBy(sw360User.getEmail())
-                                    .setCreatedOn(SW360Utils.getCreatedOn());
+                            .setCreatedOn(SW360Utils.getCreatedOn());
                 }
 
                 restControllerHelper.updateProjectReleaseRelationship(actualProjectReleaseRelationship,
@@ -2724,13 +3034,16 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         return projectService.updateProject(project, sw360User);
     }
 
-    private RequestStatus linkOrUnlinkPackages(String id, Set<String> packagesInRequestBody, boolean link)
+    private RequestStatus linkOrUnlinkPackages(String id, Set<String> packagesInRequestBody, boolean link, String comment)
             throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (comment != null) {
+            sw360User.setCommentMadeDuringModerationRequest(comment);
+        }
         Project project = projectService.getProjectForUserById(id, sw360User);
         Set<String> packageIds = new HashSet<>();
-        if (!CommonUtils.isNullOrEmptyCollection(project.getPackageIds())) {
-            packageIds = project.getPackageIds();
+        if (project.getPackageIds() != null && !CommonUtils.isNullOrEmptyCollection(project.getPackageIds().keySet())) {
+            packageIds = new HashSet<>(project.getPackageIds().keySet());
         }
         if (link) {
             packageIds.addAll(packagesInRequestBody);
@@ -2738,18 +3051,34 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             packageIds.removeAll(packagesInRequestBody);
         }
 
-        project.setPackageIds(packageIds);
+        project.setPackageIds(packageIds.stream()
+                .collect(Collectors.toMap(pkgId -> pkgId, pkgId -> {
+                    boolean isBeingLinked = link && packagesInRequestBody.contains(pkgId);
+                    ProjectPackageRelationship existing = (project.getPackageIds() != null && project.getPackageIds().get(pkgId) != null)
+                            ? project.getPackageIds().get(pkgId)
+                            : null;
+                    ProjectPackageRelationship rel = new ProjectPackageRelationship();
+                    if (isBeingLinked && comment != null) {
+                        // Newly linked package: save the provided comment
+                        rel.setComment(comment);
+                    } else if (existing != null && existing.getComment() != null) {
+                        // Already linked package: preserve existing comment
+                        rel.setComment(existing.getComment());
+                    }
+                    return rel;
+                }))
+        );
         return projectService.updateProject(project, sw360User);
     }
+
 
     private HalResource<Project> createHalProjectResourceWithAllDetails(Project sw360Project, User sw360User) {
         HalResource<Project> halProject = new HalResource<>(sw360Project);
         halProject.addEmbeddedResource(CREATED_BY, sw360Project.getCreatedBy());
 
-        Set<String> packageIds = sw360Project.getPackageIds();
-
-        if (packageIds != null) {
-            for (String id : sw360Project.getPackageIds()) {
+        Set<String> packageIds = sw360Project.getPackageIds() != null ? sw360Project.getPackageIds().keySet() : new HashSet<>();
+        if (packageIds != null && !packageIds.isEmpty()) {
+            for (String id : sw360Project.getPackageIds().keySet()) {
                 Link packageLink = linkTo(ProjectController.class)
                         .slash("api" + PackageController.PACKAGES_URL + "/" + id).withRel("packages");
                 halProject.add(packageLink);
@@ -2823,7 +3152,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get project count of a user.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/projectcount", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Project count successfully retrieved")
+    })
+    @GetMapping(value = PROJECTS_URL + "/projectcount")
     public void getUserProjectCount(HttpServletResponse response) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         try {
@@ -2840,7 +3172,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get the default license info header text.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/licenseInfoHeader", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License info header text successfully retrieved")
+    })
+    @GetMapping(value = PROJECTS_URL + "/licenseInfoHeader")
     public void getLicenseInfoheaderText(HttpServletResponse response) throws TException {
         try {
             response.setContentType("application/json; charset=UTF-8");
@@ -2855,16 +3190,71 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     }
 
     @Operation(
-            description = "Get license clearing info for a project.",
+            description = "Get project detail tab pill counts.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseClearingCount", method = RequestMethod.GET)
-    public void getlicenseClearingCount(
-            HttpServletResponse response ,
-    		@Parameter(description = "Project ID", example = "376521")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Project detail tab pill counts successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/tabCounts")
+    public ResponseEntity<ProjectDetailTabCounts> getProjectDetailTabCounts(
+            @Parameter(description = "Project ID", example = "376521")
             @PathVariable("id") String id
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+
+        int vulnerabilityCount;
+        int vulnerabilityRatedCount;
+        if (!sw360Project.isEnableVulnerabilitiesDisplay()) {
+            vulnerabilityCount = -1;
+            vulnerabilityRatedCount = -1;
+        } else {
+            List<VulnerabilityDTO> vulnerabilities = vulnerabilityService.getVulnerabilitiesByProjectId(id, sw360User);
+            vulnerabilityCount = vulnerabilities == null ? 0 : vulnerabilities.size();
+            vulnerabilityRatedCount = vulnerabilities == null ? 0
+                : (int) vulnerabilities.stream()
+                .filter(vulnerability -> !isNullEmptyOrWhitespace(vulnerability.getProjectRelevance())
+                        && !"NOT_CHECKED".equalsIgnoreCase(vulnerability.getProjectRelevance()))
+                .count();
+        }
+        int obligationCount = 0;
+        int obligationNonOpenCount = 0;
+        if (!isNullEmptyOrWhitespace(sw360Project.getLinkedObligationId())) {
+            ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+            if (obligationList != null) {
+                obligationCount = obligationList.getLinkedObligationStatusSize();
+                obligationNonOpenCount = (int) obligationList.getLinkedObligationStatus().values().stream()
+                        .filter(statusInfo -> statusInfo != null && statusInfo.getStatus() != null
+                                && !ObligationStatus.OPEN.equals(statusInfo.getStatus()))
+                        .count();
+            }
+        }
+
+        return new ResponseEntity<>(new ProjectDetailTabCounts(vulnerabilityCount, vulnerabilityRatedCount,
+                obligationCount, obligationNonOpenCount), HttpStatus.OK);
+    }
+
+    @Operation(
+            description = "Get license clearing info for a project.",
+            tags = {"Projects"}
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License clearing count successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenseClearingCount")
+    public void getlicenseClearingCount(
+            HttpServletResponse response ,
+            @Parameter(description = "Project ID", example = "376521")
+            @PathVariable("id") String id
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Project sw360Project = projectService.getProjectForUserById(id, sw360User);
 
         Project proj = projectService.getClearingInfo(sw360Project, sw360User);
@@ -2872,9 +3262,9 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         int releaseCount = clearingInfo.newRelease + clearingInfo.sentToClearingTool + clearingInfo.underClearing + clearingInfo.reportAvailable + clearingInfo.scanAvailable + clearingInfo.approved;
         int approvedCount = clearingInfo.approved;
         try {
-        	JsonObject row = new JsonObject();
-            row.addProperty("Release Count", releaseCount);
-            row.addProperty("Approved Count", approvedCount);
+            JsonObject row = new JsonObject();
+            row.addProperty("releaseCount", releaseCount);
+            row.addProperty("approvedCount", approvedCount);
             response.getWriter().write(row.toString());
         } catch (IOException e) {
             throw new SW360Exception(e.getMessage());
@@ -2882,26 +3272,134 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     }
 
     @Operation(
+            description = "Get license clearing info for multiple projects in a single request. " +
+                    "This is more efficient than calling the single project endpoint multiple times.",
+            tags = {"Projects"}
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License clearing counts successfully retrieved")
+    })
+    @PostMapping(value = PROJECTS_URL + "/licenseClearingCount")
+    public void getBatchLicenseClearingCount(
+            HttpServletResponse response,
+            @Parameter(description = "List of project IDs")
+            @RequestBody List<String> projectIds
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+
+        List<Project> projects = projectService.getClearingInfoForProjects(projectIds, sw360User);
+
+        JsonObject result = new JsonObject();
+        for (Project proj : projects) {
+            ReleaseClearingStateSummary clearingInfo = proj.getReleaseClearingStateSummary();
+            if (clearingInfo != null) {
+                int releaseCount = clearingInfo.newRelease + clearingInfo.sentToClearingTool
+                        + clearingInfo.underClearing + clearingInfo.reportAvailable
+                        + clearingInfo.scanAvailable + clearingInfo.approved;
+                int approvedCount = clearingInfo.approved;
+
+                JsonObject row = new JsonObject();
+                row.addProperty("releaseCount", releaseCount);
+                row.addProperty("approvedCount", approvedCount);
+                result.add(proj.getId(), row);
+            }
+        }
+
+        try {
+            response.setContentType("application/json");
+            response.getWriter().write(result.toString());
+        } catch (IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
+    }
+
+    @Operation(
+            description = "Get license  clearing details counts for `Clearing Detail` field " +
+                    "at Administration tab of project detail page.",
+            tags = {"Projects"}
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Clearing details count successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/clearingDetailsCount")
+    public void getlicenseClearingDetailsCount(
+            HttpServletResponse response ,
+            @Parameter(description = "Project ID", example = "376521")
+            @PathVariable("id") String id
+    ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+
+        Project proj = projectService.getClearingInfo(sw360Project, sw360User);
+        ReleaseClearingStateSummary clearingInfo = proj.getReleaseClearingStateSummary();
+        int releaseCount = clearingInfo.newRelease + clearingInfo.sentToClearingTool + clearingInfo.underClearing + clearingInfo.reportAvailable + clearingInfo.approved;
+
+        try {
+            JsonObject row = new JsonObject();
+            row.addProperty("newClearing",clearingInfo.newRelease);
+            row.addProperty("underClearing",clearingInfo.underClearing);
+            row.addProperty("sentToClearingTool",clearingInfo.sentToClearingTool);
+            row.addProperty("reportAvailable",clearingInfo.reportAvailable);
+            row.addProperty("approved",clearingInfo.approved);
+            row.addProperty("totalReleases", releaseCount);
+            response.getWriter().write(row.toString());
+        } catch (IOException e) {
+            throw new SW360Exception(e.getMessage());
+        }
+    }
+
+    @PreAuthorize("hasAuthority('READ')")
+    @Operation(
             description = "Get license obligations data from license database.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseDbObligations", method = RequestMethod.GET)
-	public ResponseEntity<?> getLicObligations(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License obligations data successfully retrieved"),
+        @ApiResponse(responseCode = "204", description = "No content - no release linked or no approved CLI/licenseInfo attachment usage",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenseDbObligations")
+    public ResponseEntity<?> getLicObligations(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-   	    final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
-   	    if (CommonUtils.isNullOrEmptyMap(sw360Project.getReleaseIdToUsage())) {
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+        if (CommonUtils.isNullOrEmptyMap(sw360Project.getReleaseIdToUsage())) {
             return new ResponseEntity<String>("No release linked to the project", HttpStatus.NO_CONTENT);
         }
         Map<String, AttachmentUsage> licenseInfoAttachmentUsage = projectService.getLicenseInfoAttachmentUsage(id);
-        if(licenseInfoAttachmentUsage.size() == 0) {
-            return new ResponseEntity<String>("No approved CLI or licenseInfo attachment usage present for the project", HttpStatus.NO_CONTENT);
+        Map<String, Set<Release>> licensesFromAttachmentUsage;
+        if (licenseInfoAttachmentUsage.isEmpty()) {
+            // Fallback: build license->releases map from release mainLicenseIds
+            licensesFromAttachmentUsage = new HashMap<>();
+            for (String releaseId : sw360Project.getReleaseIdToUsage().keySet()) {
+                try {
+                    Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
+                    if (release != null && !CommonUtils.isNullOrEmptyCollection(release.getMainLicenseIds())) {
+                        for (String licenseId : release.getMainLicenseIds()) {
+                            licensesFromAttachmentUsage.computeIfAbsent(licenseId, k -> new HashSet<>()).add(release);
+                        }
+                    }
+                } catch (TException e) {
+                    log.warn("Error fetching release {} for licenseDbObligations fallback: {}", releaseId, e.getMessage());
+                }
+            }
+        } else {
+            licensesFromAttachmentUsage = projectService.getLicensesFromAttachmentUsage(licenseInfoAttachmentUsage, sw360User);
         }
-        Map<String, Set<Release>> licensesFromAttachmentUsage = projectService.getLicensesFromAttachmentUsage(licenseInfoAttachmentUsage, sw360User);
+        if (licensesFromAttachmentUsage.isEmpty()) {
+            return new ResponseEntity<String>("No license obligations found for the project releases", HttpStatus.NO_CONTENT);
+        }
         Map<String, ObligationStatusInfo> licenseObligation = projectService.getLicenseObligationData(licensesFromAttachmentUsage, sw360User);
 
         Map<String, Object> responseBody = createPaginationMetadata(pageable, licenseObligation);
@@ -2942,14 +3440,19 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass an array of orphan obligation titles in request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/orphanObligation", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Orphaned obligation removed successfully"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/orphanObligation")
     public ResponseEntity<?> removeOrphanObligation(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
             @Parameter(description = "Array of orphaned obligations title",
                     examples = {
-                            @ExampleObject(value = "[\"title1\",\"title2\",\"title3\"]")
-                            // TODO: Add example for MAP value
+                            @ExampleObject(name = "Array of titles", value = "[\"title1\",\"title2\",\"title3\"]"),
+                            @ExampleObject(name = "Map format", value = "{\"title1\":\"obligationStatus1\",\"title2\":\"obligationStatus2\"}")
                     }
             )
             @RequestBody List<String> obligationTitlesInRequestBody
@@ -2978,23 +3481,57 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get license obligation data of project tab.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseObligations", method = RequestMethod.GET)
-	public ResponseEntity<Object> getLicenseObligations(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "License obligation data successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/licenseObligations")
+    public ResponseEntity<Object> getLicenseObligations(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             @Parameter(description = "Project ID.")
             @PathVariable("id") String id,
             @Parameter(description = "If true, returns the license obligation data in release view. "
                     + "Otherwise, returns it in project view.")
-            @RequestParam(value = "view", defaultValue = "false") boolean releaseView
+            @RequestParam(value = "view", defaultValue = "false") boolean releaseView,
+            @Parameter(description = "If true, includes obligations from all sub-projects with status "
+                    + "FULFILLED_AND_PARENT_MUST_ALSO_FULFILL. Default is false.")
+            @RequestParam(value = "includeSubprojectObligations", defaultValue = "false") boolean includeSubprojectObligations
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final Map<String, String> releaseIdToAcceptedCLI = Maps.newHashMap();
         List<Release> releases = new ArrayList<>();
         ObligationList obligation = new ObligationList();
         Map<String, ObligationStatusInfo> obligationStatusMap = Maps.newHashMap();
-        List<String> releaseIds = new ArrayList<>(sw360Project.getReleaseIdToUsage().keySet());
+
+        // Handle includeSubprojects flag for "All Obligations" tab
+        if (includeSubprojectObligations) {
+            // Get obligations from current project and all sub-projects with FULFILLED_AND_PARENT_MUST_ALSO_FULFILL
+            // and DEFERRED_TO_PARENT_PROJECT status
+            obligationStatusMap = getInheritedObligationsFromProjectHierarchy(sw360Project, sw360User);
+
+            // Enrich obligation status info with release data
+            for (Map.Entry<String, ObligationStatusInfo> entry : obligationStatusMap.entrySet()) {
+                ObligationStatusInfo statusInfo = entry.getValue();
+                if (statusInfo.getReleaseIdToAcceptedCLI() != null && !statusInfo.getReleaseIdToAcceptedCLI().isEmpty()) {
+                    Set<Release> limitedSet = releaseService.getReleasesForUserByIds(
+                            statusInfo.getReleaseIdToAcceptedCLI().keySet());
+                    statusInfo.setReleases(limitedSet);
+                }
+                statusInfo.setId(entry.getKey());
+            }
+
+            // Return paginated response
+            Map<String, Object> responseBody = createPaginationMetadata(pageable, obligationStatusMap);
+            HalResource<Map<String, Object>> halObligation = new HalResource<>(responseBody);
+            return new ResponseEntity<>(halObligation, HttpStatus.OK);
+        }
+
+        // Default behavior - existing functionality for current project only
+        List<String> releaseIds = new ArrayList<>(CommonUtils.nullToEmptyMap(sw360Project.getReleaseIdToUsage()).keySet());
         for (final String releaseId : releaseIds) {
             Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
             if (sw360Release.getAttachmentsSize() > 0) {
@@ -3003,9 +3540,10 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         }
         if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getLinkedObligationId())) {
             obligation = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
-            obligationStatusMap = CommonUtils.nullToEmptyMap(obligation.getLinkedObligationStatus());
+            obligationStatusMap = filterObligationsByLevel(CommonUtils.nullToEmptyMap(obligation.getLinkedObligationStatus()), null);
             releaseIdToAcceptedCLI.putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(obligationStatusMap));
         }
+
         if (releaseView) {
             final List<LicenseInfoParsingResult> licenseInfoWithObligations = new ArrayList<>();
             List<LicenseInfoParsingResult> processedLicenses = projectService.processLicenseInfoWithObligations(
@@ -3027,9 +3565,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     releaseIdToAcceptedCLI, releases, sw360User);
             for (Map.Entry<String, ObligationStatusInfo> entry : obligationStatusMap.entrySet()) {
                 ObligationStatusInfo statusInfo = entry.getValue();
-                Set<Release> limitedSet = releaseService
-                        .getReleasesForUserByIds(statusInfo.getReleaseIdToAcceptedCLI().keySet());
-                statusInfo.setReleases(limitedSet);
+                if(statusInfo.getStatus() == null){
+                    statusInfo.setStatus(ObligationStatus.OPEN);
+                }
+                if(statusInfo.getReleaseIdToAcceptedCLI()!=null){
+                    Set<Release> limitedSet = releaseService
+                            .getReleasesForUserByIds(statusInfo.getReleaseIdToAcceptedCLI().keySet());
+                    statusInfo.setReleases(limitedSet);
+                }
             }
 
             Map<String, Object> responseBody = createPaginationMetadata(pageable, obligationStatusMap);
@@ -3042,7 +3585,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get obligation data of project tab.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/obligation", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Obligation data successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/obligation")
     public ResponseEntity<HalResource> getObligations(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -3053,6 +3601,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             @RequestParam(value = "obligationLevel", required = true) String oblLevel
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
         final Map<String, String> releaseIdToAcceptedCLI = Maps.newHashMap();
         List<Release> releases = new ArrayList<>();;
@@ -3061,7 +3610,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         Map<String, ObligationStatusInfo> oblData = Maps.newHashMap();
         Map<String, ObligationStatusInfo> filterData = Maps.newHashMap();
 
-        List<String> releaseIds = new ArrayList<>(sw360Project.getReleaseIdToUsage().keySet());
+        List<String> releaseIds = new ArrayList<>(CommonUtils.nullToEmptyMap(sw360Project.getReleaseIdToUsage()).keySet());
         for (final String releaseId : releaseIds) {
             Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
             if (sw360Release.getAttachmentsSize() > 0) {
@@ -3077,68 +3626,189 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         }
 
         if (oblLevel.equalsIgnoreCase("License")) {
-            for (Map.Entry<String, ObligationStatusInfo> entry : obligationStatusMap.entrySet()) {
-                String key = entry.getKey();
-                if (!key.equals("compObl") && !key.equals("projectObl") && !key.equals("orgObl")) {
-                    filterData.put(key, entry.getValue());
-                }
-            }
+            filterData = filterObligationsByLevel(obligationStatusMap, null);
             releaseIdToAcceptedCLI.putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(filterData));
             oblData = projectService.setLicenseInfoWithObligations(filterData, releaseIdToAcceptedCLI, releases, sw360User);
+
             for (Map.Entry<String, ObligationStatusInfo> entry : oblData.entrySet()) {
                 ObligationStatusInfo statusInfo = entry.getValue();
                 Set<Release> limitedSet = releaseService.getReleasesForUserByIds(statusInfo.getReleaseIdToAcceptedCLI().keySet());
                 statusInfo.setReleases(limitedSet);
+                statusInfo.setId(entry.getKey());
             }
+        } else {
+            ObligationLevel targetLevel;
+            switch (oblLevel.toLowerCase()) {
+                case "project":
+                    targetLevel = ObligationLevel.PROJECT_OBLIGATION;
+                    break;
+                case "organization":
+                    targetLevel = ObligationLevel.ORGANISATION_OBLIGATION;
+                    break;
+                case "component":
+                    targetLevel = ObligationLevel.COMPONENT_OBLIGATION;
+                    break;
+                default:
+                    throw new BadRequestClientException("Invalid Obligation Level");
+            }
+            oblData = filterObligationsByLevel(oblData, targetLevel);
         }
+
 
         Map<String, Object> responseBody = createPaginationMetadata(pageable, oblData);
         HalResource<Map<String, Object>> halObligation = new HalResource<>(responseBody);
         return new ResponseEntity<>(halObligation, HttpStatus.OK);
     }
 
+    private Map<String, ObligationStatusInfo> filterObligationsByLevel(
+            Map<String, ObligationStatusInfo> obligationStatusMap, ObligationLevel targetLevel) {
+        return obligationStatusMap.entrySet().stream()
+                .filter(entry -> {
+                    ObligationLevel obligationLevel = entry.getValue().getObligationLevel();
+                    return obligationLevel == null || obligationLevel == targetLevel;
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Fetches obligations from the entire project hierarchy (current project + all sub-projects)
+     * and filters by FULFILLED_AND_PARENT_MUST_ALSO_FULFILL status.
+     *
+     * @param rootProject The root project
+     * @param sw360User   The authenticated user
+     * @return Map of obligation ID to ObligationStatusInfo with filtered status
+     * @throws TException If there's an error fetching project or obligation data
+     */
+    private Map<String, ObligationStatusInfo> getInheritedObligationsFromProjectHierarchy(
+            Project rootProject, User sw360User) throws TException {
+
+        Map<String, ObligationStatusInfo> aggregatedObligations = Maps.newHashMap();
+
+        // Collect all projects in hierarchy (root + all sub-projects recursively)
+        List<Project> allProjects = new ArrayList<>();
+        allProjects.add(rootProject);
+
+        // Get all linked sub-projects recursively
+        try {
+            Collection<ProjectLink> linkedProjectLinks = SW360Utils.getLinkedProjectsAsFlatList(
+                    rootProject, true, new ThriftClients(), log, sw360User);
+
+            // Fetch full project objects for each linked project
+            for (ProjectLink projectLink : linkedProjectLinks) {
+                try {
+                    Project subProject = projectService.getProjectForUserById(projectLink.getId(), sw360User);
+                    allProjects.add(subProject);
+                } catch (Exception e) {
+                    log.warn("Could not fetch sub-project with ID: " + projectLink.getId(), e);
+                    // Continue processing other projects
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error traversing project hierarchy for project: " + rootProject.getId(), e);
+        }
+
+        // Collect obligations from all projects
+        for (Project project : allProjects) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(project.getLinkedObligationId())) {
+                try {
+                    ObligationList obligationList = projectService.getObligationData(
+                            project.getLinkedObligationId(), sw360User);
+
+                    Map<String, ObligationStatusInfo> projectObligations =
+                            CommonUtils.nullToEmptyMap(obligationList.getLinkedObligationStatus());
+
+                    // Add project name/info to help identify source project
+                    for (Map.Entry<String, ObligationStatusInfo> entry : projectObligations.entrySet()) {
+                        ObligationStatusInfo statusInfo = entry.getValue();
+                        // Add obligations with FULFILLED_AND_PARENT_MUST_ALSO_FULFILL and DEFERRED_TO_PARENT_PROJECT status
+                        if (
+                                statusInfo.getStatus() == ObligationStatus.FULFILLED_AND_PARENT_MUST_ALSO_FULFILL
+                                        || statusInfo.getStatus() == ObligationStatus.DEFERRED_TO_PARENT_PROJECT
+                        ) {
+                            // Approach 3: Keep both with different keys
+                            // Create a unique key combining project ID and obligation ID
+                            String obligationId = entry.getKey();
+                            String uniqueKey = project.getId() + ":" + obligationId;
+
+                            // Store with the unique key to preserve obligations from all projects
+                            aggregatedObligations.put(uniqueKey, statusInfo);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Could not fetch obligations for project: " + project.getId(), e);
+                    // Continue processing other projects
+                }
+            }
+        }
+
+        return aggregatedObligations;
+    }
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
             summary = "Add licenseObligations from license DB",
-			description = "Pass an array of obligation ids in request body.",
+            description = "Pass an array of obligation ids in request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/licenseObligation", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "License obligation added successfully"),
+        @ApiResponse(responseCode = "204", description = "No content - no license obligations present",
+                content = @Content),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/{id}/licenseObligation")
     public ResponseEntity<?> addLicenseObligations(
             @Parameter(description = "License Obligation ID.")
             @PathVariable("id") String id,
-			@Parameter(description = "Set of license obligation IDs to be added.",
+            @Parameter(description = "Set of license obligation IDs to be added.",
                     example = "[\"3765276512\",\"5578999\",\"3765276513\"]"
             )
-			@RequestBody List<String> obligationIds
+            @RequestBody List<String> obligationIds
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-	    final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
-	    Map<String, AttachmentUsage> licenseInfoAttachmentUsage = projectService.getLicenseInfoAttachmentUsage(id);
-        Map<String, Set<Release>> licensesFromAttachmentUsage = projectService.getLicensesFromAttachmentUsage(
-                licenseInfoAttachmentUsage, sw360User);
+        final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+        Map<String, AttachmentUsage> licenseInfoAttachmentUsage = projectService.getLicenseInfoAttachmentUsage(id);
+        Map<String, Set<Release>> licensesFromAttachmentUsage;
+        if (licenseInfoAttachmentUsage.isEmpty()) {
+            licensesFromAttachmentUsage = new HashMap<>();
+            for (String releaseId : CommonUtils.nullToEmptyMap(sw360Project.getReleaseIdToUsage()).keySet()) {
+                try {
+                    Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
+                    if (release != null && !CommonUtils.isNullOrEmptyCollection(release.getMainLicenseIds())) {
+                        for (String licenseId : release.getMainLicenseIds()) {
+                            licensesFromAttachmentUsage.computeIfAbsent(licenseId, k -> new HashSet<>()).add(release);
+                        }
+                    }
+                } catch (TException e) {
+                    log.warn("Error fetching release {} for addLicenseObligations fallback: {}", releaseId, e.getMessage());
+                }
+            }
+        } else {
+            licensesFromAttachmentUsage = projectService.getLicensesFromAttachmentUsage(
+                    licenseInfoAttachmentUsage, sw360User);
+        }
         Map<String, ObligationStatusInfo> licenseObligation = projectService.getLicenseObligationData(licensesFromAttachmentUsage, sw360User);
         Map<String, ObligationStatusInfo> selectedLicenseObligation = new HashMap<String, ObligationStatusInfo>();
 
         ObligationList obligation = new ObligationList();
-		Map<String, ObligationStatusInfo> obligationStatusMap = Maps.newHashMap();
-		Map<String, ObligationStatusInfo> obligationStatusMapFromReport = Maps.newHashMap();
-		final Map<String, String> releaseIdToAcceptedCLI = Maps.newHashMap();
-		List<Release> releases = new ArrayList<>();
-		List<String> releaseIds = new ArrayList<>(sw360Project.getReleaseIdToUsage().keySet());
-		for (final String releaseId : releaseIds) {
-			Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
-			if (sw360Release.getAttachmentsSize() > 0) {
-				releases.add(sw360Release);
-			}
-		}
+        Map<String, ObligationStatusInfo> obligationStatusMap = Maps.newHashMap();
+        Map<String, ObligationStatusInfo> obligationStatusMapFromReport = Maps.newHashMap();
+        final Map<String, String> releaseIdToAcceptedCLI = Maps.newHashMap();
+        List<Release> releases = new ArrayList<>();
+        List<String> releaseIds = new ArrayList<>(CommonUtils.nullToEmptyMap(sw360Project.getReleaseIdToUsage()).keySet());
+        for (final String releaseId : releaseIds) {
+            Release sw360Release = releaseService.getReleaseForUserById(releaseId, sw360User);
+            if (sw360Release.getAttachmentsSize() > 0) {
+                releases.add(sw360Release);
+            }
+        }
         if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getLinkedObligationId())) {
-			obligation = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
-			obligationStatusMap = CommonUtils.nullToEmptyMap(obligation.getLinkedObligationStatus());
-			releaseIdToAcceptedCLI.putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(obligationStatusMap));
-		} else {
-			obligationStatusMapFromReport = projectService.setLicenseInfoWithObligations(obligationStatusMap, releaseIdToAcceptedCLI, releases, sw360User);
-		}
+            obligation = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+            obligationStatusMap = CommonUtils.nullToEmptyMap(obligation.getLinkedObligationStatus());
+            releaseIdToAcceptedCLI.putAll(SW360Utils.getReleaseIdtoAcceptedCLIMappings(obligationStatusMap));
+        } else {
+            obligationStatusMapFromReport = projectService.setLicenseInfoWithObligations(obligationStatusMap, releaseIdToAcceptedCLI, releases, sw360User);
+        }
 
         if (licenseObligation.size() == 0) {
             return new ResponseEntity<>("No License Obligations Present", HttpStatus.NO_CONTENT);
@@ -3155,7 +3825,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             return new ResponseEntity<>("License Obligation Added Successfully", HttpStatus.CREATED);
         }
         throw new ResourceNotFoundException("Failed to add/update obligation for project");
-	}
+    }
 
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
@@ -3163,35 +3833,341 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Pass a map of obligations in request body.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/updateLicenseObligation", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "License obligation updated successfully"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "409", description = "Conflict - cannot update license obligation due to data integrity violation",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/updateLicenseObligation")
     public ResponseEntity<?> patchLicenseObligations(
-            @Parameter(description = "Project ID.")
-            @PathVariable("id") String id,
-            @Parameter(description = "Map of obligation status info.")
+            @Parameter(description = "Project ID") @PathVariable("id") String id,
+            @Parameter(description = "Map of obligation status info")
             @RequestBody Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        final Project sw360Project = projectService.getProjectForUserById(id, sw360User);
-        ObligationList obligation = new ObligationList();
-        Map<String, ObligationStatusInfo> obligationStatusMap = Maps.newHashMap();
-        if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getLinkedObligationId())) {
-            obligation = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
-            obligationStatusMap = CommonUtils.nullToEmptyMap(obligation.getLinkedObligationStatus());
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        Map<String, ObligationStatusInfo> obligationStatusMap = new HashMap<>();
+        try {
+            obligationStatusMap = processLicenseObligations(id, sw360User, requestBodyObligationStatusInfo);
+            Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService
+                    .compareObligationStatusMap(sw360User, obligationStatusMap, requestBodyObligationStatusInfo);
+            Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+            ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+            RequestStatus updateStatus = projectService
+                    .patchLinkedObligations(sw360User, updatedObligationStatusMap, obligationList);
+            if (updateStatus == RequestStatus.SUCCESS) {
+                return ResponseEntity
+                        .status(HttpStatus.CREATED)
+                        .body("License Obligation Updated Successfully");
+            }
+
+            throw new DataIntegrityViolationException("Cannot update License Obligation");
+        } catch (Exception e) {
+            log.error("Error updating license obligations: ", e);
+            throw new DataIntegrityViolationException("Failed to update License Obligation: " + e.getMessage());
         }
-        Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService
-                .compareObligationStatusMap(sw360User, obligationStatusMap, requestBodyObligationStatusInfo);
-        RequestStatus updateObligationStatus = projectService.patchLinkedObligations(sw360User, updatedObligationStatusMap, obligation);
-        if (updateObligationStatus == RequestStatus.SUCCESS) {
-            return new ResponseEntity<>("License Obligation Updated Successfully", HttpStatus.CREATED);
+    }
+
+    /**
+     * Processes the obligations for a project based on whether it has linked obligations or not.
+     * If linked obligations exist, it processes them; otherwise, it updates the project obligations.
+     *
+     * @param sw360Project The SW360 project to process obligations for.
+     * @param sw360User The user performing the operation.
+     * @param requestBodyObligationStatusInfo The obligation status information from the request body.
+     * @param obligationList The obligation list to be processed.
+     * @return A map of obligation status information after processing.
+     * @throws TException If there is an error during the Thrift operation.
+     */
+    private Map<String, ObligationStatusInfo> processLicenseObligations(
+            String projectId,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo
+
+    ) throws TException {
+        Project sw360Project = projectService.getProjectForUserById(projectId, sw360User);
+        if (hasLinkedObligations(sw360Project)) {
+            return processExistingLicenseObligations(sw360Project, sw360User, requestBodyObligationStatusInfo);
         }
-        throw new DataIntegrityViolationException("Cannot update License Obligation");
+        return updateProjectLicenseObligations(sw360Project, sw360User, new HashMap<>());
+    }
+
+    private boolean hasLinkedObligations(Project project) {
+        return CommonUtils.isNotNullEmptyOrWhitespace(project.getLinkedObligationId());
+    }
+
+    /**
+     * Processes existing obligations for a project.
+     * If the project has linked obligations, it retrieves them and checks if all obligations from the request body are present.
+     * If not all obligations are present, it updates the project obligations with the existing ones.
+     * If all obligations are present, it returns the existing obligation status map.
+     *
+     * @param sw360Project The SW360 project to process obligations for.
+     * @param sw360User The user performing the operation.
+     * @param requestBodyObligationStatusInfo The obligation status information from the request body.
+     * @param obligationList The obligation list to be processed.
+     * @return A map of obligation status information after processing.
+     * @throws TException If there is an error during the Thrift operation.
+     */
+    private Map<String, ObligationStatusInfo> processExistingLicenseObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo
+    ) throws TException {
+        ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+        Map<String, ObligationStatusInfo> obligationStatusMap = CommonUtils.nullToEmptyMap(obligationList.getLinkedObligationStatus());
+
+        boolean allObligationsPresent = requestBodyObligationStatusInfo.keySet()
+                .stream()
+                .allMatch(obligationStatusMap::containsKey);
+
+        if (!allObligationsPresent) {
+            return updateProjectLicenseObligations(sw360Project, sw360User, obligationStatusMap);
+        }
+
+        return obligationStatusMap;
+    }
+
+    /**
+     * Updates the project obligations by retrieving the releases and setting the license information with obligations.
+     * It also adds linked obligations to the project.
+     * This method is called when the project has no linked obligations or when the existing obligations need to be updated.
+     *
+     * @param sw360Project The SW360 project to update obligations for.
+     * @param sw360User The user performing the operation.
+     * @param existingObligationStatusMap The existing obligation status map to be updated.
+     * @return A map of updated obligation status information.
+     * @throws TException If there is an error during the Thrift operation.
+     */
+    private Map<String, ObligationStatusInfo> updateProjectLicenseObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> existingObligationStatusMap
+    ) throws TException {
+        Map<String, String> releaseIdToAcceptedCLI = new HashMap<>();
+        List<Release> releases = getReleasesWithAttachments(sw360Project, sw360User);
+
+        Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService.setLicenseInfoWithObligations(
+                existingObligationStatusMap,
+                releaseIdToAcceptedCLI,
+                releases,
+                sw360User
+        );
+
+
+        projectService.addLinkedObligations(sw360Project, sw360User, updatedObligationStatusMap);
+        return updatedObligationStatusMap;
+    }
+
+    /**
+     * Retrieves releases with attachments for a given project and user.
+     * It filters out releases that do not have any attachments.
+     * This method is used to ensure that only relevant releases are processed, especially when dealing with license obligations.
+     *
+     *
+     * @param project The project to retrieve releases from.
+     * @param user The user for whom the releases are being retrieved.
+     * @return A list of releases that have attachments.
+     * @throws TException If there is an error during the Thrift operation.
+     */
+    private List<Release> getReleasesWithAttachments(Project project, User user) throws TException {
+        return CommonUtils.nullToEmptyMap(project.getReleaseIdToUsage()).keySet().stream()
+                .map(releaseId -> {
+                    try {
+                        Release release = releaseService.getReleaseForUserById(releaseId, user);
+                        return release.getAttachmentsSize() > 0 ? release : null;
+                    } catch (TException e) {
+                        log.error("Error fetching release: " + releaseId, e);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+    @PreAuthorize("hasAuthority('WRITE')")
+    @Operation(
+            summary = "Update project Obligations other than License Obligations",
+            description = "Pass a map of obligations in request body.",
+            tags = {"Projects"}
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Obligation updated successfully"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to modify this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "409", description = "Conflict - cannot update obligation due to data integrity violation",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PatchMapping(value = PROJECTS_URL + "/{id}/updateObligation")
+    public ResponseEntity<?> patchObligations(
+            @Parameter(description = "Project ID") @PathVariable("id") String id,
+            @Parameter(description = "Map of obligation status info")
+            @RequestBody Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo ,
+            @Parameter(description = "Obligation Level",
+                    schema = @Schema(allowableValues = {"project", "organization", "component", "all"}))
+            @RequestParam(value = "obligationLevel", required = true) String oblLevel
+    ) {
+        Map<String, ObligationStatusInfo> obligationStatusMap = new HashMap<>();
+        try {
+            final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+            restControllerHelper.throwIfSecurityUser(sw360User);
+            if ("all".equals(oblLevel)) {
+                Map<String, ObligationStatusInfo> filteredMap = requestBodyObligationStatusInfo.entrySet()
+                        .stream()
+                        .filter(entry -> entry.getValue() != null &&
+                                entry.getValue().getObligationLevel() != null)
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                Map<String, ObligationStatusInfo> licenseObligationStatusMap = filteredMap.entrySet()
+                        .stream()
+                        .filter(entry -> ObligationLevel.LICENSE_OBLIGATION.equals(entry.getValue().getObligationLevel()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                Map<String, ObligationStatusInfo> otherObligationStatusMap = filteredMap.entrySet()
+                        .stream()
+                        .filter(entry -> !ObligationLevel.LICENSE_OBLIGATION.equals(entry.getValue().getObligationLevel()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                licenseObligationStatusMap = processLicenseObligations(id, sw360User, licenseObligationStatusMap);
+                otherObligationStatusMap = processObligations(id, sw360User, otherObligationStatusMap);
+
+                if (!CommonUtils.isNullOrEmptyMap(licenseObligationStatusMap)) {
+                    obligationStatusMap.putAll(licenseObligationStatusMap);
+                }
+                if (!CommonUtils.isNullOrEmptyMap(otherObligationStatusMap)) {
+                    obligationStatusMap.putAll(otherObligationStatusMap);
+                }
+            } else {
+                obligationStatusMap = processObligations(id, sw360User, requestBodyObligationStatusInfo, oblLevel);
+            }
+            Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService
+                    .compareObligationStatusMap(sw360User, obligationStatusMap, requestBodyObligationStatusInfo);
+            Project sw360Project = projectService.getProjectForUserById(id, sw360User);
+            ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+            RequestStatus updateStatus = projectService
+                    .patchLinkedObligations(sw360User, updatedObligationStatusMap, obligationList);
+            if (updateStatus == RequestStatus.SUCCESS) {
+                return ResponseEntity
+                        .status(HttpStatus.CREATED)
+                        .body(oblLevel + " Obligation Updated Successfully");
+            }
+
+            throw new DataIntegrityViolationException("Cannot update "+oblLevel+" Obligation");
+        } catch (Exception e) {
+            log.error("Error updating {0} obligations: {}", oblLevel ,e);
+            throw new DataIntegrityViolationException("Failed to update "+oblLevel+"  Obligation: " + e.getMessage());
+        }
+    }
+
+    private Map<String, ObligationStatusInfo> processObligations(
+            String projectId,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo,
+            String oblLevel) throws TException {
+        Project sw360Project = projectService.getProjectForUserById(projectId, sw360User);
+        if (hasLinkedObligations(sw360Project)) {
+            return processExistingObligations(sw360Project, sw360User, requestBodyObligationStatusInfo ,oblLevel);
+        }
+        return updateProjectObligations(sw360Project, sw360User, new HashMap<>(), oblLevel);
+    }
+
+     private Map<String, ObligationStatusInfo> processExistingObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo,
+            String oblLevel) throws TException {
+        ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+        Map<String, ObligationStatusInfo> obligationStatusMap = CommonUtils.nullToEmptyMap(obligationList.getLinkedObligationStatus());
+
+        boolean allObligationsPresent = requestBodyObligationStatusInfo.keySet()
+                .stream()
+                .filter(entry -> {
+                    ObligationStatusInfo statusInfo = requestBodyObligationStatusInfo.get(entry);
+                    return statusInfo.getObligationLevel() == null || statusInfo.getObligationLevel().toString().equalsIgnoreCase(oblLevel);
+                })
+                .distinct()
+                .collect(Collectors.toSet())
+                .stream()
+                .allMatch(obligationStatusMap::containsKey);
+
+        if (!allObligationsPresent) {
+            return updateProjectObligations(sw360Project, sw360User, obligationStatusMap , oblLevel);
+        }
+
+        return obligationStatusMap;
+    }
+
+    private Map<String, ObligationStatusInfo> processObligations(
+            String projectId,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo) throws TException {
+        Project sw360Project = projectService.getProjectForUserById(projectId, sw360User);
+        if (hasLinkedObligations(sw360Project)) {
+            return processExistingObligations(sw360Project, sw360User, requestBodyObligationStatusInfo);
+        }
+        return updateProjectObligations(sw360Project, sw360User, new HashMap<>());
+    }
+
+    private Map<String, ObligationStatusInfo> processExistingObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> requestBodyObligationStatusInfo) throws TException {
+        ObligationList obligationList = projectService.getObligationData(sw360Project.getLinkedObligationId(), sw360User);
+        Map<String, ObligationStatusInfo> obligationStatusMap = CommonUtils.nullToEmptyMap(obligationList.getLinkedObligationStatus());
+
+        boolean allObligationsPresent = requestBodyObligationStatusInfo.keySet()
+                .stream()
+                .filter(entry -> {
+                    ObligationStatusInfo statusInfo = requestBodyObligationStatusInfo.get(entry);
+                    return statusInfo.getObligationLevel() == null;
+                })
+                .collect(Collectors.toSet())
+                .stream()
+                .allMatch(obligationStatusMap::containsKey);
+
+        if (!allObligationsPresent) {
+            return updateProjectObligations(sw360Project, sw360User, obligationStatusMap);
+        }
+
+        return obligationStatusMap;
+    }
+
+    private Map<String, ObligationStatusInfo> updateProjectObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> existingObligationStatusMap,
+            String oblLevel) throws TException {
+
+          Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService.setObligationsFromAdminSection(
+                sw360User, existingObligationStatusMap, sw360Project, oblLevel);
+
+        projectService.addLinkedObligations(sw360Project, sw360User, updatedObligationStatusMap);
+        return updatedObligationStatusMap;
+    }
+
+    private Map<String, ObligationStatusInfo> updateProjectObligations(
+            Project sw360Project,
+            User sw360User,
+            Map<String, ObligationStatusInfo> existingObligationStatusMap) throws TException {
+
+        Map<String, ObligationStatusInfo> updatedObligationStatusMap = projectService.setObligationsFromAdminSection(
+                sw360User, existingObligationStatusMap, sw360Project);
+
+        projectService.addLinkedObligations(sw360Project, sw360User, updatedObligationStatusMap);
+        return updatedObligationStatusMap;
     }
 
     @Operation(
             description = "Get summary and administration page of project tab.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/summaryAdministration", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Project summary and administration data successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/summaryAdministration")
     public ResponseEntity<EntityModel<Project>> getAdministration(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id
@@ -3221,7 +4197,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             summary = "Get a list view of dependency network for a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}/listView", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Dependency network list view successfully retrieved"),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/network/{id}/listView")
     public ResponseEntity<?> getListViewDependencyNetwork(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String projectId
@@ -3239,8 +4220,13 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get linked resources (projects, releases) of a project",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}/linkedResources", method = RequestMethod.GET)
-    public ResponseEntity<?> getLinkedResourcesOfProjectForDependencyNetwork(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Linked resources successfully retrieved"),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/network/{id}/linkedResources")
+    public ResponseEntity<ProjectLink> getLinkedResourcesOfProjectForDependencyNetwork(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
             @Parameter(description = "Get linked releases transitively (default is false)", example = "true")
@@ -3258,12 +4244,19 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get indirect linked releases of a project in dependency network by release's index path",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}/releases", method = RequestMethod.GET)
-    public ResponseEntity<?> getLinkedReleasesInDependencyNetworkByIndexPath(
-        @Parameter(description = "Project ID", example = "376576")
-        @PathVariable("id") String projectId,
-        @Parameter(description = "Index path", example = "0->1")
-        @RequestParam(value = "path", required = false) String releaseIndexPath
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Linked releases successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled or runtime error",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/network/{id}/releases")
+    public ResponseEntity<CollectionModel<ReleaseLink>> getLinkedReleasesInDependencyNetworkByIndexPath(
+            @Parameter(description = "Project ID", example = "376576")
+            @PathVariable("id") String projectId,
+            @Parameter(description = "Index path", example = "0->1")
+            @RequestParam(value = "path", required = false) String releaseIndexPath
     ) throws TException {
         if (!SW360Constants.ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP) {
             throw new SW360Exception(SW360Constants.PLEASE_ENABLE_FLEXIBLE_PROJECT_RELEASE_RELATIONSHIP);
@@ -3291,32 +4284,31 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
     private void setAdditionalFieldsToHalResource(Project sw360Project, HalResource<Project> userHalResource) throws SW360Exception {
         try {
             String modifiedByEmail = sw360Project.getModifiedBy();
-            if (modifiedByEmail != null) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(modifiedByEmail)) {
                 User projectModifier = restControllerHelper.getUserByEmail(modifiedByEmail);
                 if (projectModifier != null) {
                     restControllerHelper.addEmbeddedUser(userHalResource, projectModifier, "modifiedBy");
                 }
             }
             String projectOwnerEmail = sw360Project.getProjectOwner();
-            if (projectOwnerEmail != null) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(projectOwnerEmail)) {
                 User projectOwner = restControllerHelper.getUserByEmail(sw360Project.getProjectOwner());
                 if (projectOwner != null) {
                     restControllerHelper.addEmbeddedUser(userHalResource, projectOwner, "projectOwner");
                 }
             }
-            if (sw360Project.getSecurityResponsibles() == null || sw360Project.getSecurityResponsibles().isEmpty()) {
-                sw360Project.setSecurityResponsibles(new HashSet<String>(){{add("");}});
+            if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getSecurityResponsibles())) {
+                Set<String> securityResponsibles = sw360Project.getSecurityResponsibles();
+                restControllerHelper.addEmbeddedSecurityResponsibles(userHalResource, securityResponsibles);
             }
-            Set<String> securityResponsibles = sw360Project.getSecurityResponsibles();
-            restControllerHelper.addEmbeddedSecurityResponsibles(userHalResource, securityResponsibles);
 
-            String clearingTeam = sw360Project.getClearingTeam();
-            if (clearingTeam != null) {
-                restControllerHelper.addEmbeddedClearingTeam(userHalResource, clearingTeam, "clearingTeam");
-            }
-            if (sw360Project.getProjectResponsible() != null) {
+            if (CommonUtils.isNotNullEmptyOrWhitespace(sw360Project.getProjectResponsible())) {
                 restControllerHelper.addEmbeddedProjectResponsible(userHalResource,sw360Project.getProjectResponsible());
             }
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             throw new SW360Exception(e.getMessage());
         }
@@ -3339,28 +4331,30 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         projectDTO.setDependencyNetwork(dependencyNetwork);
         HalResource<ProjectDTO> halProject = new HalResource<>(projectDTO);
 
-        User projectCreator = restControllerHelper.getUserByEmail(projectDTO.getCreatedBy());
-        restControllerHelper.addEmbeddedUser(halProject, projectCreator, CREATED_BY);
+        if (CommonUtils.isNotNullEmptyOrWhitespace(projectDTO.getCreatedBy())) {
+            User projectCreator = restControllerHelper.getUserByEmail(projectDTO.getCreatedBy());
+            restControllerHelper.addEmbeddedUser(halProject, projectCreator, CREATED_BY);
+        }
 
         Map<String, ProjectProjectRelationship> linkedProjects = projectDTO.getLinkedProjects();
-        if (linkedProjects != null) {
+        if (!CommonUtils.isNullOrEmptyMap(linkedProjects)) {
             restControllerHelper.addEmbeddedProjectDTO(halProject, linkedProjects.keySet(), projectService, sw360User);
         }
 
-        if (projectDTO.getModerators() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getModerators())) {
             Set<String> moderators = projectDTO.getModerators();
             restControllerHelper.addEmbeddedModerators(halProject, moderators);
         }
 
-        if (projectDTO.getAttachments() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getAttachments())) {
             restControllerHelper.addEmbeddedAttachments(halProject, projectDTO.getAttachments());
         }
 
-        if(projectDTO.getLeadArchitect() != null) {
+        if (CommonUtils.isNotNullEmptyOrWhitespace(projectDTO.getLeadArchitect())) {
             restControllerHelper.addEmbeddedLeadArchitect(halProject, projectDTO.getLeadArchitect());
         }
 
-        if (projectDTO.getContributors() != null) {
+        if (!CommonUtils.isNullOrEmptyCollection(sw360Project.getContributors())) {
             Set<String> contributors = projectDTO.getContributors();
             restControllerHelper.addEmbeddedContributors(halProject, contributors);
         }
@@ -3411,7 +4405,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     uniqueDependencyNetwork.add(releaseNode);
                 }
             }
-            project.setReleaseRelationNetwork(new Gson().toJson(uniqueDependencyNetwork));
+            project.setReleaseRelationNetwork(GSON.toJson(uniqueDependencyNetwork));
         }
         else {
             project.setReleaseRelationNetwork(null);
@@ -3502,7 +4496,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             summary = "Create a clearing request for a project.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/clearingRequest", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Clearing request successfully created"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to create clearing requests",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/{id}/clearingRequest")
     public ResponseEntity<?> createClearingRequest(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String id,
@@ -3524,8 +4523,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
 
         if (clearingRequest.getClearingType() == null) {
             throw new BadRequestClientException("clearingType is a mandatory field. Possible values are "
-                     + Arrays.asList(ClearingRequestType.values()));
-         }
+                    + Arrays.asList(ClearingRequestType.values()));
+        }
 
         Integer criticalCount = moderationRequestService.getOpenCriticalCrCountByGroup(user.getDepartment());
         clearingRequest.setPriority(criticalCount > 1 ? null : clearingRequest.getPriority());
@@ -3553,8 +4552,8 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
         clearingRequest.setId(addDocumentRequestSummary.getId());
 
         URI location = ServletUriComponentsBuilder
-            .fromCurrentRequest().path("/{id}")
-            .buildAndExpand(clearingRequest.getId()).toUri();
+                .fromCurrentRequest().path("/{id}")
+                .buildAndExpand(clearingRequest.getId()).toUri();
 
         HalResource<ClearingRequest> halResource = new HalResource<>(clearingRequest);
 
@@ -3565,7 +4564,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get linked releases information in project's dependency network.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/{id}/linkedReleases", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Linked releases information successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/network/{id}/linkedReleases")
     public ResponseEntity<?> getLinkedReleasesInNetwork(
             @Parameter(description = "Project ID.")
             @PathVariable("id") String projectId
@@ -3582,7 +4588,12 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Get linked releases information of linked projects.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/subProjects/releases", method = RequestMethod.GET)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Linked releases of sub-projects successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @GetMapping(value = PROJECTS_URL + "/{id}/subProjects/releases")
     public ResponseEntity<?> getLinkedReleasesOfLinkedProjects(
             @Parameter(description = "Project ID.") @PathVariable("id") String projectId
     ) throws TException {
@@ -3599,7 +4610,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Compare dependency network with default network (relationships between releases).",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/compareDefaultNetwork", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Dependency network comparison successfully retrieved"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this project",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/network/compareDefaultNetwork")
     public ResponseEntity<?> compareDependencyNetworkWithDefaultNetwork(
             @RequestBody List<ReleaseNode> dependencyNetwork
     ) throws SW360Exception {
@@ -3620,7 +4638,14 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
             description = "Create a duplicate project with dependency network.",
             tags = {"Projects"}
     )
-    @RequestMapping(value = PROJECTS_URL + "/network/duplicate/{id}", method = RequestMethod.POST)
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Project with network successfully created"),
+        @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to create projects",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500", description = "Internal server error - flexible project release relationship not enabled",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorMessage.class)))
+    })
+    @PostMapping(value = PROJECTS_URL + "/network/duplicate/{id}")
     public ResponseEntity<?> createDuplicateProjectWithDependencyNetwork(
             @Parameter(description = "Project ID to copy.")
             @PathVariable("id") String id,
@@ -3670,56 +4695,6 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 .buildAndExpand(createdProject.getId()).toUri();
 
         return ResponseEntity.created(location).body(projectDTOHalResource);
-    }
-
-    /**
-     * Create a filter predicate to remove all projects which do not satisfy the restriction set.
-     * @param restrictions Restrictions set to filter projects on
-     * @return Filter predicate for stream.
-     */
-    private static @NonNull Predicate<Project> filterProjectMap(Map<String, Set<String>> restrictions) {
-        return project -> {
-            for (Map.Entry<String, Set<String>> restriction : restrictions.entrySet()) {
-                final Set<String> filterSet = restriction.getValue();
-                Project._Fields field = Project._Fields.findByName(restriction.getKey());
-                Object fieldValue = project.getFieldValue(field);
-                if (fieldValue == null) {
-                    return false;
-                }
-                if (field == Project._Fields.PROJECT_TYPE && !filterSet.contains(project.projectType.name())) {
-                    return false;
-                } else if (field == Project._Fields.VERSION && !filterSet.contains(project.version)) {
-                    return false;
-                } else if (field == Project._Fields.PROJECT_RESPONSIBLE && !filterSet.contains(project.projectResponsible)) {
-                    return false;
-                } else if (field == Project._Fields.STATE && !filterSet.contains(project.state.name())) {
-                    return false;
-                } else if (field == Project._Fields.CLEARING_STATE && !filterSet.contains(project.clearingState.name())) {
-                    return false;
-                } else if ((field == Project._Fields.CREATED_BY || field == Project._Fields.CREATED_ON)
-                        && !fieldValue.toString().equalsIgnoreCase(filterSet.iterator().next())) {
-                    return false;
-                } else if (fieldValue instanceof Set) {
-                    if (Sets.intersection(filterSet, (Set<String>) fieldValue).isEmpty()) {
-                        return false;
-                    }
-                } else if (fieldValue instanceof Map<?,?>) {
-                    Map<?, ?> fieldValueMap = (Map<?, ?>) fieldValue;
-                    boolean hasIntersection = false;
-                    if(field == Project._Fields.ADDITIONAL_DATA){
-                        hasIntersection = fieldValueMap.values().stream()
-                                .anyMatch(filterSet::contains);
-                    }else{
-                        hasIntersection = fieldValueMap.keySet().stream()
-                                .anyMatch(filterSet::contains);
-                    }
-                    if (!hasIntersection) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
     }
 
     @Operation(
@@ -3777,7 +4752,7 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                     )
             }
     )
-    @RequestMapping(value = PROJECTS_URL + "/{id}/addLinkedReleasesLicenses", method = RequestMethod.POST)
+    @PostMapping(value = PROJECTS_URL + "/{id}/addLinkedReleasesLicenses")
     public ResponseEntity<HalResource<EntityModel<Map<String, List<String>>>>> addLicenseToLinkedReleases(
             @Parameter(description = "Project ID", example = "376576")
             @PathVariable("id") String projectId
@@ -3815,5 +4790,33 @@ public class ProjectController implements RepresentationModelProcessor<Repositor
                 ));
 
         return new ResponseEntity<>(resources, HttpStatus.OK);
+    }
+
+    @Operation(
+            summary = "Get all project groups.",
+            description = "Get all the unique groups used by projects. The first entry '__EMPTY__' can be used to " +
+                    "search for projects with null, empty, or missing businessUnit.",
+            tags = {"Projects"}
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Project groups successfully retrieved")
+    })
+    @GetMapping(value = PROJECTS_URL + "/groups")
+    public List<String> getAllProjectGroups() {
+        Set<String> groups;
+        try {
+            groups = projectService.getGroups();
+        } catch (TException e) {
+            groups = Collections.emptySet();
+        }
+
+        LinkedHashSet<String> responseGroups = new LinkedHashSet<>();
+        responseGroups.add(SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN);
+        groups.stream()
+                .filter(Objects::nonNull)
+                .filter(group -> !group.isEmpty())
+                .filter(group -> !SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN.equals(group))
+                .forEach(responseGroups::add);
+        return new ArrayList<>(responseGroups);
     }
 }

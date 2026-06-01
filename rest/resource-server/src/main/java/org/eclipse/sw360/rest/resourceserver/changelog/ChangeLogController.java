@@ -12,10 +12,11 @@ package org.eclipse.sw360.rest.resourceserver.changelog;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 import java.net.URISyntaxException;
-import java.util.LinkedHashMap;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,6 +35,7 @@ import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
@@ -51,9 +53,8 @@ import org.springframework.hateoas.server.core.Relation;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -64,7 +65,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RestController;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -96,7 +97,7 @@ public class ChangeLogController implements RepresentationModelProcessor<Reposit
                     ),
             }
     )
-    @RequestMapping(value = CHANGE_LOG_URL + "/document/{id}", method = RequestMethod.GET)
+    @GetMapping(value = CHANGE_LOG_URL + "/document/{id}")
     public ResponseEntity getChangeLogForDocument(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -106,10 +107,12 @@ public class ChangeLogController implements RepresentationModelProcessor<Reposit
     ) throws TException, URISyntaxException, PaginationParameterException,
             ResourceClassNotFoundException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        List<ChangeLogs> changelogs = sw360ChangeLogService.getChangeLogsByDocumentId(docId, sw360User);
-        changelogs.stream().forEach(cl -> cl.setChangeTimestamp(cl.getChangeTimestamp().split(" ")[0]));
-        PaginationResult<ChangeLogs> paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-                changelogs, SW360Constants.TYPE_CHANGELOG);
+        Map<PaginationData, List<ChangeLogs>> changelogsResult = sw360ChangeLogService.getChangeLogsByDocumentIdPaginated(docId, sw360User, pageable);
+        List<ChangeLogs> changelogs = changelogsResult.values().iterator().next();
+        int totalCount = Math.toIntExact(changelogsResult.keySet().stream()
+                .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+        PaginationResult<ChangeLogs> paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                request, pageable, changelogs, SW360Constants.TYPE_CHANGELOG, totalCount);
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.registerModule(sw360Module);

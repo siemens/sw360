@@ -1,4 +1,3 @@
-
 # Copyright Helio Chisisni de Castro, 2023. Part of the SW360 Portal Project.
 # Copyright Siemens AG, 2020. Part of the SW360 Portal Project.
 # Copyright BMW CarIT GmbH, 2021.
@@ -13,15 +12,14 @@
 #--------------------------------------------------------------------------------------------------
 # Thrift
 # Ubuntu Noble image
-FROM ubuntu@sha256:72297848456d5d37d1262630108ab308d3e9ec7ed1c3286a32fe09856619a782 AS build
+FROM ubuntu:24.04@sha256:98ff7968124952e719a8a69bb3cccdd217f5fe758108ac4f21ad22e1df44d237 AS build
 
 ARG BASEDIR="/build"
 ARG DESTDIR="/"
 ARG THRIFT_VERSION="0.20.0"
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
-RUN --mount=type=cache,mode=0755,target=/var/cache/apt \
-    apt-get -qq update \
+RUN apt-get -qq update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     bison \
     build-essential \
@@ -32,12 +30,13 @@ RUN --mount=type=cache,mode=0755,target=/var/cache/apt \
     libevent-dev \
     libtool \
     pkg-config \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ./third-party/thrift/install-thrift.sh install_thrift.sh
 
-RUN --mount=type=cache,target=/var/cache/deps \
-    ./install_thrift.sh
+RUN --mount=type=cache,target=$BASEDIR/cache \
+    bash ./install_thrift.sh
 
 FROM scratch
 COPY --from=build /usr/local/bin/thrift /usr/local/bin/thrift

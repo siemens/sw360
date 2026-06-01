@@ -11,15 +11,14 @@ package org.eclipse.sw360.rest.authserver;
 
 import org.junit.Ignore;
 import org.junit.Test;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 /**
  * A POST request for an access token with grant type 'client_credentials' and
@@ -41,7 +40,7 @@ public class GrantTypeClientCredentialsCustomHeaderAuthTest extends IntegrationT
 
         responseEntity = new TestRestTemplate().postForEntity(url, new HttpEntity<>(headers), String.class);
 
-        assertThat(responseEntity.getStatusCode(), is(HttpStatus.UNAUTHORIZED));
+        assertEquals(HttpStatus.UNAUTHORIZED, responseEntity.getStatusCode());
     }
 
 }

@@ -137,6 +137,8 @@ enum MainlineState {
 enum ConfigFor {
     FOSSOLOGY_REST = 0,
     SW360_CONFIGURATION = 1,
+//    SW360_SCHEDULER = 2,   // Reverted in https://github.com/eclipse-sw360/sw360/pull/3244
+    UI_CONFIGURATION = 3,
 }
 
 enum ObligationStatus {
@@ -274,4 +276,10 @@ union Source {
 
 struct RestrictedResource {
     1: optional i32 projects,
+}
+
+struct ProjectPackageRelationship {
+    1: optional string comment,
+    2: optional string createdOn,
+    3: optional string createdBy
 }

@@ -12,19 +12,21 @@ package org.eclipse.sw360.datahandler.cloudantclient;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TFieldIdEnum;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
@@ -43,14 +45,51 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.jetbrains.annotations.NotNull;
 
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.eq;
+
 /**
  * Access the database in a CRUD manner, for a generic class
  *
  */
 public class DatabaseRepositoryCloudantClient<T> {
 
-    protected final Logger log = LogManager.getLogger(DatabaseConnectorCloudant.class);
+    protected final Logger log = LogManager.getLogger(DatabaseRepositoryCloudantClient.class);
     private static final char HIGH_VALUE_UNICODE_CHARACTER = '\uFFF0';
+    private static final Gson GSON = new Gson();
+
+    /**
+     * JVM-/classloader-scoped guard to avoid re-PUTting design documents and
+     * (re-)creating Mango indexes on every repository construction. Design
+     * documents and index definitions only change when code changes.
+     *
+     * Keys:
+     *  - INITIALISED_DDOCS:    "<dbName>::<designDocId>"
+     *  - INITIALISED_INDEXES:  "<dbName>::<designDocId>::<indexName>"
+     */
+    private static final Set<String> INITIALISED_DDOCS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> INITIALISED_INDEXES = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Test-only hook to forget all design-document and index initialisations
+     * for the given database. Required because the tests delete and recreate
+     * databases between test methods within the same JVM; without this the
+     * JVM-wide cache would incorrectly believe the (now-deleted) database
+     * still has its design docs and indexes installed.
+     *
+     * <p>Production code never calls this. Test helpers
+     * (e.g. {@code TestUtils.deleteDatabase} / {@code TestUtils.createDatabase})
+     * call it after destroying or recreating a database.
+     *
+     * @param dbName the CouchDB/Cloudant database name to forget
+     */
+    public static void forgetInitialisedDesignArtifacts(String dbName) {
+        if (dbName == null || dbName.isEmpty()) {
+            return;
+        }
+        String prefix = dbName + "::";
+        INITIALISED_DDOCS.removeIf(k -> k.startsWith(prefix));
+        INITIALISED_INDEXES.removeIf(k -> k.startsWith(prefix));
+    }
 
     private final Class<T> type;
     private DatabaseConnectorCloudant connector;
@@ -58,6 +97,11 @@ public class DatabaseRepositoryCloudantClient<T> {
     public void initStandardDesignDocument(Map<String, DesignDocumentViewsMapReduce> views,
                                            @NotNull DatabaseConnectorCloudant db) {
         String ddocId = type.getSimpleName();
+        String key = db.getDbName() + "::" + ddocId;
+        if (!INITIALISED_DDOCS.add(key)) {
+            // Already initialised in this JVM/classloader; skip
+            return;
+        }
         DesignDocument newDdoc = new DesignDocument.Builder()
                 .views(views)
                 .build();
@@ -73,7 +117,11 @@ public class DatabaseRepositoryCloudantClient<T> {
         return mrBuilder.build();
     }
 
-    public void createIndex(String indexName, String[] fields, DatabaseConnectorCloudant db) {
+    public void createIndex(String ddocId, String indexName, String[] fields,
+                            DatabaseConnectorCloudant db) {
+        if (!INITIALISED_INDEXES.add(db.getDbName() + "::" + ddocId + "::" + indexName)) {
+            return;
+        }
         IndexDefinition.Builder indexDefinitionBuilder = new IndexDefinition.Builder();
         for (String fieldName : fields) {
             IndexField field = new IndexField.Builder()
@@ -82,7 +130,38 @@ public class DatabaseRepositoryCloudantClient<T> {
             indexDefinitionBuilder.addFields(field);
         }
 
-        db.createIndex(indexDefinitionBuilder.build(), indexName, "json");
+        db.createIndex(indexDefinitionBuilder.build(), ddocId, indexName,
+                "json");
+    }
+
+    /**
+     * Create partial indexes with a type filter for better and faster querying.
+     * @param ddocId Design ID for the index (used in query for `use_index` field)
+     * @param indexName Index name (can be paired with `ddocId` in `use_index`)
+     * @param type Type of the document to filter
+     * @param fields Fields to index
+     * @param db DB connector.
+     */
+    public void createPartialTypeIndex(
+            String ddocId, String indexName, String type, String @NotNull [] fields,
+            DatabaseConnectorCloudant db
+    ) {
+        if (!INITIALISED_INDEXES.add(db.getDbName() + "::" + ddocId + "::" + indexName)) {
+            return;
+        }
+        IndexDefinition.Builder indexDefinitionBuilder = new IndexDefinition.
+                Builder();
+        for (String fieldName : fields) {
+            IndexField field = new IndexField.Builder()
+                    .add(fieldName, "asc")
+                    .build();
+            indexDefinitionBuilder.addFields(field);
+        }
+        indexDefinitionBuilder.partialFilterSelector(eq("type", type));
+
+        db.createIndex(
+                indexDefinitionBuilder.build(), ddocId, indexName, "json"
+        );
     }
 
     protected DatabaseConnectorCloudant getConnector() {
@@ -123,12 +202,17 @@ public class DatabaseRepositoryCloudantClient<T> {
     public Set<String> queryForIdsAsValue(PostViewOptions.Builder query, Set<String> keys) {
         PostViewOptions req = query
                 .keys(keys.stream().map(r -> (Object)r).toList())
+                .reduce(false)
                 .build();
         return queryForIdsFromReqBuilder(req);
     }
 
     public Set<String> queryForIdsAsValue(PostViewOptions.Builder queryBuilder, String key) {
-        PostViewOptions query = queryBuilder.includeDocs(true).keys(Collections.singletonList(key)).build();
+        PostViewOptions query = queryBuilder
+                .includeDocs(true)
+                .keys(Collections.singletonList(key))
+                .reduce(false)
+                .build();
         ViewResult viewResponse = null;
         try {
             viewResponse = getConnector().getPostViewQueryResponse(query);
@@ -145,7 +229,7 @@ public class DatabaseRepositoryCloudantClient<T> {
     }
 
     public Set<String> queryForIdsAsValue(PostViewOptions.Builder query) {
-        PostViewOptions reqBuild = query.includeDocs(true).build();
+        PostViewOptions reqBuild = query.includeDocs(true).reduce(false).build();
         return queryForIdsFromReqBuilder(reqBuild);
     }
 
@@ -154,6 +238,86 @@ public class DatabaseRepositoryCloudantClient<T> {
                 .startKey(startKey)
                 .endKey(endKey).includeDocs(true).build();
         return queryView(query);
+    }
+
+    public List<T> queryViewPaginated(
+            String viewName, String key, PaginationData pageData, boolean isReduced
+    ) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int offset = pageData.getDisplayStart();
+        final boolean ascending = pageData.isAscending();
+
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, viewName)
+                .descending(!ascending)
+                .keys(Collections.singletonList(key))
+                .reduce(false)
+                .includeDocs(true);
+
+        if (rowsPerPage != -1) {
+            query.limit(rowsPerPage).skip(offset);
+        }
+
+        paginationSetTotalRowCount(pageData, isReduced, query.build());
+
+        return queryView(query.build());
+    }
+
+    public List<T> queryViewPaginated(
+            String viewName, String startKey, String endKey, PaginationData pageData, boolean isReduced
+    ) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int offset = pageData.getDisplayStart();
+        final boolean ascending = pageData.isAscending();
+
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, viewName)
+                .descending(!ascending)
+                .reduce(false)
+                .includeDocs(true);
+
+        if (ascending) {
+            query.startKey(startKey)
+                    .endKey(endKey);
+        } else {
+            query.startKey(endKey)
+                    .endKey(startKey);
+        }
+
+        if (rowsPerPage != -1) {
+            query.limit(rowsPerPage).skip(offset);
+        }
+
+        paginationSetTotalRowCount(pageData, isReduced, query.build());
+
+        return queryView(query.build());
+    }
+
+    public List<T> queryViewPaginated(
+            String queryName, Object[] startKeys, Object[] endKeys, PaginationData pageData, boolean isReduced
+    ) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int offset = pageData.getDisplayStart();
+        final boolean ascending = pageData.isAscending();
+
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, queryName)
+                .reduce(false)
+                .descending(!ascending)
+                .includeDocs(true);
+
+        if (ascending) {
+            query.startKey(startKeys)
+                    .endKey(endKeys);
+        } else {
+            query.startKey(endKeys)
+                    .endKey(startKeys);
+        }
+
+        if (rowsPerPage != -1) {
+            query.limit(rowsPerPage).skip(offset);
+        }
+
+        paginationSetTotalRowCount(pageData, isReduced, query.build());
+
+        return queryView(query.build());
     }
 
     public List<T> queryView(String viewName, String key) {
@@ -167,6 +331,31 @@ public class DatabaseRepositoryCloudantClient<T> {
         PostViewOptions query = connector.getPostViewQueryBuilder(type, viewName)
                 .includeDocs(true).build();
         return queryView(query);
+    }
+
+    public List<T> queryViewPaginated(String viewName, PaginationData pageData, boolean isReduced) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int offset = pageData.getDisplayStart();
+        final boolean ascending = pageData.isAscending();
+
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, viewName)
+                .descending(!ascending)
+                .reduce(false)
+                .includeDocs(true);
+
+        if (rowsPerPage != -1) {
+            query.limit(rowsPerPage).skip(offset);
+        }
+
+        paginationSetTotalRowCount(pageData, isReduced, query.build());
+
+        return queryView(query.build());
+    }
+
+    public List<T> queryViewWithComplexKeysPaginated(String queryName, String key, PaginationData pageData) {
+        Object[] startKeys = new Object[] { key };
+        Object[] endKeys = new Object[] { key, new HashMap<String, Object>()  };
+        return queryViewPaginated(queryName, startKeys, endKeys, pageData, false);
     }
 
     public Set<String> queryForIds(PostViewOptions query) {
@@ -200,8 +389,16 @@ public class DatabaseRepositoryCloudantClient<T> {
         return queryView(viewName, key, key + HIGH_VALUE_UNICODE_CHARACTER);
     }
 
+    public List<T> queryByPrefixPaginated(String viewName, String key, PaginationData pageData, boolean isReduced) {
+        return queryViewPaginated(viewName, key, key + HIGH_VALUE_UNICODE_CHARACTER, pageData, isReduced);
+    }
+
     public Set<String> queryForIdsByPrefix(String viewName, String prefix) {
         return queryForIds(viewName, prefix, prefix + HIGH_VALUE_UNICODE_CHARACTER);
+    }
+
+    public Set<String> queryForIdsByPrefixPaginated(String viewName, String prefix, PaginationData pageData, boolean isReduced) {
+        return queryForIdsPaginated(viewName, prefix, prefix + HIGH_VALUE_UNICODE_CHARACTER, pageData, isReduced);
     }
 
     public Set<String> queryForIdsAsValueByPrefix(String viewName, String prefix) {
@@ -214,6 +411,45 @@ public class DatabaseRepositoryCloudantClient<T> {
                 .endKey(endKey)
                 .build();
         return queryForIds(query);
+    }
+
+    public Set<String> queryForIdsAsValue(String queryName, List<Object> keys) {
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, queryName);
+
+        PostViewOptions req = query
+                .keys(keys)
+                .reduce(false)
+                .build();
+
+        return queryForIdsFromReqBuilder(req);
+    }
+
+    public Set<String> queryForIdsPaginated(
+            String queryName, String startKey, String endKey, PaginationData pageData, boolean isReduced
+    ) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int offset = pageData.getDisplayStart();
+        final boolean ascending = pageData.isAscending();
+
+        PostViewOptions.Builder query = connector.getPostViewQueryBuilder(type, queryName)
+                .reduce(false)
+                .descending(!ascending);
+
+        if (ascending) {
+            query.startKey(startKey)
+                    .endKey(endKey);
+        } else {
+            query.startKey(endKey)
+                    .endKey(startKey);
+        }
+
+        if (rowsPerPage != -1) {
+            query.limit(rowsPerPage).skip(offset);
+        }
+
+        paginationSetTotalRowCount(pageData, isReduced, query.build());
+
+        return queryForIds(query.build());
     }
 
     public Set<String> queryForIdsAsValue(String queryName, String startKey, String endKey) {
@@ -285,20 +521,51 @@ public class DatabaseRepositoryCloudantClient<T> {
         return docList;
     }
 
+    public long getViewTotalCount(PostViewOptions req) {
+        long docLength = 0;
+        try {
+            ViewResult response = getConnector().getPostViewQueryResponse(req);
+            docLength = response.getTotalRows();
+        } catch (ServiceResponseException e) {
+            log.warn("Error in getting documents", e);
+        }
+        return docLength;
+    }
+
+    public long viewReduceSum(PostViewOptions req) {
+        long sum = 0;
+        PostViewOptions.Builder queryBuilder = req.newBuilder()
+                .reduce(true).group(true).includeDocs(false);
+        try {
+            ViewResult response = getConnector().getPostViewQueryResponse(queryBuilder.build());
+            List<Object> values = response.getRows().stream()
+                    .map(ViewResultRow::getValue)
+                    .toList();
+            for (Object value : values) {
+                try {
+                    sum += Long.parseLong(value.toString());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        } catch (ServiceResponseException e) {
+            log.warn("Error in reducing view", e);
+        }
+        return sum;
+    }
+
     public @NotNull List<T> getPojoFromViewResponse(@NotNull ViewResult response) {
         return response.getRows().stream()
                 .map(r -> connector.getPojoFromDocument(r.getDoc(), type))
-                .toList();
+                .collect(Collectors.toList()); // Simple .toList() is immutable
     }
 
     public List<Source> queryViewForSource(PostViewOptions req) {
         List<Source> sources = Lists.newArrayList();
-        Gson gson = new Gson();
         try {
             ViewResult response = getConnector().getPostViewQueryResponse(req);
             for (ViewResultRow row : response.getRows()) {
                 Type t = new TypeToken<Map<String, String>>() {}.getType();
-                Map<String, String> srcMap = gson.fromJson(new Gson().toJson(row.getValue()), t);
+                Map<String, String> srcMap = GSON.fromJson(GSON.toJsonTree(row.getValue()), t);
                 Source._Fields type = Source._Fields.findByName(srcMap.keySet().iterator().next());
                 Source source = new Source(type, srcMap.values().iterator().next());
                 sources.add(source);
@@ -311,11 +578,10 @@ public class DatabaseRepositoryCloudantClient<T> {
 
     public List<Attachment> queryViewForAttachment(PostViewOptions req) {
         List<Attachment> attachments = Lists.newArrayList();
-        Gson gson = new Gson();
         try {
             ViewResult response = getConnector().getPostViewQueryResponse(req);
             for (ViewResultRow row : response.getRows()) {
-                Attachment value = gson.fromJson(new Gson().toJson(row.getValue()), Attachment.class);
+                Attachment value = GSON.fromJson(GSON.toJsonTree(row.getValue()), Attachment.class);
                 attachments.add(value);
             }
         } catch (ServiceResponseException e) {
@@ -423,5 +689,74 @@ public class DatabaseRepositoryCloudantClient<T> {
 
     public List<T> getDocsByListIds(Collection<String> ids) {
         return connector.getDocsByListIds(type, ids);
+    }
+
+    private void paginationSetTotalRowCount(PaginationData pageData, boolean isReduced, PostViewOptions query) {
+        if (!isReduced) {
+            if (isFilteredViewQuery(query)) {
+                pageData.setTotalRowCount(getFilteredViewTotalCount(query));
+            } else {
+                PostViewOptions.Builder countQuery = query.newBuilder();
+                countQuery.includeDocs(false);
+                countQuery.limit(1);
+                pageData.setTotalRowCount(getViewTotalCount(countQuery.build()));
+            }
+        } else {
+            pageData.setTotalRowCount(viewReduceSum(query));
+        }
+    }
+
+    private long getFilteredViewTotalCount(PostViewOptions query) {
+        ViewResult response = queryQueryResponse(buildFilteredCountQuery(query));
+        if (response == null || response.getRows() == null) {
+            return 0;
+        }
+        return response.getRows().size();
+    }
+
+    private PostViewOptions buildFilteredCountQuery(PostViewOptions query) {
+        PostViewOptions.Builder countQuery = new PostViewOptions.Builder(query.db(), query.ddoc(), query.view())
+                .includeDocs(false)
+                .reduce(false);
+
+        if (query.descending() != null) {
+            countQuery.descending(query.descending());
+        }
+        if (query.inclusiveEnd() != null) {
+            countQuery.inclusiveEnd(query.inclusiveEnd());
+        }
+        if (query.key() != null) {
+            countQuery.key(query.key());
+        }
+        if (query.keys() != null && !query.keys().isEmpty()) {
+            countQuery.keys(query.keys());
+        }
+        if (query.startKey() != null) {
+            countQuery.startKey(query.startKey());
+        }
+        if (query.endKey() != null) {
+            countQuery.endKey(query.endKey());
+        }
+        if (query.startKeyDocId() != null) {
+            countQuery.startKeyDocId(query.startKeyDocId());
+        }
+        if (query.endKeyDocId() != null) {
+            countQuery.endKeyDocId(query.endKeyDocId());
+        }
+        if (query.stable() != null) {
+            countQuery.stable(query.stable());
+        }
+        if (query.update() != null) {
+            countQuery.update(query.update());
+        }
+
+        return countQuery.build();
+    }
+
+    private static boolean isFilteredViewQuery(PostViewOptions query) {
+        return query.key() != null
+                || (query.keys() != null && !query.keys().isEmpty())
+                || query.startKey() != null
+                || query.endKey() != null;
     }
 }

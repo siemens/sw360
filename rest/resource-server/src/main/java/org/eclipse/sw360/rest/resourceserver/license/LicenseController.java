@@ -1,6 +1,7 @@
 /*
  * Copyright Siemens AG, 2017-2018.
  * Copyright Bosch Software Innovations GmbH, 2017.
+ * Copyright Ritankar Saha <ritankar.saha786@gmail.com>, 2025.
  * Part of the SW360 Portal Project.
  *
  * This program and the accompanying materials are made
@@ -22,13 +23,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
-import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
@@ -47,6 +49,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
@@ -54,26 +57,36 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatus.Series;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
-
 import java.net.URISyntaxException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
 @Slf4j
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -92,26 +105,40 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
 
     @Operation(
             summary = "List all of the service's licenses.",
-            description = "List all of the service's licenses.",
+            description = "List all of the service's licenses. Supports quick filtering.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSES_URL, method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel> getLicenses(
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paginated list of licenses.")
+    })
+    @GetMapping(value = LICENSES_URL)
+    public ResponseEntity<CollectionModel<License>> getLicenses(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
+            @Parameter(description = "Search text to filter licenses.")
+            @RequestParam(value = "searchText", required = false) String searchText,
             HttpServletRequest request
     ) throws TException, ResourceClassNotFoundException, PaginationParameterException, URISyntaxException {
-        List<License> sw360Licenses = licenseService.getLicenses();
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        List<License> sw360Licenses;
+
+        if (CommonUtils.isNotNullEmptyOrWhitespace(searchText)) {
+            sw360Licenses = licenseService.searchLicenses(searchText);
+        } else {
+            sw360Licenses = licenseService.getLicenses();
+        }
+
         PaginationResult<License> paginationResult = restControllerHelper.createPaginationResult(request, pageable, sw360Licenses, SW360Constants.TYPE_LICENSE);
         List<EntityModel<License>> licenseResources = new ArrayList<>();
-        paginationResult.getResources().stream()
+        paginationResult.getResources()
                 .forEach(license -> {
                     License embeddedLicense = restControllerHelper.convertToEmbeddedLicense(license);
                     EntityModel<License> licenseResource = EntityModel.of(embeddedLicense);
                     licenseResources.add(licenseResource);
                 });
-        CollectionModel resources;
-        if (licenseResources.size() == 0) {
+        CollectionModel<License> resources;
+        if (licenseResources.isEmpty()) {
             resources = restControllerHelper.emptyPageResource(License.class, paginationResult);
         } else {
             resources = restControllerHelper.generatePagesResource(paginationResult, licenseResources);
@@ -124,10 +151,15 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             description = "List all obligations of a license.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSES_URL + "/{id}/obligations", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of obligations for the license.")
+    })
+    @GetMapping(value = LICENSES_URL + "/{id}/obligations")
     public ResponseEntity<CollectionModel<EntityModel<Obligation>>> getObligationsByLicenseId(
             @PathVariable("id") String id
     ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         List<Obligation> obligations = licenseService.getObligationsByLicenseId(id);
         List<EntityModel<Obligation>> obligationResources = new ArrayList<>();
         obligations.forEach(o -> {
@@ -143,7 +175,10 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             description = "List all of the service's licenseTypes.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSE_TYPES_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of license types.")
+    })
+    @GetMapping(value = LICENSE_TYPES_URL)
     public ResponseEntity<CollectionModel<EntityModel<LicenseType>>> getLicenseTypes(
             @Parameter(description = "The search license type text.")
             @RequestParam(value = "search", required = false) String searchElem) throws TException {
@@ -170,11 +205,16 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             description = "Get a specific license.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSES_URL + "/{id:.+}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "License with embedded obligations.")
+    })
+    @GetMapping(value = LICENSES_URL + "/{id:.+}")
     public ResponseEntity<EntityModel<License>> getLicense(
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id
     ) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         License sw360License = licenseService.getLicenseById(id);
         HalResource<License> licenseHalResource = createHalLicense(sw360License);
         return new ResponseEntity<>(licenseHalResource, HttpStatus.OK);
@@ -186,7 +226,10 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/{id:.+}", method = RequestMethod.DELETE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "License deleted successfully.")
+    })
+    @DeleteMapping(value = LICENSES_URL + "/{id:.+}")
     public ResponseEntity deleteLicense(
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id
@@ -202,7 +245,12 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL, method = RequestMethod.POST)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "License created successfully."),
+            @ApiResponse(responseCode = "409", description = "License with same shortname already exists.",
+                content = @Content(mediaType = "application/json"))
+    })
+    @PostMapping(value = LICENSES_URL)
     public ResponseEntity<EntityModel<License>> createLicense(
             @Parameter(description = "The license to be created.")
             @RequestBody License license
@@ -241,9 +289,10 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             ),
             @ApiResponse(responseCode = "405",
                     description = "Reject license update due to: an already checked license is not allowed" +
-                            " to become unchecked again")
+                            " to become unchecked again"),
+            @ApiResponse(responseCode = "400", description = "License update failed (permission denied or business rule violation).")
     })
-    @RequestMapping(value = LICENSES_URL + "/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = LICENSES_URL + "/{id}")
     public ResponseEntity<EntityModel<License>> updateLicense(
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id,
@@ -261,6 +310,9 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
         RequestStatus requestStatus = licenseService.updateLicense(licenseUpdate, sw360User);
         if (requestStatus == RequestStatus.SENT_TO_MODERATOR) {
             return new ResponseEntity(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
+        }
+        if (requestStatus != RequestStatus.SUCCESS) {
+            throw new BadRequestClientException("License update failed with status: " + requestStatus);
         }
         HalResource<License> halResource = createHalLicense(licenseUpdate);
         return new ResponseEntity<>(halResource, HttpStatus.OK);
@@ -285,7 +337,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             ),
             @ApiResponse(responseCode = "500", description = "Update Whitelist to Obligation Fail!")
     })
-    @RequestMapping(value = LICENSES_URL+ "/{id}/whitelist", method = RequestMethod.PATCH)
+    @PatchMapping(value = LICENSES_URL+ "/{id}/whitelist")
     public ResponseEntity<EntityModel<License>> updateWhitelist(
             @Parameter(description = "ID of the license.")
             @PathVariable("id") String licenseId,
@@ -348,7 +400,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             )
     })
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/{id}/obligations", method = RequestMethod.POST)
+    @PostMapping(value = LICENSES_URL + "/{id}/obligations")
     public ResponseEntity linkObligation(
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id,
@@ -378,7 +430,7 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             )
     })
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/{id}/obligations", method = RequestMethod.PATCH)
+    @PatchMapping(value = LICENSES_URL + "/{id}/obligations")
     public ResponseEntity unlinkObligation(
             @Parameter(description = "The id of the license.")
             @PathVariable("id") String id,
@@ -433,7 +485,10 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/deleteAll", method = RequestMethod.DELETE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "All licenses deleted successfully.")
+    })
+    @DeleteMapping(value = LICENSES_URL + "/deleteAll")
     public ResponseEntity deleteAllLicense() throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         licenseService.deleteAllLicenseInfo(sw360User);
@@ -446,11 +501,16 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             tags = {"Licenses"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/import/SPDX", method = RequestMethod.POST)
-    public ResponseEntity importSPDX() throws TException {
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "SPDX license imported successfully.")
+    })
+    @PostMapping(value = LICENSES_URL + "/import/SPDX")
+    public ResponseEntity<RequestSummary> importSPDX() throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        licenseService.importSpdxInformation(sw360User);
-        return new ResponseEntity<>(HttpStatus.OK);
+        RequestSummary requestSummary = licenseService.importSpdxInformation(sw360User);
+        requestSummary.setMessage("SPDX license has imported successfully");
+        HttpStatus status = HttpStatus.OK;
+        return new ResponseEntity<>(requestSummary, status);
     }
 
     @Operation(
@@ -462,12 +522,16 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             }
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSES_URL + "/downloadLicenses", method = RequestMethod.GET, produces = "application/zip")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "License archive (ZIP) stream.")
+    })
+    @GetMapping(value = LICENSES_URL + "/downloadLicenses", produces = "application/zip")
     public void downloadLicenseArchive(
             HttpServletRequest request,
             HttpServletResponse response
     ) throws TException, IOException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         licenseService.getDownloadLicenseArchive(sw360User,request,response);
 
     }
@@ -477,7 +541,11 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             description = "Upload license archive.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSES_URL + "/upload", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_MIXED_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "License archive uploaded successfully.")
+    })
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @PostMapping(value = LICENSES_URL + "/upload", consumes = {MediaType.MULTIPART_MIXED_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> uploadLicenses(
             @Parameter(description = "The license archive file to be uploaded.")
             @RequestParam("licenseFile") MultipartFile file,
@@ -490,6 +558,12 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             User sw360User = restControllerHelper.getSw360UserFromAuthentication();
             licenseService.uploadLicense(sw360User, file, overwriteIfExternalIdMatches,
                     overwriteIfIdMatchesEvenWithoutExternalIdMatch);
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (BadRequestClientException e) {
+            throw e;
         } catch (Exception e) {
             throw new SW360Exception(e.getMessage());
 	    }
@@ -501,15 +575,16 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
             description = "Import OSADL information.",
             tags = {"Licenses"}
     )
-    @RequestMapping(value = LICENSES_URL + "/import/OSADL", method = RequestMethod.POST)
+    @PreAuthorize("hasAuthority('WRITE')")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "OSADL information imported successfully.")
+    })
+    @PostMapping(value = LICENSES_URL + "/import/OSADL")
     public ResponseEntity<RequestSummary> importOsadlInfo() throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        RequestSummary requestSummary=licenseService.importOsadlInformation(sw360User);
-        requestSummary.setMessage("OSADL license has imported successfully");
-        requestSummary.unsetTotalAffectedElements();
-        requestSummary.unsetTotalElements();
-        HttpStatus status = HttpStatus.OK;
-        return new ResponseEntity<>(requestSummary,status);
+        RequestSummary requestSummary = licenseService.importOsadlInformation(sw360User);
+        HttpStatus status = requestSummary.getRequestStatus() == RequestStatus.SUCCESS ? HttpStatus.OK : HttpStatus.INTERNAL_SERVER_ERROR;
+        return new ResponseEntity<>(requestSummary, status);
     }
 
     @Operation(
@@ -529,7 +604,8 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
                     }
             )
     })
-    @RequestMapping(value = LICENSES_URL + "/addLicenseType", method = RequestMethod.POST)
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @PostMapping(value = LICENSES_URL + "/addLicenseType")
     public ResponseEntity<RequestStatus> createLicenseType(
             @Parameter(description = "The license type name.")
             @RequestParam(value = "licenseType", required = true) String licenseType,
@@ -544,10 +620,38 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
     @Operation(
             summary = "Delete a specific license type.",
             description = "Delete a specific license type.",
-            tags = {"Licenses"}
+            tags = {"Licenses"},
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200", description = "License type deleted successfully.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(
+                                                    example = """
+                                                    {
+                                                        "status": "SECCESS",
+                                                        "message": "License type deleted successfully."
+                                                    }
+                                                    """
+                                            ))
+                            }
+                    ),
+                    @ApiResponse(
+                            responseCode = "403", description = "User does not have permission to delete license type."
+                    ),
+                    @ApiResponse(
+                            responseCode = "404", description = "License type with the given ID was not found."
+                    ),
+                    @ApiResponse(
+                            responseCode = "409", description = "Cannot delete license type because it is currently in use."
+                    ),
+                    @ApiResponse(
+                            responseCode = "500", description = "Unexpected error occurred while deleting license type."
+                    )
+            }
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = LICENSE_TYPES_URL + "/{id}", method = RequestMethod.DELETE)
+    @DeleteMapping(value = LICENSE_TYPES_URL + "/{id}")
     public ResponseEntity deleteLicenseType(
             @Parameter(description = "The id of the license type.")
             @PathVariable("id") String id
@@ -555,6 +659,64 @@ public class LicenseController implements RepresentationModelProcessor<Repositor
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         RequestStatus status = licenseService.deleteLicenseType(id, sw360User);
 
-        return ResponseEntity.ok("License type deleted successfully: " + status.name());
+        switch (status) {
+            case SUCCESS:
+                Map<String, String> successResponse = new HashMap<>();
+                successResponse.put("status", status.name());
+                successResponse.put("message", "License type deleted successfully.");
+                return ResponseEntity.ok(successResponse);
+
+            case IN_USE:
+                throw new HttpClientErrorException(HttpStatus.CONFLICT,
+                        "Cannot delete license type because it is currently in use.");
+
+            case ACCESS_DENIED:
+                throw new AccessDeniedException("User does not have permission to delete license type.");
+
+            case INVALID_INPUT:
+                throw new ResourceNotFoundException("License type with the given ID was not found.");
+
+            default:
+                throw new RuntimeException("Unexpected error occurred while deleting license type.");
+        }
+    }
+
+    @Operation(
+            summary = "Check if a license type is being used and get the count.",
+            description = "Returns whether the license type is being used and the total count of such licenses.",
+            tags = {"License Types"},
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200", description = "LicenseType usage information",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(
+                                                    example = """
+                                                            {
+                                                              isUsed: true,
+                                                              count: 5
+                                                            }
+                                                            """
+                                            )
+                                    )
+                            }
+                    ),
+                    @ApiResponse(
+                            responseCode = " 403", description = "User is not an admin"
+                    )
+            }
+    )
+    @GetMapping(value = LICENSE_TYPES_URL + "/{licenseTypeId}/usage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> getLicenseTypeUsage(
+            @PathVariable("licenseTypeId") String licenseTypeId
+    ) throws  TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        int count;
+        count = licenseService.getLicenseTypeUsageCount(licenseTypeId, sw360User);
+        boolean isUsed = count > 0;
+        Map<String, Object> response = new HashMap<>();
+        response.put("isUsed", isUsed);
+        response.put("count", count);
+        return ResponseEntity.ok(response);
     }
 }

@@ -36,9 +36,11 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.lang.reflect.Array;
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -52,6 +54,11 @@ public class CommonUtils {
 
     public static final String SYSTEM_CONFIGURATION_PATH = "/etc/sw360";
     private static List<String> MULTIPLE_FILE_EXTENSIONS = Arrays.asList(".tar.gz", ".tar.bz2", ".tar.xz", ".tar.lz", ".tar.lzma");
+    public static final String DEFAULT_ATTACHMENT_FILENAME = "comp_attachment";
+    private static final Pattern FILENAME_SANITIZE_PATTERN =
+            Pattern.compile("(?i)/|\\\\|%2f|%5c");
+    private static final Pattern LEADING_UNDERSCORES_PATTERN =
+            Pattern.compile("^_+");
 
     private CommonUtils() {
         // Utility class with only static functions
@@ -59,7 +66,8 @@ public class CommonUtils {
 
     private static final Ordering<String> CASE_INSENSITIVE_ORDERING = Ordering.from(String.CASE_INSENSITIVE_ORDER);
 
-    public static final CSVFormat sw360CsvFormat = CSVFormat.RFC4180.withQuote('\'').withEscape('\\').withIgnoreSurroundingSpaces(true).withQuoteMode(QuoteMode.ALL);
+    public static final CSVFormat sw360CsvFormat = CSVFormat.RFC4180
+            .builder().setQuote('\'').setEscape('\\').setIgnoreSurroundingSpaces(true).setQuoteMode(QuoteMode.ALL).get();
 
     private static final Splitter COMMA_SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
 
@@ -239,6 +247,32 @@ public class CommonUtils {
         return !isNullOrEmptyCollection(collection);
     }
 
+    /**
+     * Sanitize filename to prevent path traversal attacks.
+     * Replaces path separators (/ and \) with underscores to prevent directory traversal. Also make they don't start
+     * with `_` as CouchDB does not allow it.
+     *
+     * @param filename the original filename that may contain path separators
+     * @return sanitized filename safe for file operations, or DEFAULT_ATTACHMENT_FILENAME if input is invalid
+     */
+    public static String sanitizeFilename(String filename) {
+        if (isNullEmptyOrWhitespace(filename)) {
+            return DEFAULT_ATTACHMENT_FILENAME;
+        }
+
+        // Replace path separators with underscores
+        // This prevents path traversal since sequences like "../" become ".._"
+        String sanitized = FILENAME_SANITIZE_PATTERN.matcher(filename).replaceAll("_");
+
+        // Filename cannot start with _ (remove leading underscores)
+        sanitized = LEADING_UNDERSCORES_PATTERN.matcher(sanitized).replaceFirst("");
+
+        // If filename becomes empty after sanitization, use default
+        return isNullEmptyOrWhitespace(sanitized)
+                ? DEFAULT_ATTACHMENT_FILENAME
+                : sanitized;
+    }
+
     public static boolean allAreEmptyOrNull(Collection... collections) {
         return !atLeastOneIsNotEmpty(collections);
     }
@@ -414,19 +448,22 @@ public class CommonUtils {
     }
 
     public static boolean isValidUrl(String url) {
+        if (isNullOrEmpty(url)) {
+            return false;
+        }
         try {
-            return !isNullOrEmpty(new URL(url).getHost());
-        } catch (MalformedURLException e) {
+            return !isNullOrEmpty(new URI(url).toURL().getHost());
+        } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
             return false;
         }
     }
 
     public static String getTargetNameOfUrl(String url) {
         try {
-            String path = new URL(url).getPath();
+            String path = new URI(url).toURL().getPath();
             String fileName = FilenameUtils.getName(path);
             return !isNullOrEmpty(fileName) ? fileName : path;
-        } catch (MalformedURLException e) {
+        } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
             return "";
         }
     }

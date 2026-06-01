@@ -21,6 +21,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,7 +33,6 @@ import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
-import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.search.SearchResult;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
@@ -44,8 +46,7 @@ import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import lombok.NonNull;
@@ -53,7 +54,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RestController;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -77,7 +78,11 @@ public class SearchController implements RepresentationModelProcessor<Repository
                 "Name for Project, Component and Release, Fullname for License, User and Vendor, Title for Obligation",
             tags = {"Search"}
     )
-    @RequestMapping(value = SEARCH_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Search results successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No search results found.", content = @Content)
+    })
+    @GetMapping(value = SEARCH_URL)
     public ResponseEntity<CollectionModel<EntityModel<SearchResult>>> getSearchResult(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -102,9 +107,9 @@ public class SearchController implements RepresentationModelProcessor<Repository
                 searchResults, SW360Constants.TYPE_SEARCHRESULT);
 
         List<EntityModel<SearchResult>> searchResources = paginationResult.getResources().stream()
-                .map(sr -> EntityModel.of(sr)).collect(Collectors.toList());
+                .map(EntityModel::of).collect(Collectors.toList());
 
-        CollectionModel resources = null;
+        CollectionModel<EntityModel<SearchResult>> resources = null;
         if (CommonUtils.isNotEmpty(searchResources)) {
             resources = restControllerHelper.generatePagesResource(paginationResult, searchResources);
         }else{

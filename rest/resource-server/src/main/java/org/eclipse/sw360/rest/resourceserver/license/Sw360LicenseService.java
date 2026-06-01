@@ -1,6 +1,6 @@
 /*
  * Copyright Siemens AG, 2017-2018. Part of the SW360 Portal Project.
- *
+ * Copyright Ritankar Saha <ritankar.saha786@gmail.com>, 2025.
  * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
  * which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -27,7 +27,6 @@ import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
-import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -56,11 +55,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
 
 @Service
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class Sw360LicenseService {
     @Value("${sw360.thrift-server-url:http://localhost:8080}")
     private String thriftServerUrl;
-    private static String CONTENT_TYPE = "application/zip";
+    private static final String CONTENT_TYPE = "application/zip";
     LicenseType lType = new LicenseType();
 
     public List<License> getLicenses() throws TException {
@@ -145,7 +144,11 @@ public class Sw360LicenseService {
                 license.setObligations(obligations);
             }
         }
-        return sw360LicenseClient.updateLicense(license, sw360User, sw360User);
+        RequestStatus status = sw360LicenseClient.updateLicense(license, sw360User, sw360User);
+        if (status == RequestStatus.FAILURE) {
+            throw new BadRequestClientException("License update failed with status: " + status);
+        }
+        return status;
     }
 
     public Set<String> getIdObligationsContainWhitelist(User sw360User, String licenseId, Set<String> diffIds) throws TException {
@@ -188,7 +191,7 @@ public class Sw360LicenseService {
 
     public void checkObligationIds(Set<String> obligationIds) throws TException {
         if (obligationIds.isEmpty()) {
-            throw new BadRequestClientException("Cannot update because no obliagtion id input");
+            throw new BadRequestClientException("Cannot update because no obligation id input");
         }
         LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
         ArrayList<String> obligationIdsIncorrect = new ArrayList<>();
@@ -221,40 +224,42 @@ public class Sw360LicenseService {
         }
     }
 
-    private LicenseService.Iface getThriftLicenseClient() throws TTransportException {
+    // visible for testing
+    LicenseService.Iface getThriftLicenseClient() throws TTransportException {
         THttpClient thriftClient = new THttpClient(thriftServerUrl + "/licenses/thrift");
         TProtocol protocol = new TCompactProtocol(thriftClient);
         return new LicenseService.Client(protocol);
     }
-    public void importSpdxInformation(User sw360User) throws TException {
+    public RequestSummary importSpdxInformation(User sw360User) throws TException {
         LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
         if (PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
             RequestSummary allSPDXLicenseStatus = sw360LicenseClient.importAllSpdxLicenses(sw360User);
+            return allSPDXLicenseStatus;
         } else {
             throw new BadRequestClientException("Unable to import All Spdx license. User is not admin");
         }
     }
 
-    public void getDownloadLicenseArchive(User sw360User ,HttpServletRequest request,HttpServletResponse response) throws TException,IOException{
+    public void getDownloadLicenseArchive(User sw360User ,HttpServletRequest request,HttpServletResponse response) throws TException, IOException {
         if (!PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
             throw new BadRequestClientException("Unable to download archive license. User is not admin");
         }
         try {
             LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
-            String fileConstant="LicensesBackup.lics";
             Map<String, InputStream> fileNameToStreams = (new LicsExporter(sw360LicenseClient)).getFilenameToCSVStreams();
             final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            final ZipOutputStream zipOutputStream = new ZipOutputStream(byteArrayOutputStream);
-
-            for (Map.Entry<String, InputStream> entry : fileNameToStreams.entrySet()) {
-                 ZipTools.addToZip(zipOutputStream, entry.getKey(), entry.getValue());
+            try (ZipOutputStream zipOutputStream = new ZipOutputStream(byteArrayOutputStream)) {
+                for (Map.Entry<String, InputStream> entry : fileNameToStreams.entrySet()) {
+                    try (InputStream in = entry.getValue()) {
+                        ZipTools.addToZip(zipOutputStream, entry.getKey(), in);
+                    }
+                }
+                zipOutputStream.finish();
             }
-            zipOutputStream.flush();
-            zipOutputStream.close();
             final ByteArrayInputStream zipFile = new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
-            String filename = String.format(fileConstant, SW360Utils.getCreatedOn());
+            String filename = "LicensesBackup_" + SW360Utils.getCreatedOn() + ".lics";
             response.setContentType(CONTENT_TYPE);
-            response.setHeader("Content-Disposition", String.format("license; filename=\"%s\"", filename));
+            response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
             copyDataStreamToResponse(response, zipFile);
         } catch (SW360Exception exp) {
             if (exp.getErrorCode() == 404) {
@@ -269,55 +274,82 @@ public class Sw360LicenseService {
         FileCopyUtils.copy(buffer, response.getOutputStream());
     }
 
-    public void uploadLicense(User sw360User, MultipartFile file, boolean overwriteIfExternalIdMatches, boolean overwriteIfIdMatchesEvenWithoutExternalIdMatch) throws IOException, TException {
-        final HashMap<String, InputStream> inputMap = new HashMap<>();
+    public void uploadLicense(User sw360User, MultipartFile file, boolean overwriteIfExternalIdMatches, boolean overwriteIfIdMatchesEvenWithoutExternalIdMatch)
+            throws IOException, TException {
+
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestClientException("Unable to upload license file. File is null or empty.");
+        }
 
         if (!PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
-            throw new BadRequestClientException("Unable to upload license file. User is not admin");
+            throw new BadRequestClientException("Unable to upload license file. User is not admin.");
         }
-        try {
-            InputStream inputStream = file.getInputStream();
+
+        final HashMap<String, InputStream> inputMap = new HashMap<>();
+        Throwable primaryThrowable = null;
+
+        try (InputStream inputStream = file.getInputStream()) {
             ZipTools.extractZipToInputStreamMap(inputStream, inputMap);
             LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
             final LicsImporter licsImporter = new LicsImporter(sw360LicenseClient, overwriteIfExternalIdMatches, overwriteIfIdMatchesEvenWithoutExternalIdMatch);
             licsImporter.importLics(sw360User, inputMap);
+        } catch (Throwable t) {
+            primaryThrowable = t;
+            throw t;
+        } finally {
+            IOException closeFailure = null;
+            for (InputStream in : inputMap.values()) {
+                try {
+                    in.close();
+                } catch (IOException e) {
+                    if (closeFailure == null) {
+                        closeFailure = e;
+                    } else {
+                        closeFailure.addSuppressed(e);
+                    }
+                }
+            }
 
-        }finally {
-            for (InputStream inputStream : inputMap.values()) {
-                inputStream.close();
+            if (closeFailure != null) {
+                if (primaryThrowable != null) {
+                    primaryThrowable.addSuppressed(closeFailure);
+                } else {
+                    throw closeFailure;
+                }
             }
         }
-	}
+    }
 
     public RequestSummary importOsadlInformation(User sw360User) throws TException {
         LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
         if (PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
-            RequestSummary osdlLicenseStatus = sw360LicenseClient.importAllOSADLLicenses(sw360User);
-            return osdlLicenseStatus;
+            return sw360LicenseClient.importAllOSADLLicenses(sw360User);
         } else {
-            throw new BadRequestClientException("Unable to import All Spdx license. User is not admin");
+            throw new BadRequestClientException("Unable to import All OSADL license obligations. User is not admin");
         }
     }
 
     public RequestStatus addLicenseType(User sw360User, String licenseType, HttpServletRequest request) throws TException {
         LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
         if (StringUtils.isNotEmpty(licenseType)) {
-             lType.setLicenseType(licenseType);
+            lType.setLicenseType(licenseType);
+        } else {
+            throw new BadRequestClientException("license type is empty");
         }
-        else {
-              throw new BadRequestClientException("license type is empty");
-        }
-        try {
-            if (PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
-                RequestStatus status = sw360LicenseClient.addLicenseType(lType, sw360User);
-            } else {
-                throw new BadRequestClientException("Unable to create License Type. User is not admin");
+        if (PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
+            try {
+                return sw360LicenseClient.addLicenseType(lType, sw360User);
+            } catch (TException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new TException(e.getMessage());
             }
-         } catch ( Exception e) {
-                 throw new TException(e.getMessage());
-         }
-         return RequestStatus.SUCCESS;
-     }
+        } else {
+            throw new AccessDeniedException("Unable to create License Type. User is not admin");
+        }
+    }
 
      public List<LicenseType> quickSearchLicenseType(String searchElem) {
          try {
@@ -363,4 +395,35 @@ public class Sw360LicenseService {
 
          return status;
      }
+
+    public int getLicenseTypeUsageCount(String licenseTypeId, User sw360User) throws TException{
+        if (!PermissionUtils.isUserAtLeast(UserGroup.ADMIN, sw360User)) {
+            throw new AccessDeniedException("User is not authorized to retrieve license type usage details.");
+        }
+
+        try {
+            LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
+
+            return sw360LicenseClient.checkLicenseTypeInUse(licenseTypeId);
+        } catch (SW360Exception sw360Exp) {
+            if (sw360Exp.getErrorCode() == 404) {
+                throw new ResourceNotFoundException("License type not found with ID: " + licenseTypeId);
+            } else {
+                throw sw360Exp;
+            }
+        }
+    }
+
+    /**
+     * Search licenses for given text in fullname or shortname.
+     * @param searchText String to search.
+     * @return Sorted list of licenses.
+     * @throws TException If Thrift had issues.
+     */
+    public List<License> searchLicenses(String searchText) throws TException {
+        LicenseService.Iface sw360LicenseClient = getThriftLicenseClient();
+        List<License> licenses = sw360LicenseClient.searchLicense(searchText);
+        licenses.sort(Comparator.comparing(License::getFullname, String.CASE_INSENSITIVE_ORDER));
+        return licenses;
+    }
 }

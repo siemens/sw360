@@ -21,25 +21,31 @@ import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+
+import lombok.NonNull;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.common.PropertyUtils;
 import org.eclipse.sw360.rest.common.Sw360CORSFilter;
+import org.eclipse.sw360.rest.common.Sw360SecurityFilter;
 import org.eclipse.sw360.rest.common.Sw360XssFilter;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
-import org.eclipse.sw360.rest.resourceserver.security.apiToken.ApiTokenAuthenticationFilter;
+import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.core.config.RepositoryRestConfiguration;
 import org.springframework.data.rest.webmvc.config.RepositoryRestConfigurer;
 import org.springframework.hateoas.UriTemplate;
@@ -51,7 +57,7 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import java.util.*;
 
 @SpringBootApplication
-@Import({Sw360CORSFilter.class, Sw360XssFilter.class})
+@Import({Sw360CORSFilter.class, Sw360XssFilter.class, Sw360SecurityFilter.class})
 public class Sw360ResourceServer extends SpringBootServletInitializer {
 
     public static final String REST_BASE_PATH = "/api";
@@ -78,55 +84,61 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     @Value("${spring.data.rest.default-page-size:10}")
     private int defaultPageSize;
 
+    @Value("${sw360.security.http-basic.enabled:true}")
+    private boolean basicAuthEnabled;
+
     private static final String SW360_PROPERTIES_FILE_PATH = "/sw360.properties";
     private static final String VERSION_INFO_PROPERTIES_FILE = "/restInfo.properties";
-    private static final String VERSION_INFO_KEY = "sw360RestVersion";
-    private static final String BUILD_VERSION_KEY = "sw360BuildVersion";
-    private static final String COMMIT_COUNT_KEY = "sw360CommitCount";
+    public static final String VERSION_INFO_KEY = "sw360RestVersion";
+    public static final String COMMIT_COUNT_KEY = "sw360CommitCount";
+    public static final String BUILD_TIME_KEY = "buildTime";
+    public static final String BUILD_NUMBER_KEY = "buildNumber";
+    public static final String PROJECT_VERSION_KEY = "sw360Version";
+    public static final String GIT_BRANCH_KEY = "gitBranch";
     private static final String CURIE_NAMESPACE = "sw360";
     private static final String APPLICATION_ID = "rest";
 
     public static final String API_TOKEN_HASH_SALT;
+    public static final Boolean API_WRITE_TOKEN_GENERATOR_ENABLED;
     public static final String API_TOKEN_MAX_VALIDITY_READ_IN_DAYS;
     public static final String API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS;
+    public static final int API_TOKEN_LENGTH;
     public static final UserGroup API_WRITE_ACCESS_USERGROUP;
-    public static final Set<String> DOMAIN;
+    public static final Set<String> DEFAULT_DOMAINS;
     public static final String REPORT_FILENAME_MAPPING;
-    public static final String JWKS_ISSUER_URL;
-    public static final String JWKS_ENDPOINT_URL;
-    public static final Boolean IS_JWKS_VALIDATION_ENABLED;
     public static final UserGroup CONFIG_WRITE_ACCESS_USERGROUP;
     public static final UserGroup CONFIG_ADMIN_ACCESS_USERGROUP;
     private static final String DEFAULT_WRITE_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
     private static final String DEFAULT_ADMIN_ACCESS_USERGROUP = UserGroup.SW360_ADMIN.name();
     private static final String SERVER_PATH_URL;
-    private static final String APPLICATION_NAME = "/resource";
-    private static final Map<Object, Object> versionInfo;
+    public static final Map<Object, Object> versionInfo;
+    public static final String SVM_NOTIFICATION_URL;
 
     static {
         Properties props = CommonUtils.loadProperties(Sw360ResourceServer.class, SW360_PROPERTIES_FILE_PATH);
+        API_WRITE_TOKEN_GENERATOR_ENABLED = Boolean.parseBoolean(props.getProperty("rest.apitoken.write.generator.enable", "true"));
         API_TOKEN_MAX_VALIDITY_READ_IN_DAYS = props.getProperty("rest.apitoken.read.validity.days", "90");
         API_TOKEN_MAX_VALIDITY_WRITE_IN_DAYS = props.getProperty("rest.apitoken.write.validity.days", "30");
         API_TOKEN_HASH_SALT = props.getProperty("rest.apitoken.hash.salt", "$2a$04$Software360RestApiSalt");
+        API_TOKEN_LENGTH = Integer.parseInt(props.getProperty("rest.apitoken.length", "20"));
         API_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", UserGroup.ADMIN.name()));
-        DOMAIN = CommonUtils.splitToSet(props.getProperty("domain",
-                "Application Software, Documentation, Embedded Software, Hardware, Test and Diagnostics"));
+        DEFAULT_DOMAINS = CommonUtils.splitToSet(
+                "Application Software, Documentation, Embedded Software, Hardware, Test and Diagnostics");
         REPORT_FILENAME_MAPPING = props.getProperty("org.eclipse.sw360.licensinfo.projectclearing.templatemapping", "");
-        JWKS_ISSUER_URL = props.getProperty("jwks.issuer.url", null);
-        JWKS_ENDPOINT_URL = props.getProperty("jwks.endpoint.url", null);
-        IS_JWKS_VALIDATION_ENABLED = Boolean.parseBoolean(props.getProperty("jwks.validation.enabled", "false"));
         CONFIG_WRITE_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.write.access.usergroup", DEFAULT_WRITE_ACCESS_USERGROUP));
         CONFIG_ADMIN_ACCESS_USERGROUP = UserGroup.valueOf(props.getProperty("rest.admin.access.usergroup", DEFAULT_ADMIN_ACCESS_USERGROUP));
         SERVER_PATH_URL = props.getProperty("backend.url", "http://localhost:8080");
+        SVM_NOTIFICATION_URL = props.getProperty("svm.notification.url", "");
 
         versionInfo = new HashMap<>();
         Properties properties = CommonUtils.loadProperties(Sw360ResourceServer.class, VERSION_INFO_PROPERTIES_FILE, false);
         versionInfo.putAll(properties);
+        versionInfo.put(VERSION_INFO_KEY, getRestVersion());
 
         SpringDocUtils.getConfig()
-                .replaceParameterObjectWithClass(org.springframework.data.domain.Pageable.class,
+                .replaceParameterObjectWithClass(Pageable.class,
                         OpenAPIPaginationHelper.class)
-                .replaceParameterObjectWithClass(org.springframework.data.domain.PageRequest.class,
+                .replaceParameterObjectWithClass(PageRequest.class,
                         OpenAPIPaginationHelper.class);
     }
 
@@ -147,6 +159,7 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     }
 
     @Override
+    @NonNull
     protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
         return builder
             .sources(Sw360ResourceServer.class)
@@ -169,24 +182,33 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
 
     @Bean
     public OpenAPI customOpenAPI() {
-        Server server = new Server();
-        server.setUrl(SERVER_PATH_URL + APPLICATION_NAME + REST_BASE_PATH);
-        server.setDescription("Current instance.");
-        String restVersionString = getRestVersion();
+        String restVersionString = String.valueOf(versionInfo.getOrDefault(VERSION_INFO_KEY,
+                "1.0.0"));
+
+        Components securityComponents = new Components()
+                .addSecuritySchemes("tokenAuth",
+                        new SecurityScheme().type(SecurityScheme.Type.APIKEY).name("Authorization")
+                                .in(SecurityScheme.In.HEADER)
+                                .description("Enter the token with the `Token ` prefix, e.g. \"Token abcdef123456...\"."))
+                .addSecuritySchemes("bearerAuth",
+                        new SecurityScheme().type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")
+                                .description("Enter a JWT access token without the `Bearer ` prefix, e.g. \"eyJhbGciOiJ...\"."));
+
+        if (basicAuthEnabled) {
+            securityComponents.addSecuritySchemes("basic",
+                    new SecurityScheme().type(SecurityScheme.Type.HTTP).name("Basic")
+                            .scheme("basic")
+                            .description("Username & password based authentication."));
+        }
+
         return new OpenAPI()
-                .components(new Components()
-                        .addSecuritySchemes("tokenAuth",
-                                new SecurityScheme().type(SecurityScheme.Type.APIKEY).name("Authorization")
-                                        .in(SecurityScheme.In.HEADER)
-                                        .description("Enter the token with the `Bearer ` prefix, e.g. \"Bearer eyJhbGciOiJ.....\"."))
-                        .addSecuritySchemes("basic",
-                                new SecurityScheme().type(SecurityScheme.Type.HTTP).name("Basic")
-                                        .scheme("basic")
-                                        .description("Username & password based authentication.")))
+                .addServersItem(new Server().url("/resource/api").description("SW360 REST API Server"))
+                .components(securityComponents)
                 .info(new Info().title("SW360 API").license(new License().name("EPL-2.0")
                                 .url("https://github.com/eclipse-sw360/sw360/blob/main/LICENSE"))
                         .version(restVersionString))
-                .servers(List.of(server))
                 .path("/health", new PathItem().get(
                         new Operation().tags(Collections.singletonList("Health"))
                                 .summary("Health endpoint").operationId("health")
@@ -202,6 +224,33 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
     }
 
     /**
+     * Check for each endpoint which uses `tokenAuth` from before to also use
+     * `bearerAuth` security scheme.
+     */
+    @Bean
+    public OpenApiCustomizer bearerAuthForTokenAuthOperationsCustomizer() {
+        return openApi -> {
+            if (openApi.getPaths() == null) {
+                return;
+            }
+            openApi.getPaths().values().forEach(pathItem -> pathItem.readOperations().forEach(operation -> {
+                List<SecurityRequirement> securityRequirements = operation.getSecurity();
+                if (securityRequirements == null || securityRequirements.isEmpty()) {
+                    return;
+                }
+
+                boolean hasTokenAuth = securityRequirements.stream().anyMatch(req -> req.containsKey("tokenAuth"));
+                boolean hasBearerAuth = securityRequirements.stream().anyMatch(req -> req.containsKey("bearerAuth"));
+
+                if (hasTokenAuth && !hasBearerAuth) {
+                    // Add bearer as an alternative auth mechanism for token-auth protected endpoints.
+                    securityRequirements.add(new SecurityRequirement().addList("bearerAuth"));
+                }
+            }));
+        };
+    }
+
+    /**
      * Generate version string for REST using git build information.
      * <ol>
      *   <li>Check if the build version and commit count exists in properties.</li>
@@ -211,8 +260,8 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
      * </ol>
      * @return Version string for OpenAPI docs.
      */
-    private String getRestVersion() {
-        Object buildVersion = versionInfo.get(BUILD_VERSION_KEY);
+    public static String getRestVersion() {
+        Object buildVersion = versionInfo.get(PROJECT_VERSION_KEY);
         Object commitCount = versionInfo.get(COMMIT_COUNT_KEY);
         String restVersionString = "1.0.0";
         if (buildVersion != null && commitCount != null) {

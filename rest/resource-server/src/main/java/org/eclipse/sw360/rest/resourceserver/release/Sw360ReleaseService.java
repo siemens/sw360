@@ -1,5 +1,6 @@
 /*
  * Copyright Siemens AG, 2017-2018.
+ * Copyright Sandip Mandal<sandipmandal02.sm@gmail.com>, 2026.
  * Copyright Bosch Software Innovations GmbH, 2017.
  * Part of the SW360 Portal Project.
  *
@@ -15,6 +16,7 @@ package org.eclipse.sw360.rest.resourceserver.release;
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import lombok.NonNull;
@@ -30,12 +32,12 @@ import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
-import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
-import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.components.*;
 import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
@@ -52,31 +54,37 @@ import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.ExternalReferen
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformationService;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ProjectVulnerabilityRating;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityService;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
 import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
-import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
-import org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoRequestStatus;
 
 import com.google.common.collect.Sets;
-import org.springframework.web.client.HttpClientErrorException;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptySet;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyString;
 import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_FORCE_UPDATE_ENABLED;
@@ -91,11 +99,15 @@ import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 
 
 @Service
 @Slf4j
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class Sw360ReleaseService implements AwareOfRestServices<Release> {
     @Value("${sw360.thrift-server-url:http://localhost:8080}")
     private String thriftServerUrl;
@@ -105,7 +117,6 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
 
     @NonNull
     private final Sw360ProjectService projectService;
-    private final Sw360LicenseService licenseService;
 
     private static FossologyService.Iface fossologyClient;
     private static final String RESPONSE_STATUS_VALUE_COMPLETED = "Completed";
@@ -122,6 +133,18 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         return sw360ComponentClient.getAllReleasesForUser(sw360User);
     }
 
+    public Map<PaginationData, List<Release>> searchReleaseByNamePaginated(String name, Pageable pageable) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.searchReleaseByNamePaginated(name, pageData);
+    }
+
+    public Map<PaginationData, List<Release>> getAccessibleNewReleasesWithSrc(User user, Pageable pageable) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.getAccessibleNewReleasesWithSrc(user, pageData);
+    }
+
     public Release getReleaseForUserById(String releaseId, User sw360User) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         Release releaseById = null;
@@ -132,7 +155,7 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
             releaseById.setAdditionalData(sortedAdditionalData);
         } catch (SW360Exception sw360Exp) {
             if (sw360Exp.getErrorCode() == 404) {
-                throw new ResourceNotFoundException("Release does not exists! id=" + releaseId);
+                throw new ResourceNotFoundException("Release does not exists! id=" + releaseId, sw360Exp);
             } else {
                 throw sw360Exp;
             }
@@ -161,6 +184,15 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
                 }
             }
         return limitedSet;
+    }
+
+    public List<Release> getAccessibleReleasesByIds(Set<String> releaseIds, User sw360User) throws TException {
+        if (CommonUtils.isNullOrEmptyCollection(releaseIds)) {
+            return Collections.emptyList();
+        }
+
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        return sw360ComponentClient.getAccessibleReleasesById(releaseIds, sw360User);
     }
 
     public List<ReleaseLink> getLinkedReleaseRelations(Release release, User user) throws TException {
@@ -287,6 +319,7 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
             throw new BadRequestClientException("No Component found with Id - " + componentId);
         }
         release.setName(componentById.getName());
+        release.setComponentType(componentById.getComponentType());
     }
 
     public RequestStatus updateRelease(Release release, User sw360User) throws TException {
@@ -311,6 +344,11 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
                     "Release name and version field cannot be empty or contain only whitespace character");
         } else if (requestStatus == RequestStatus.DUPLICATE_ATTACHMENT) {
             throw new RuntimeException("Multiple attachments with same name or content cannot be present in attachment list.");
+        } else if (requestStatus == RequestStatus.DUPLICATE) {
+            throw new HttpClientErrorException(HttpStatus.CONFLICT,
+                    "A release with the same name and version already exists.");
+        } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
+            throw new AccessDeniedException("Not allowed to update release '" + SW360Utils.printName(release) + "'.");
         } else if (requestStatus != RequestStatus.SUCCESS && requestStatus != RequestStatus.SENT_TO_MODERATOR) {
             throw new RuntimeException(
                     "sw360 release with name '" + SW360Utils.printName(release) + " cannot be updated.");
@@ -960,15 +998,16 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
                             attachmentId, uploadDescription);
                 }
             } catch (Exception exp) {
-                log.error(String.format("Release : %s .Error occured while triggering Fossology Process . %s",
+                log.error(String.format("Release : %s .Error occurred while triggering Fossology Process . %s",
                         new Object[] { releaseId, exp.getMessage() }));
             } finally {
                 log.info("Release : " + releaseId + " .Fossology Process exited, removing lock.");
                 if (service != null)
                     service.shutdownNow();
-                if (lockObj.isLocked())
+                if (lockObj.isHeldByCurrentThread()) {
                     lockObj.unlock();
-                mapOfLocks.remove(releaseId);
+                    mapOfLocks.remove(releaseId);
+                }
             }
         });
 
@@ -1005,7 +1044,7 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
             attachmentSizeinBytes = FileCopyUtils.copy(streamToAttachments, attachmentOutputStream);
         } catch (IOException exp) {
             log.error("Release : " + release.getId()
-                    + " .Error occured while calculation attachment size.Attachment ID : " + attachmentId);
+                    + " .Error occurred while calculation attachment size.Attachment ID : " + attachmentId);
         }
 
         return (attachmentSizeinBytes / 1024) / 1024;
@@ -1326,9 +1365,10 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
     /*
      * Use lucene search for searching releases based on name
      */
-    public List<Release> refineSearch(String searchText, User sw360User) throws TException {
+    public Map<PaginationData, List<Release>> refineSearch(String searchText, User sw360User, Pageable pageable) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        return sw360ComponentClient.searchAccessibleReleases(searchText, sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.searchAccessibleReleases(searchText, sw360User, pageData);
     }
 
     public void addEmbeddedLinkedRelease(Release sw360Release, User sw360User, HalResource<ReleaseLink> releaseResource, Set<String> releaseIdsInBranch) {
@@ -1433,19 +1473,35 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         }
     }
 
-    public Map<String, Object> getReleaseLicenseFileListInfo(Release rel, User sw360User) throws TException{
+    public Map<String, Object> getReleaseLicenseFileListInfo(Release rel, User sw360User, String attachmentId) throws TException{
         ThriftClients thriftClients = new ThriftClients();
         LicenseInfoService.Iface licenseClient = thriftClients.makeLicenseInfoClient();
-        final Predicate<Attachment> isCLI = attachment -> AttachmentType.COMPONENT_LICENSE_INFO_XML.equals(attachment.getAttachmentType())
-                || AttachmentType.COMPONENT_LICENSE_INFO_COMBINED.equals(attachment.getAttachmentType());
+        final Predicate<Attachment> isSupportedAttachment = attachment ->
+                AttachmentType.COMPONENT_LICENSE_INFO_XML.equals(attachment.getAttachmentType())
+                || AttachmentType.COMPONENT_LICENSE_INFO_COMBINED.equals(attachment.getAttachmentType())
+                || AttachmentType.INITIAL_SCAN_REPORT.equals(attachment.getAttachmentType());
         Set<LicenseNameWithText> licenseNameWithTexts = new HashSet<LicenseNameWithText>();
         Map<String, Object> successResponse = new HashMap<>();
-        List<Attachment> filteredAttachments = CommonUtils.nullToEmptySet(rel.getAttachments()).stream().filter(isCLI).collect(Collectors.toList());
-        if (filteredAttachments.size() > 1) {
-            Predicate<Attachment> isApprovedCLI = attachment -> CheckStatus.ACCEPTED.equals(attachment.getCheckStatus());
-            filteredAttachments = filteredAttachments.stream().filter(isApprovedCLI).collect(Collectors.toList());
+        List<Attachment> filteredAttachments = CommonUtils.nullToEmptySet(rel.getAttachments()).stream().filter(isSupportedAttachment).collect(Collectors.toList());
+
+        // If attachmentId is provided, filter by that specific attachment
+        if (CommonUtils.isNotNullEmptyOrWhitespace(attachmentId)) {
+            filteredAttachments = filteredAttachments.stream()
+                    .filter(attachment -> attachmentId.equals(attachment.getAttachmentContentId()))
+                    .collect(Collectors.toList());
+            if (filteredAttachments.isEmpty()) {
+                throw new ResourceNotFoundException("Attachment with id " + attachmentId + " not found or is not a supported attachment type (CLI/ISR)");
+            }
+        } else {
+            // Original logic: filter by approved attachments if multiple exist
+            if (filteredAttachments.size() > 1) {
+                Predicate<Attachment> isApprovedAttachment = attachment -> CheckStatus.ACCEPTED.equals(attachment.getCheckStatus());
+                filteredAttachments = filteredAttachments.stream().filter(isApprovedAttachment).collect(Collectors.toList());
+            }
         }
-        if (filteredAttachments.size() == 1 && filteredAttachments.get(0).getFilename().endsWith(SW360Constants.XML_FILE_EXTENSION)) {
+
+        if (filteredAttachments.size() == 1 && (filteredAttachments.get(0).getFilename().endsWith(SW360Constants.XML_FILE_EXTENSION)
+                || filteredAttachments.get(0).getFilename().endsWith(SW360Constants.RDF_FILE_EXTENSION))) {
             final Attachment filteredAttachment = filteredAttachments.get(0);
             final String attachmentContentId = filteredAttachment.getAttachmentContentId();
             try {
@@ -1471,7 +1527,7 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
                         successResponse.put("attName", nullToEmptyString(filteredAttachment.getFilename()));
                         return successResponse;
                     } else {
-                        throw new BadRequestClientException("source file information not found in cli");
+                        throw new BadRequestClientException("source file information not found in attachment");
                     }
                 }
             } catch (TException exception) {
@@ -1482,13 +1538,155 @@ public class Sw360ReleaseService implements AwareOfRestServices<Release> {
         }
         else {
             if (filteredAttachments.size() > 1) {
-                throw new DataIntegrityViolationException("multiple approved cli are found in the release");
+                throw new DataIntegrityViolationException("multiple approved attachments are found in the release");
             } else if (filteredAttachments.isEmpty()) {
-                throw new ResourceNotFoundException("cli attachment not found in the release");
+                throw new ResourceNotFoundException("supported attachment (CLI/ISR) not found in the release");
             } else {
-                throw new BadRequestClientException("source file information not found in cli");
+                throw new BadRequestClientException("source file information not found in attachment");
             }
         }
         return successResponse;
+    }
+
+    public RequestStatus mergeRelease(
+            String mergeTargetId, String mergeSourceId, ReleaseMergeSelector releaseSelection,
+            User sw360User
+    ) throws TException {
+
+        validateReleaseMergeSelection(releaseSelection);
+        if (isReleaseMissing(mergeTargetId, sw360User) || isReleaseMissing(mergeSourceId, sw360User)) {
+            throw new ResourceNotFoundException("Source or Target Release ID does not exist.");
+        }
+        String componentId = getMergeReleaseComponentId(mergeTargetId, mergeSourceId, sw360User);
+        releaseSelection.setComponentId(componentId);
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        RequestStatus requestStatus = sw360ComponentClient.mergeReleases(mergeTargetId, mergeSourceId, releaseSelection,
+                sw360User);
+
+        if (requestStatus == RequestStatus.IN_USE) {
+            throw new BadRequestClientException("Release already in use.");
+        } else if (requestStatus == RequestStatus.FAILURE) {
+            throw new SW360Exception("Cannot merge these releases.");
+        } else if (requestStatus == RequestStatus.ACCESS_DENIED) {
+            throw new AccessDeniedException("Access denied");
+        }
+
+        return requestStatus;
+    }
+
+    private void validateReleaseMergeSelection(ReleaseMergeSelector releaseSelection) throws BadRequestClientException {
+        if (releaseSelection == null) {
+            throw new BadRequestClientException("Body for merge cannot be null");
+        }
+        Set<Release._Fields> requiredFields = ImmutableSet.<Release._Fields>builder()
+                .add(Release._Fields.NAME).add(Release._Fields.CREATED_ON)
+                .add(Release._Fields.CREATED_BY).add(Release._Fields.VERSION).build();
+
+        for (Release._Fields field : requiredFields) {
+            if (!releaseSelection.isSet(field)
+                    || isNullEmptyOrWhitespace((String) releaseSelection.getFieldValue(field))) {
+                throw new BadRequestClientException("Merge body is missing field " + field.getFieldName());
+            }
+        }
+        if (!releaseSelection.isSetAttachments()) {
+            throw new BadRequestClientException("Merge body is missing field attachments");
+        }
+    }
+
+    private boolean isReleaseMissing(String releaseId, User sw360User) {
+        try {
+            ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+            Release release = sw360ComponentClient.getReleaseById(releaseId, sw360User);
+            return release == null;
+        } catch (Exception e) {
+            log.info("Error fetching release with ID: {}", releaseId, e);
+            return true;
+        }
+    }
+
+    private String getMergeReleaseComponentId(String targetReleaseId, String sourceReleaseId, User sw360User) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        Release targetRelease = sw360ComponentClient.getReleaseById(targetReleaseId, sw360User);
+        Release sourceRelease = sw360ComponentClient.getReleaseById(sourceReleaseId, sw360User);
+        if (targetRelease.getComponentId() == null || sourceRelease.getComponentId() == null ||
+                !targetRelease.getComponentId().equals(sourceRelease.getComponentId())
+        ) {
+            throw new BadRequestClientException("Source and Target Releases must belong to the same component.");
+        }
+        return targetRelease.getComponentId();
+    }
+
+    /**
+     * Converts a Pageable object to a PaginationData object.
+     *
+     * @param pageable the Pageable object to convert
+     * @return a PaginationData object representing the pagination information
+     */
+    private static PaginationData pageableToPaginationData(@NotNull Pageable pageable) {
+        ReleaseSortColumn column = ReleaseSortColumn.BY_CREATEDON;
+        boolean ascending = false;
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            String property = order.getProperty();
+            column = switch (property) {
+                case "createdOn" -> ReleaseSortColumn.BY_CREATEDON;
+                case "name" -> ReleaseSortColumn.BY_NAME;
+                case "version" -> ReleaseSortColumn.BY_VERSION;
+                default -> column; // Default to BY_CREATEDON if no match
+            };
+            ascending = order.isAscending();
+        }
+        return new PaginationData().setDisplayStart((int) pageable.getOffset())
+                .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(column.getValue()).setAscending(ascending);
+    }
+
+    /**
+     * Get usage information for release merge
+     */
+    public Map<String, Integer> getUsageInformationForReleaseMerge(String releaseSourceId, User sessionUser) throws TException {
+        Map<String, Integer> usageInformation = new HashMap<>();
+        ThriftClients thriftClients = new ThriftClients();
+        ProjectService.Iface projectClient = thriftClients.makeProjectClient();
+        Set<Project> projects = projectClient.searchByReleaseId(releaseSourceId, sessionUser);
+        usageInformation.put("projects", projects.size());
+
+        AttachmentService.Iface attachmentClient = thriftClients.makeAttachmentClient();
+        List<AttachmentUsage> attachmentUsages = attachmentClient.getAttachmentUsagesByReleaseId(releaseSourceId);
+        usageInformation.put("attachmentUsages", attachmentUsages.size());
+
+        ComponentService.Iface componentClient = thriftClients.makeComponentClient();
+        List<Release> releases = componentClient.getReferencingReleases(releaseSourceId);
+        usageInformation.put("releases", releases.size());
+
+        VulnerabilityService.Iface vulnerabilityClient = thriftClients.makeVulnerabilityClient();
+        List<ReleaseVulnerabilityRelation> releaseVulnerabilities = vulnerabilityClient.getReleaseVulnerabilityRelationsByReleaseId(releaseSourceId, sessionUser);
+        usageInformation.put("releaseVulnerabilities", releaseVulnerabilities.size());
+        List<ProjectVulnerabilityRating> projectRatings = vulnerabilityClient.getProjectVulnerabilityRatingsByReleaseId(releaseSourceId, sessionUser);
+        usageInformation.put("projectRatings", projectRatings.size());
+
+        PackageService.Iface packageClient = thriftClients.makePackageClient();
+        Set<Package> packages = packageClient.getPackagesByReleaseId(releaseSourceId);
+        usageInformation.put("packages", packages.size());
+
+        return usageInformation;
+    }
+
+    /**
+     * Get linked packages for a release
+     */
+    public List<Package> getLinkedPackagesForRelease(String releaseId, User user) throws TException {
+        Release release = getReleaseForUserById(releaseId, user);
+
+        if (release.getPackageIds() == null || release.getPackageIds().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            PackageService.Iface packageClient = new ThriftClients().makePackageClient();
+            return packageClient.getPackageWithReleaseByPackageIds(release.getPackageIds());
+        } catch (TTransportException e) {
+            throw new TException("Unable to get package client", e);
+        }
     }
 }

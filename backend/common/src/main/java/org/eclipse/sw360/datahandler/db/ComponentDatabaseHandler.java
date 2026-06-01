@@ -75,6 +75,8 @@ import org.spdx.core.InvalidSPDXAnalysisException;
 
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
@@ -142,7 +144,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final ReleaseModerator releaseModerator;
     private final ProjectModerator projectModerator;
 
-    public static final List<EccInformation._Fields> ECC_FIELDS = Arrays.asList(EccInformation._Fields.ECC_STATUS, EccInformation._Fields.AL, EccInformation._Fields.ECCN, EccInformation._Fields.MATERIAL_INDEX_NUMBER, EccInformation._Fields.ECC_COMMENT);
+    public static final List<EccInformation._Fields> ECC_FIELDS = Arrays.asList(EccInformation._Fields.ECC_STATUS, EccInformation._Fields.AL, EccInformation._Fields.ECCN, EccInformation._Fields.MATERIAL_INDEX_NUMBER, EccInformation._Fields.ECC_COMMENT, EccInformation._Fields.CONTAINS_CRYPTOGRAPHY);
 
     private final MailUtil mailUtil = new MailUtil();
     private static final ImmutableList<Component._Fields> listOfStringFieldsInCompToTrim = ImmutableList.of(
@@ -248,12 +250,12 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 releaseAfter.setClearingState(ClearingState.NEW_CLEARING);
             }
 
-            if (newSecondBestCR.isPresent() &&  (newSecondBestCR.get().getCheckStatus() == CheckStatus.ACCEPTED)) {
-                releaseAfter.setClearingState(ClearingState.INTERNAL_USE_SCAN_AVAILABLE);
-            }
-
             if (isrCountAfter > 0) {
                 releaseAfter.setClearingState(ClearingState.SCAN_AVAILABLE);
+            }
+
+            if (newSecondBestCR.isPresent() &&  (newSecondBestCR.get().getCheckStatus() == CheckStatus.ACCEPTED)) {
+                releaseAfter.setClearingState(ClearingState.INTERNAL_USE_SCAN_AVAILABLE);
             }
         }
     }
@@ -345,6 +347,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return releaseRepository.getReleasesFullDocsFromComponentId(id, user);
     }
 
+    public Map<PaginationData, List<Release>> getReleasesFromComponentIdWithPagination(String id, User user, PaginationData pageData) throws TException {
+        return releaseRepository.getReleasesFromComponentIdWithPagination(id, user, pageData);
+    }
+
     public List<Component> getMyComponents(String user) {
         Collection<Component> myComponents = componentRepository.getMyComponents(user);
 
@@ -369,24 +375,31 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
     }
 
     public Component getComponent(String id, User user) throws SW360Exception {
-        Component component = componentRepository.get(id);
+        try {
+            Component component = componentRepository.get(id);
 
-        if (component == null) {
-            throw fail("Could not fetch component from database! id=" + id);
+            if (component == null) {
+                log.error("Component not found in database. Component ID: {}", id);
+                throw fail(404, "Could not fetch component from database! id=" + id);
+            }
+
+            component.setReleases(releaseRepository.makeSummaryWithPermissions(SummaryType.SUMMARY, component.releaseIds, user));
+            component.unsetReleaseIds();
+
+            setMainLicenses(component);
+
+            vendorRepository.fillVendor(component);
+
+            makePermission(component, user).fillPermissions();
+
+            return component;
+        } catch (SW360Exception e) {
+            log.error("Error fetching component. Component ID: {}, Error: {}", id, e.getMessage(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error while fetching component. Component ID: {}, Error: {}", id, e.getMessage(), e);
+            throw new SW360Exception("Failed to fetch component with id: " + id + ". " + e.getMessage());
         }
-
-        // Convert Ids to release summary
-        component.setReleases(releaseRepository.makeSummaryWithPermissions(SummaryType.SUMMARY, component.releaseIds, user));
-        component.unsetReleaseIds();
-
-        setMainLicenses(component);
-
-        vendorRepository.fillVendor(component);
-
-        // Set permissions
-        makePermission(component, user).fillPermissions();
-
-        return component;
     }
 
     public Component getAccessibleComponent(String id, User user) throws SW360Exception {
@@ -464,7 +477,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 }
                 return addDocumentRequestSummary;
             }
-            if (!CommonUtils.isValidUrl(vcsUrl)) {
+            if (!isValidUrl(vcsUrl)) {
                 log.error("Invalid VCS URL: " + vcsUrl);
                 return new AddDocumentRequestSummary().setRequestStatus(AddDocumentRequestStatus.INVALID_INPUT);
             }
@@ -783,6 +796,23 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         } else {
             return null;
         }
+    }
+
+    public Map<PaginationData, List<Component>> searchComponentByNamePrefixPaginated(User user, String name, PaginationData pageData) {
+        return componentRepository.searchComponentByNamePrefixPaginated(user, name, pageData);
+    }
+
+    public Map<PaginationData, List<Component>> searchComponentByExactNamePaginated(User user, String name, PaginationData pageData) {
+        return componentRepository.searchComponentByExactNamePaginated(user, name, pageData);
+    }
+
+    public Map<PaginationData, List<Component>> searchComponentByExactValues(Map<String,Set<String>> subQueryRestrictions, User user, PaginationData pageData) {
+        Map<PaginationData, List<Component>> resultMap = componentRepository.searchComponentByExactValues(subQueryRestrictions, user, pageData);
+        List<Component> resultComponentList = resultMap.get(pageData);
+        for (Component component : resultComponentList) {
+            makePermission(component, user).fillPermissionsInOther(component);
+        }
+        return Collections.singletonMap(pageData, resultComponentList);
     }
 
     private boolean isDependenciesExistInComponent(Component component) {
@@ -1143,9 +1173,12 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         // Get actual document for members that should no change
         Release actual = releaseRepository.get(release.getId());
         assertNotNull(actual, "Could not find release to update");
+        ensureEccInformationIsSet(actual);
         DatabaseHandlerUtil.saveAttachmentInFileSystem(attachmentConnector, actual.getAttachments(),
                 release.getAttachments(), user.getEmail(), release.getId());
-        if (actual.equals(release)) {
+
+        // Use compareTo logic to detect if there are no changes
+        if (hasNoChanges(actual, release)) {
             return RequestStatus.SUCCESS;
         } else if (duplicateAttachmentExist(release)) {
             return RequestStatus.DUPLICATE_ATTACHMENT;
@@ -1199,8 +1232,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 Component oldComponent = componentRepository.get(componentId);
                 Component updatedComponent = updateReleaseDependentFieldsForComponentId(componentId, user);
                 // clean up attachments in database
-                attachmentConnector.deleteAttachmentDifference(nullToEmptySet(actual.getAttachments()),
+                Set<String> idsToBeDeleted = attachmentConnector.getAttachentContentIdsToBeDeleted(nullToEmptySet(actual.getAttachments()),
                         nullToEmptySet(release.getAttachments()));
+                Set<String> idsInUse = attachmentDatabaseHandler.getAttachmentsByIds(idsToBeDeleted).stream().map(Attachment::getAttachmentContentId).collect(Collectors.toSet());
+                attachmentConnector.deleteAttachmentsByIds(idsToBeDeleted.stream().filter(id->!idsInUse.contains(id)).collect(Collectors.toSet()));
                 // update linked packages
                 updateLinkedPackages(CommonUtils.nullToEmptySet(actual.getPackageIds()), CommonUtils.nullToEmptySet(release.getPackageIds()), release.getId(), user);
                 sendMailNotificationsForReleaseUpdate(release, user.getEmail());
@@ -1254,13 +1289,13 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
     private boolean isValidURL(String url) {
         try {
-            HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+            HttpURLConnection connection = (HttpURLConnection) new URI(url).toURL().openConnection();
             connection.setRequestMethod("HEAD");
             connection.setInstanceFollowRedirects(true); // Ensure redirects are followed
             connection.setConnectTimeout(3000);
             connection.setReadTimeout(3000);
             return connection.getResponseCode() == HttpURLConnection.HTTP_OK;
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException | IllegalArgumentException e) {
             log.error("Invalid or unreachable URL: {}", url, e);
             return false;
         }
@@ -1280,7 +1315,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             Set<String> updatedAttachmentId = updatedAttachments.stream().map(Attachment::getAttachmentContentId).collect(Collectors.toSet());
 
             // check if attachments are updated
-            if (!originalAttachmentId.equals(updatedAttachmentId)) {
+            if (!Objects.equals(originalAttachmentId, updatedAttachmentId)) {
                 // fetch all the projects associated with this release and collect the Clearing request Ids
                 final Set<Project> usingProjects = projectRepository.searchByReleaseId(release.getId());
                 final Set<String> crIds = CommonUtils.nullToEmptySet(usingProjects).stream()
@@ -1353,6 +1388,97 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         Set<String> updatedLinkedReleaseIds = nullToEmptyMap(updated.getReleaseIdToRelationship()).keySet();
         Set<String> actualLinkedReleaseIds = nullToEmptyMap(actual.getReleaseIdToRelationship()).keySet();
         deleteAttachmentUsagesOfUnlinkedReleases(usedBy, updatedLinkedReleaseIds, actualLinkedReleaseIds);
+    }
+
+    /**
+     * Check if there are no changes between two Release objects using compareTo logic
+     * This is a GENERALIZED method that uses Thrift reflection to automatically
+     * compare ALL fields - no need to manually add new fields when they're added to Release
+     *
+     * @param actual The current release from database
+     * @param update The updated release from the user
+     * @return true if there are NO changes, false if there are changes
+     */
+    private boolean hasNoChanges(Release actual, Release update) {
+        // Normalize vendor IDs for consistent comparison
+        SW360Utils.setVendorId(actual);
+        SW360Utils.setVendorId(update);
+
+        return compareThriftObjects(actual, update, Release._Fields.values());
+    }
+
+    /**
+     * Generalized method to compare two Thrift objects field by field
+     * This automatically handles ALL fields using Thrift's reflection capabilities
+     *
+     * @param obj1 First Thrift object
+     * @param obj2 Second Thrift object
+     * @param fields Array of field enums (e.g., Release._Fields.values())
+     * @return true if objects are equal (no changes), false if different
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <T extends org.apache.thrift.TBase<T, F>, F extends org.apache.thrift.TFieldIdEnum>
+            boolean compareThriftObjects(T obj1, T obj2, F[] fields) {
+
+        if (obj1 == null && obj2 == null) {
+            return true;
+        }
+        if (obj1 == null || obj2 == null) {
+            return false;
+        }
+
+        // Iterate through all fields automatically using Thrift reflection
+        for (F field : fields) {
+            // Get field values using Thrift's getFieldValue
+            Object value1 = obj1.isSet(field) ? obj1.getFieldValue(field) : null;
+            Object value2 = obj2.isSet(field) ? obj2.getFieldValue(field) : null;
+
+            // Compare field values
+            if (!areFieldValuesEqual(value1, value2, field.getFieldName())) {
+                return false;
+            }
+        }
+
+        // All fields are equal
+        log.debug("No changes detected - all fields are equal");
+        return true;
+    }
+
+    /**
+     * Compare two field values with proper null handling and type-specific comparison
+     * Includes detailed logging to track which fields differ
+     *
+     * @param value1 First value
+     * @param value2 Second value
+     * @param fieldName Name of field (for logging)
+     * @return true if values are equal, false otherwise
+     */
+    private boolean areFieldValuesEqual(Object value1, Object value2, String fieldName) {
+        // Both null = equal
+        if (value1 == null && value2 == null) {
+            return true;
+        }
+
+        // One null, one not = not equal
+        if (value1 == null || value2 == null) {
+            return false;
+        }
+
+        // For Comparable types, use compareTo
+        if (value1 instanceof Comparable && value2 instanceof Comparable &&
+            value1.getClass().equals(value2.getClass())) {
+            try {
+                @SuppressWarnings("unchecked")
+                int comparison = ((Comparable<Object>) value1).compareTo(value2);
+                return comparison == 0;
+            } catch (ClassCastException e) {
+                // Fall back to equals if compareTo fails
+                return Objects.equals(value1, value2);
+            }
+        }
+
+        // For all other types (collections, maps, objects), use equals
+        return Objects.equals(value1, value2);
     }
 
     public boolean hasChangesInEccFields(Release release, Release actual) {
@@ -1506,7 +1632,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                     return addedCount != orphanCount;
                 }
             } catch (TException e) {
-                log.error(String.format("An error occured while updating linked packages of release: %s", releaseId), e.getCause());
+                log.error(String.format("An error occurred while updating linked packages of release: %s", releaseId), e.getCause());
                 return true;
             }
         }
@@ -1546,7 +1672,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 }
             }
         } catch (TException e) {
-            log.error(String.format("An error occured while updating linked packages of release: %s", releaseId), e.getCause());
+            log.error(String.format("An error occurred while updating linked packages of release: %s", releaseId), e.getCause());
             throw new SW360Exception(e.getMessage());
         }
     }
@@ -1603,11 +1729,16 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
             updateReleaseReferencesInReleases(mergeTargetId, mergeSourceId, sessionUser);
             updateReleaseReferencesInVulnerabilities(mergeTargetId, mergeSourceId, sessionUser);
             updateReleaseReferencesInProjectRatings(mergeTargetId, mergeSourceId, sessionUser);
+            updateReleaseReferencesInPackages(mergeTargetId, mergeSourceId, sessionUser);
 
             // Finally we can delete the source component
             updateParentComponent(mergeSource, sessionUser);
 
-            deleteRelease(mergeSourceId, sessionUser);
+            RequestStatus deleteStatus = deleteRelease(mergeSourceId, sessionUser);
+            if (deleteStatus != RequestStatus.SUCCESS) {
+                log.error("Failed to delete source release [{}] during merge. Status: {}", mergeSourceId, deleteStatus);
+                return RequestStatus.FAILURE;
+            }
 
         } catch(Exception e) {
             log.error("Cannot merge release [" + mergeSource.getId() + "] into [" + mergeTarget.getId() + "].", e);
@@ -1798,10 +1929,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         ProjectService.Iface projectClient = new ThriftClients().makeProjectClient();
 
         final String userEmail = sessionUser.getEmail();
-        Set<Project> projects = projectClient.searchByReleaseId(mergeSourceId, sessionUser);
+        Set<Project> projects = projectRepository.searchByReleaseId(mergeSourceId);
         for(Project project : projects) {
             // retrieve full document, other method only retrieves summary
-            project = projectClient.getProjectById(project.getId(), sessionUser);
+            project = projectClient.getProjectByIdIgnoringVisibility(project.getId());
             Project projectBefore=project.deepCopy();
             ProjectReleaseRelationship relationship = project.getReleaseIdToUsage().remove(mergeSourceId);
             // if the target release is also linked, keep this one, do not overwrite
@@ -1809,7 +1940,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                 project.putToReleaseIdToUsage(mergeTargetId, relationship);
             }
             updateModifiedFields(project, userEmail);
-            projectClient.updateProject(project, sessionUser);
+            projectClient.updateProjectWithForceFlag(project, sessionUser, true);
 
             dbHandlerUtil.addChangeLogs(project, projectBefore, userEmail, Operation.UPDATE,
                     attachmentConnector, Lists.newArrayList(), mergeTargetId, Operation.MERGE_RELEASE);
@@ -1880,6 +2011,32 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
     }
 
+    private void updateReleaseReferencesInPackages(String mergeTargetId, String mergeSourceId, User sessionUser) throws TException {
+        PackageService.Iface packageClient = new ThriftClients().makePackageClient();
+
+        Set<Package> packages = packageClient.getPackagesByReleaseId(mergeSourceId);
+        Release mergeTarget = releaseRepository.get(mergeTargetId);
+        for (Package pkg : packages) {
+            Package packageBefore = pkg.deepCopy();
+            pkg.setReleaseId(mergeTargetId);
+            packageClient.updatePackage(pkg, sessionUser);
+            mergeTarget.addToPackageIds(pkg.getId());
+            dbHandlerUtil.addChangeLogs(pkg, packageBefore, sessionUser.getEmail(), Operation.UPDATE,
+                    attachmentConnector, Lists.newArrayList(), mergeTargetId, Operation.MERGE_RELEASE);
+        }
+        // Update the merge target release with the migrated package IDs
+        if (!packages.isEmpty()) {
+            releaseRepository.update(mergeTarget);
+        }
+
+        // Remove package IDs from source release so deleteRelease does not block
+        Release mergeSource = releaseRepository.get(mergeSourceId);
+        if (mergeSource.isSetPackageIds()) {
+            mergeSource.getPackageIds().clear();
+            releaseRepository.update(mergeSource);
+        }
+    }
+
     private void updateParentComponent(Release release, User sessionUser) throws SW360Exception {
         Component component = getComponent(release.getComponentId(), sessionUser);
         Component componentBefore = component.deepCopy();
@@ -1911,8 +2068,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         }
 
         final Set<String> releaseIds = component.getReleaseIds();
-        if (releaseIds!=null && releaseIds.size()>0) return RequestStatus.IN_USE;
-        if (checkIfInUse(releaseIds)) return RequestStatus.IN_USE;
+        if (!forceDelete && checkIfInUse(releaseIds)) return RequestStatus.IN_USE;
 
 
         if (makePermission(component, user).isActionAllowed(RequestedAction.DELETE) || forceDelete) {
@@ -2188,8 +2344,22 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         return releaseRepository.searchByNamePrefix(name);
     }
 
-    public List<Release> searchAccessibleReleasesByText(ReleaseSearchHandler searchHandler, String searchText, User user){
-        return getAccessibleReleaseList(searchHandler.search(searchText), user);
+    public Map<PaginationData, List<Release>> searchReleaseByNamePaginated(String name, PaginationData pageData) {
+        return releaseRepository.searchReleaseByNamePaginated(name, pageData);
+    }
+
+    public Map<PaginationData, List<Release>> searchAccessibleReleasesByText(ReleaseSearchHandler searchHandler, String searchText, User user, PaginationData pageData) {
+        Map<PaginationData, List<Release>> searchResult = searchHandler.search(searchText, pageData);
+        PaginationData respPageData = searchResult.keySet().iterator().next();
+        List<Release> releaseList = searchResult.values().iterator().next();
+        return Collections.singletonMap(respPageData, getAccessibleReleaseList(releaseList, user));
+    }
+
+    public Map<PaginationData, List<Release>> getAccessibleNewReleasesWithSrc(User user, PaginationData pageData) {
+        Map<PaginationData, List<Release>> searchResult = releaseRepository.getAccessibleNewReleasesWithSrc(pageData);
+        PaginationData respPageData = searchResult.keySet().iterator().next();
+        List<Release> releaseList = searchResult.values().iterator().next();
+        return Collections.singletonMap(respPageData, getAccessibleReleaseList(releaseList, user));
     }
 
     public List<Release> getReleases(Set<String> ids) {
@@ -2652,7 +2822,7 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                     try {
                         return getRelease(relId, sessionUser);
                     } catch (SW360Exception e) {
-                        log.error("Error occured while getting release. ", e);
+                        log.error("Error occurred while getting release. ", e);
                     }
                     return null;
                 }).filter(rel -> rel == null || !makePermission(rel, sessionUser).isActionAllowed(RequestedAction.WRITE))
@@ -3194,12 +3364,12 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
                                         // Delete the SRC zip file after the release is updated
                                         file.delete();
                                         break;
-                                    } catch (IOException | TException e) {
+                                    } catch (IOException | URISyntaxException | IllegalArgumentException | TException e) {
                                         log.error(
                                                 "SRC Upload: Error while downloading the source code zip file for release:"
                                                         + r.getId() + " " + e);
                                     } catch (Exception e) {
-                                        log.error("An exception occured while uploading source:" + r.getId() + " " + e);
+                                        log.error("An exception occurred while uploading source:" + r.getId() + " " + e);
                                     }
                                 }
                             }
@@ -3225,8 +3395,8 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
 
 
 
-    public File downloadFile(String url, String destinationDirectory) throws IOException {
-        URL fileUrl = new URL(url);
+    public File downloadFile(String url, String destinationDirectory) throws IOException, URISyntaxException {
+        URL fileUrl = new URI(url).toURL();
         String regex = ".*/([^/]+)/archive/refs/tags/(?:v)?(.*).zip$";
         String fileName = url.replaceAll(regex, "$1-$2.zip");
         Path destinationPath = Paths.get(destinationDirectory, fileName.replace("/","-"));
@@ -3240,9 +3410,10 @@ public class ComponentDatabaseHandler extends AttachmentAwareDatabaseHandler {
         String fileName = file.getName();
         String contentType = "application/zip";
         final AttachmentContent attachmentContent = makeAttachmentContent(fileName, contentType);
-        FileInputStream inputStream = new FileInputStream(file);
-        Attachment attachment = new AttachmentFrontendUtils().uploadAttachmentContent(attachmentContent, inputStream, null);
-
+        Attachment attachment;
+        try (FileInputStream inputStream = new FileInputStream(file)) {
+            attachment = new AttachmentFrontendUtils().uploadAttachmentContent(attachmentContent, inputStream, null);
+        }
         attachment.setSha1(attachmentConnector.getSha1FromAttachmentContentId(attachmentContent.getId()));
         attachment.setAttachmentType(AttachmentType.SOURCE);
         attachment.setCheckStatus(CheckStatus.NOTCHECKED);

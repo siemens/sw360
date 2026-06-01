@@ -16,16 +16,20 @@ import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.thrift.health.Health;
 import org.eclipse.sw360.datahandler.thrift.health.HealthService;
 import org.eclipse.sw360.datahandler.thrift.health.Status;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
+import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.SpyBean;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.net.MalformedURLException;
@@ -36,6 +40,7 @@ import java.util.Map;
 import static org.assertj.core.api.BDDAssertions.then;
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,17 +56,24 @@ public class SW360RestHealthIndicatorTest {
     @LocalServerPort
     private int port;
 
-    @SpyBean
+    @MockitoSpyBean
     private SW360RestHealthIndicator restHealthIndicatorMock;
 
-    @Autowired
-    private TestRestTemplate testRestTemplate;
+    @MockitoBean
+    private Sw360UserService userServiceMock;
+
 
     private static final String IS_DB_REACHABLE = "isDbReachable";
     private static final String IS_THRIFT_REACHABLE = "isThriftReachable";
     private static final String ERROR = "error";
 
     private DatabaseInstanceCloudant databaseInstanceMock;
+
+    @Before
+    public void before() throws TException{
+        given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
+    }
 
     /**
      * Makes a request to localhost with the default server port and returns
@@ -70,7 +82,7 @@ public class SW360RestHealthIndicatorTest {
      * @return response of request
      */
     private ResponseEntity<Map> getMapResponseEntityForHealthEndpointRequest(String endpoint) {
-        return this.testRestTemplate.getForEntity(
+        return new TestRestTemplate().getForEntity(
                 "http://localhost:" + this.port + Sw360ResourceServer.REST_BASE_PATH + endpoint, Map.class);
     }
 

@@ -12,17 +12,24 @@ package org.eclipse.sw360.datahandler.db;
 import com.ibm.cloud.cloudant.v1.Cloudant;
 import com.google.gson.Gson;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserSortColumn;
 import org.eclipse.sw360.nouveau.designdocument.NouveauDesignDocument;
 import org.eclipse.sw360.nouveau.designdocument.NouveauIndexDesignDocument;
 import org.eclipse.sw360.nouveau.designdocument.NouveauIndexFunction;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.eclipse.sw360.common.utils.SearchUtils.OBJ_ARRAY_TO_STRING_INDEX;
 import static org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector.prepareFuzzyQuery;
 import static org.eclipse.sw360.nouveau.LuceneAwareCouchDbConnector.DEFAULT_DESIGN_PREFIX;
 
@@ -49,22 +56,31 @@ public class UserSearchHandler {
     private static final NouveauIndexDesignDocument luceneUserSearchView
         = new NouveauIndexDesignDocument("usersearch",
             new NouveauIndexFunction("function(doc) {" +
+                OBJ_ARRAY_TO_STRING_INDEX +
                 "    if (!doc.type || doc.type != 'user') return;" +
                 "    if (doc.givenname && typeof(doc.givenname) == 'string' && doc.givenname.length > 0) {" +
                 "      index('text', 'givenname', doc.givenname, {'store': true});" +
+                "      index('string', 'givenname_sort', doc.givenname);" +
                 "    }" +
                 "    if (doc.lastname && typeof(doc.lastname) == 'string' && doc.lastname.length > 0) {" +
                 "      index('text', 'lastname', doc.lastname, {'store': true});" +
+                "      index('string', 'lastname_sort', doc.lastname);" +
                 "    }" +
                 "    if (doc.email && typeof(doc.email) == 'string' && doc.email.length > 0) {" +
                 "      index('text', 'email', doc.email, {'store': true});" +
+                "      index('string', 'email_sort', doc.email);" +
                 "    }" +
                 "    if (doc.userGroup && typeof(doc.userGroup) == 'string' && doc.userGroup.length > 0) {" +
                 "      index('text', 'userGroup', doc.userGroup, {'store': true});" +
                 "    }" +
                 "    if (doc.department && typeof(doc.department) == 'string' && doc.department.length > 0) {" +
                 "      index('text', 'department', doc.department, {'store': true});" +
+                "      index('string', 'department_sort', doc.department);" +
                 "    }" +
+                "    if (doc.deactivated && typeof(doc.deactivated) == 'boolean') {" +
+                "      index('double', 'deactivated', doc.deactivated ? 0 : 1);" +
+                "    }" +
+                "    arrayToStringIndex(doc.primaryRoles, 'primaryroles');" +
                 "}"));
 
     private final NouveauLuceneAwareDatabaseConnector connector;
@@ -96,7 +112,44 @@ public class UserSearchHandler {
         return connector.searchAndSortByScore(User.class, luceneSearchView.getIndexName(), queryString);
     }
 
-    public List<User> search(String text, final Map<String, Set<String>> subQueryRestrictions) {
-        return connector.searchViewWithRestrictions(User.class, luceneUserSearchView.getIndexName(), text, subQueryRestrictions);
+    public Map<PaginationData, List<User>> search(String text, final Map<String, Set<String>> subQueryRestrictions, @Nonnull PaginationData pageData) {
+        String sortColumn = getSortColumnName(pageData);
+        return connector.searchViewWithRestrictionsWithAnd(User.class,
+                luceneUserSearchView.getIndexName(), text, subQueryRestrictions,
+                pageData, sortColumn, pageData.isAscending());
+    }
+
+    /**
+     * Search users by a free-text term matched against givenname, lastname, or email using.
+     */
+    public Map<PaginationData, List<User>> searchByNameOrEmail(String searchText, @Nonnull PaginationData pageData) {
+        Map<String, Set<String>> subQueryRestrictions = new HashMap<>();
+        if (CommonUtils.isNotNullEmptyOrWhitespace(searchText)) {
+            subQueryRestrictions.put(User._Fields.GIVENNAME.getFieldName(), Collections.singleton(searchText));
+            subQueryRestrictions.put(User._Fields.LASTNAME.getFieldName(), Collections.singleton(searchText));
+            subQueryRestrictions.put(User._Fields.EMAIL.getFieldName(), Collections.singleton(searchText));
+        }
+        String sortColumn = getSortColumnName(pageData);
+        return connector.searchViewWithRestrictionsWithOr(User.class,
+                luceneUserSearchView.getIndexName(), null, subQueryRestrictions,
+                pageData, sortColumn, pageData.isAscending());
+    }
+
+    /**
+     * Convert sort column number back to sorting column name. This function makes sure to use the string column (with
+     * `_sort` suffix) for text indexes.
+     * @param pageData Pagination Data from the request.
+     * @return Sort column name. Defaults to givenname_sort
+     */
+    private static @Nonnull String getSortColumnName(@Nonnull PaginationData pageData) {
+        return switch (UserSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case UserSortColumn.BY_LASTNAME -> "lastname_sort";
+            case UserSortColumn.BY_EMAIL -> "email_sort";
+            case UserSortColumn.BY_STATUS -> "deactivated";
+            case UserSortColumn.BY_DEPARTMENT -> "department_sort";
+            case UserSortColumn.BY_ROLE -> "primaryroles_sort";
+            case null -> "givenname_sort";
+            default -> "givenname_sort";
+        };
     }
 }

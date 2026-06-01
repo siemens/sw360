@@ -12,14 +12,11 @@ package org.eclipse.sw360.cyclonedx;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -31,9 +28,11 @@ import org.cyclonedx.model.Bom;
 import org.cyclonedx.model.ExternalReference;
 import org.cyclonedx.model.ExternalReference.Type;
 import org.cyclonedx.model.Metadata;
+import org.cyclonedx.model.Property;
 import org.cyclonedx.parsers.JsonParser;
 import org.cyclonedx.parsers.Parser;
 import org.cyclonedx.parsers.XmlParser;
+import org.eclipse.sw360.common.utils.RepositoryURL;
 import org.eclipse.sw360.commonIO.AttachmentFrontendUtils;
 import org.eclipse.sw360.datahandler.common.*;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
@@ -45,6 +44,7 @@ import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
 import org.eclipse.sw360.datahandler.thrift.CycloneDxComponentType;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.ProjectPackageRelationship;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
@@ -73,7 +73,9 @@ import com.google.common.net.MediaType;
 import com.google.gson.Gson;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 
+import static org.eclipse.sw360.common.utils.RepositoryURL.*;
 import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_PACKAGE_PORTLET_ENABLED;
+import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.NON_PKG_MANAGED_COMPS_PROP;
 
 /**
  * CycloneDX BOM import implementation.
@@ -83,7 +85,7 @@ import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_PACKAGE_PO
  */
 public class CycloneDxBOMImporter {
     private static final Logger log = LogManager.getLogger(CycloneDxBOMImporter.class);
-    private static final String SCHEMA_PATTERN = ".+://(\\w*(?:[\\-@.\\\\s,_:/][/(.\\-)A-Za-z0-9]+)*)";
+    private static final Gson GSON = new Gson();
     private static final String DOT_GIT = ".git";
     private static final String SLASH = "/";
     private static final String DOT = ".";
@@ -103,29 +105,20 @@ public class CycloneDxBOMImporter {
     private static final String DUPLICATE_PACKAGE = "dupPkg";
     private static final String INVALID_COMPONENT = "invalidComp";
     private static final String INVALID_RELEASE = "invalidRel";
+    private static final String NON_PKG_MANAGED_COMP_WITHOUT_VCS = "nonPkgManagedCompWithoutVCS";
     private static final String INVALID_PACKAGE = "invalidPkg";
+    private static final String COMPONENT_IMPORT_ERROR_COUNT_KEY = "compImportErrorCount";
     private static final String PROJECT_ID = "projectId";
     private static final String PROJECT_NAME = "projectName";
-    private static final String REDIRECTED_VCS = "redirectedVCS";
-    private static final Predicate<ExternalReference.Type> typeFilter = type -> ExternalReference.Type.VCS.equals(type);
-
-    private Set<String> redirectedUrls = new HashSet<>();
+    public static final String INVALID_VCS_COMPONENT = "invalidVcsComponent";
+    private static final Predicate<ExternalReference.Type> typeFilter = Type.VCS::equals;
 
     private final ProjectDatabaseHandler projectDatabaseHandler;
     private final ComponentDatabaseHandler componentDatabaseHandler;
     private final PackageDatabaseHandler packageDatabaseHandler;
     private final User user;
     private final AttachmentConnector attachmentConnector;
-
-    // Map of supported hosts and base URL formats
-    private static final Map<String, String> VCS_HOSTS = Map.of(
-            "github.com", "https://github.com/%s/%s",
-            "gitlab.com", "https://gitlab.com/%s/%s",
-            "bitbucket.org", "https://bitbucket.org/%s/%s",
-            "cs.opensource.google", "https://cs.opensource.google/%s/%s",
-            "go.googlesource.com", "https://go.googlesource.com/%s",
-            "pypi.org", "https://pypi.org/project/%s"
-    );
+    private final RepositoryURL repositoryURL;
 
     public CycloneDxBOMImporter(ProjectDatabaseHandler projectDatabaseHandler, ComponentDatabaseHandler componentDatabaseHandler,
             PackageDatabaseHandler packageDatabaseHandler, AttachmentConnector attachmentConnector, User user) {
@@ -134,6 +127,7 @@ public class CycloneDxBOMImporter {
         this.packageDatabaseHandler = packageDatabaseHandler;
         this.attachmentConnector = attachmentConnector;
         this.user = user;
+        this.repositoryURL = new RepositoryURL();
     }
 
     /**
@@ -145,17 +139,24 @@ public class CycloneDxBOMImporter {
      * @return Map<String, List<org.cyclonedx.model.Component>>
      */
     private Map<String, List<org.cyclonedx.model.Component>> getVcsToComponentMap(List<org.cyclonedx.model.Component> components) {
-        return components.parallelStream().filter(Objects::nonNull)
+        Stream<org.cyclonedx.model.Component> baseStream = components.parallelStream()
+                .filter(Objects::nonNull);
+
+        if (CommonUtils.isNotNullEmptyOrWhitespace(SW360Utils.readConfig(NON_PKG_MANAGED_COMPS_PROP, ""))) {
+            baseStream = baseStream.filter(comp -> !isCompNonPkgManaged(comp));
+        }
+
+        return baseStream
                 .flatMap(comp -> CommonUtils.nullToEmptyList(comp.getExternalReferences()).stream()
-                        .filter(Objects::nonNull)
                         .filter(ref -> ExternalReference.Type.VCS.equals(ref.getType()))
                         .map(ExternalReference::getUrl)
-                        .map(url -> sanitizeVCS(url.toLowerCase()))
-                        .filter(url -> CommonUtils.isValidUrl(url))
-                        .map(url -> getFinalURL(url))
+                        .filter(CommonUtils::isNotNullEmptyOrWhitespace)
+                        .map(url->repositoryURL.processURL(url.trim()))
                         .map(url -> new AbstractMap.SimpleEntry<>(url, comp)))
-                .collect(Collectors.groupingBy(e -> e.getKey(),
-                        Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
+                .collect(Collectors.groupingBy(
+                        AbstractMap.SimpleEntry::getKey,
+                        Collectors.mapping(Map.Entry::getValue, Collectors.toList())
+                ));
     }
 
     @SuppressWarnings("unchecked")
@@ -199,19 +200,23 @@ public class CycloneDxBOMImporter {
 
             if (!SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true)) {
                 vcsToComponentMap.put("", components);
-                requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, projectId, attachmentContent, doNotReplacePackageAndRelease);
+                requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, new ArrayList<>(), projectId, attachmentContent, doNotReplacePackageAndRelease);
             } else {
                 vcsToComponentMap = getVcsToComponentMap(components);
-                if (componentsCount == vcsCount) {
+                List<org.cyclonedx.model.Component> nonPkgManagedComponents = components.stream()
+                        .filter(Objects::nonNull)
+                        .filter(this::isCompNonPkgManaged)
+                        .collect(Collectors.toList());
 
-                    requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, projectId, attachmentContent, doNotReplacePackageAndRelease);
+                if (componentsCount == vcsCount) {
+                    requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, nonPkgManagedComponents, projectId, attachmentContent, doNotReplacePackageAndRelease);
                 } else if (componentsCount > vcsCount) {
-                    requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, projectId, attachmentContent, doNotReplacePackageAndRelease);
+                    requestSummary = importSbomAsProject(compMetadata, vcsToComponentMap, nonPkgManagedComponents, projectId, attachmentContent, doNotReplacePackageAndRelease);
 
                     if (requestSummary.requestStatus.equals(RequestStatus.SUCCESS)) {
 
                         String jsonMessage = requestSummary.getMessage();
-                        messageMap = new Gson().fromJson(jsonMessage, Map.class);
+                        messageMap = GSON.fromJson(jsonMessage, Map.class);
                         String projId = messageMap.get("projectId");
 
                         if (CommonUtils.isNullEmptyOrWhitespace(projId)) {
@@ -224,6 +229,8 @@ public class CycloneDxBOMImporter {
                         Integer relReuseCount = Integer.valueOf(messageMap.get(REL_REUSE_COUNT_KEY));
                         Integer pkgReuseCount = Integer.valueOf(messageMap.get(PKG_REUSE_COUNT_KEY));
                         Integer pkgCreationCount = Integer.valueOf(messageMap.get(PKG_CREATION_COUNT_KEY));
+                        String errorCountStr = messageMap.get(COMPONENT_IMPORT_ERROR_COUNT_KEY);
+                        int compImportErrorCount = CommonUtils.isNullEmptyOrWhitespace(errorCountStr) ? 0 : Integer.parseInt(errorCountStr);
 
                         String packages = messageMap.get(DUPLICATE_PACKAGE);
                         if (CommonUtils.isNotNullEmptyOrWhitespace(packages)) {
@@ -236,11 +243,11 @@ public class CycloneDxBOMImporter {
                             packages = "";
                         }
                         Project project = projectDatabaseHandler.getProjectById(projId, user);
-
+                        Map<String, ProjectPackageRelationship> linkedPackages =  CommonUtils.isNullOrEmptyMap(project.getPackageIds()) ? new HashMap<>() : project.getPackageIds();
                         for (org.cyclonedx.model.Component comp : components) {
                             if (CommonUtils.isNullOrEmptyCollection(comp.getExternalReferences())
                                     || comp.getExternalReferences().stream().map(ExternalReference::getType).filter(typeFilter).count() == 0
-                                    || !containsComp(vcsToComponentMap, comp)) {
+                                    || !containsComp(vcsToComponentMap, comp) && !isCompNonPkgManaged(comp)) {
 
                                 final var fullName = SW360Utils.getVersionedName(comp.getName(), comp.getVersion());
                                 final var licenses = getLicenseFromBomComponent(comp);
@@ -249,6 +256,7 @@ public class CycloneDxBOMImporter {
                                 if (pkg == null || CommonUtils.isNullEmptyOrWhitespace(pkg.getName()) || CommonUtils.isNullEmptyOrWhitespace(pkg.getVersion())
                                         || CommonUtils.isNullEmptyOrWhitespace(pkg.getPurl())) {
                                     invalidPackages.add(fullName);
+                                    compImportErrorCount++;
                                     log.error(String.format("Invalid package '%s' found in SBoM, missing name or version or purl! ", fullName));
                                     continue;
                                 }
@@ -260,7 +268,7 @@ public class CycloneDxBOMImporter {
                                     if (CommonUtils.isNotNullEmptyOrWhitespace(pkgAddSummary.getId())) {
                                         pkg.setId(pkgAddSummary.getId());
                                         if (AddDocumentRequestStatus.DUPLICATE.equals(pkgAddSummary.getRequestStatus())) {
-                                            if(!CommonUtils.nullToEmptySet(project.getPackageIds()).contains(pkgAddSummary.getId())){
+                                            if (project.getPackageIds() != null && !CommonUtils.nullToEmptySet(project.getPackageIds().keySet()).contains(pkgAddSummary.getId())) {
                                                 pkgReuseCount++;
                                             }
                                             Package dupPkg = packageDatabaseHandler.getPackageById(pkgAddSummary.getId());
@@ -279,9 +287,11 @@ public class CycloneDxBOMImporter {
                                         duplicatePackages.add(fullName);
                                         continue;
                                     }
-                                    project.addToPackageIds(pkgAddSummary.getId());
+                                    linkedPackages.put(pkgAddSummary.getId(), createPackageNode(project, user, ""));
+                                    project.setPackageIds(linkedPackages);
                                 } catch (SW360Exception e) {
                                     log.error("An error occured while creating/adding package from SBOM: " + e.getMessage());
+                                    compImportErrorCount++;
                                     continue;
                                 }
                             }
@@ -294,27 +304,26 @@ public class CycloneDxBOMImporter {
                         // all components does not have VCS, so return & show appropriate error in UI
                         messageMap.put(INVALID_COMPONENT, String.join(JOINER, componentsWithoutVcs));
                         messageMap.put(INVALID_PACKAGE, String.join(JOINER, invalidPackages));
-                        messageMap.put(REDIRECTED_VCS, String.join(JOINER, this.redirectedUrls));
-                        messageMap.put(DUPLICATE_PACKAGE, String.join(JOINER, duplicatePackages));
                         messageMap.put(SW360Constants.MESSAGE,
                                 String.format("VCS information is missing for <b>%s</b> / <b>%s</b> Components!",
                                         componentsCount - vcsCount, componentsCount));
                         messageMap.put(REL_REUSE_COUNT_KEY, String.valueOf(relReuseCount));
                         messageMap.put(PKG_CREATION_COUNT_KEY, String.valueOf(pkgCreationCount));
                         messageMap.put(PKG_REUSE_COUNT_KEY, String.valueOf(pkgReuseCount));
+                        messageMap.put(COMPONENT_IMPORT_ERROR_COUNT_KEY, String.valueOf(compImportErrorCount));
                         requestSummary.setMessage(convertCollectionToJSONString(messageMap));
                     }
                 } else {
-                    requestSummary.setMessage(String.format(String.format(
-                            "SBOM import aborted with error: Multiple vcs information found in compnents, vcs found: %s and total components: %s",
-                            vcsCount, componentsCount)));
+                    requestSummary.setMessage(String.format(
+                            "SBOM import aborted with error: Multiple vcs information found in components, vcs found: %s and total components: %s",
+                            vcsCount, componentsCount));
                     return requestSummary;
                 }
             }
 
             if (RequestStatus.SUCCESS.equals(requestSummary.getRequestStatus())) {
                 String jsonMessage = requestSummary.getMessage();
-                messageMap = new Gson().fromJson(jsonMessage, Map.class);
+                messageMap = GSON.fromJson(jsonMessage, Map.class);
                 String projId = messageMap.get("projectId");
                 Project project = projectDatabaseHandler.getProjectById(projId, user);
                 try {
@@ -349,37 +358,37 @@ public class CycloneDxBOMImporter {
                         log.info("failed to link SBOM Import status attachment to project with status: " + updateStatus);
                     }
                 } catch (SW360Exception e) {
-                    log.error("An error occured while updating project from SBOM: " + e.getMessage());
-                    requestSummary.setMessage("An error occured while updating project during SBOM import, please delete the project and re-import SBOM!");
+                    log.error("An error occurred while updating project from SBOM: " + e.getMessage());
+                    requestSummary.setMessage("An error occurred while updating project during SBOM import, please delete the project and re-import SBOM!");
                     return requestSummary;
                 }
             }
 
         } catch (IOException e) {
-            log.error("IOException occured while importing CycloneDX SBoM: ", e);
-            requestSummary.setMessage("IOException occured while importing CycloneDX SBoM: " + e.getMessage());
+            log.error("IOException occurred while importing CycloneDX SBoM: ", e);
+            requestSummary.setMessage("IOException occurred while importing CycloneDX SBoM: " + e.getMessage());
         } catch (ParseException e) {
-            log.error("ParseException occured while importing CycloneDX SBoM: ", e);
-            requestSummary.setMessage("ParseException occured while importing CycloneDX SBoM: " + e.getMessage());
+            log.error("ParseException occurred while importing CycloneDX SBoM: ", e);
+            requestSummary.setMessage("ParseException occurred while importing CycloneDX SBoM: " + e.getMessage());
         } catch (SW360Exception e) {
-            log.error("SW360Exception occured while importing CycloneDX SBoM: ", e);
-            requestSummary.setMessage("SW360Exception occured while importing CycloneDX SBoM: " + e.getMessage());
+            log.error("SW360Exception occurred while importing CycloneDX SBoM: ", e);
+            requestSummary.setMessage("SW360Exception occurred while importing CycloneDX SBoM: " + e.getMessage());
         } catch (Exception e) {
-            log.error("Exception occured while importing CycloneDX SBoM: ", e);
-            requestSummary.setMessage("An Exception occured while importing CycloneDX SBoM: " + e.getMessage());
+            log.error("Exception occurred while importing CycloneDX SBoM: ", e);
+            requestSummary.setMessage("An Exception occurred while importing CycloneDX SBoM: " + e.getMessage());
         }
         return requestSummary;
     }
 
     public RequestSummary importSbomAsProject(org.cyclonedx.model.Component compMetadata,
-            Map<String, List<org.cyclonedx.model.Component>> vcsToComponentMap, String projectId, AttachmentContent attachmentContent, boolean doNotReplacePackageAndRelease)
+            Map<String, List<org.cyclonedx.model.Component>> vcsToComponentMap, List<org.cyclonedx.model.Component> nonPkgManagedComponents, String projectId, AttachmentContent attachmentContent, boolean doNotReplacePackageAndRelease)
                     throws SW360Exception {
         final RequestSummary summary = new RequestSummary();
         summary.setRequestStatus(RequestStatus.FAILURE);
 
         Project project;
         AddDocumentRequestSummary projectAddSummary = new AddDocumentRequestSummary();
-        AddDocumentRequestStatus addStatus = projectAddSummary.getRequestStatus();
+        AddDocumentRequestStatus addStatus;
         Map<String, String> messageMap = new HashMap<>();
 
         try {
@@ -395,7 +404,6 @@ public class CycloneDxBOMImporter {
                 }
                 log.info("reusing existing project: " + projectId);
             } else {
-                // Metadata component is used to created the project
                 project = createProject(compMetadata);
                 projectAddSummary = projectDatabaseHandler.addProject(project, user);
                 addStatus = projectAddSummary.getRequestStatus();
@@ -419,13 +427,18 @@ public class CycloneDxBOMImporter {
                 }
             }
         } catch (SW360Exception e) {
+
             log.error("An error occured while importing project from SBOM: " + e.getMessage());
             summary.setMessage("An error occured while importing project from SBOM!");
+            summary.setRequestStatus(RequestStatus.FAILURE);
+
+            log.error("An error occurred while importing project from SBOM: " + e.getMessage());
+            summary.setMessage("An error occurred while importing project from SBOM!");
             return summary;
         }
 
         if (SW360Utils.readConfig(IS_PACKAGE_PORTLET_ENABLED, true)) {
-            messageMap = importAllComponentsAsPackages(vcsToComponentMap, project, doNotReplacePackageAndRelease);
+            messageMap = importAllComponentsAsPackages(vcsToComponentMap, nonPkgManagedComponents, project, doNotReplacePackageAndRelease);
         } else {
             messageMap = importAllComponentsAsReleases(vcsToComponentMap, project);
         }
@@ -433,9 +446,22 @@ public class CycloneDxBOMImporter {
         if (RequestStatus.SUCCESS.equals(updateStatus)) {
             log.info("project updated successfully: " + project.getId());
         } else {
-            log.info("failed to update project with status: " + updateStatus);
+            log.error("Failed to update project: " + project.getId() + " with status: " + updateStatus);
+            summary.setMessage("Failed to update project after SBOM import!");
+            summary.setRequestStatus(RequestStatus.FAILURE);
+            return summary;
         }
+
+        int importErrorCount = 0;
+        String errorCountStr = messageMap.get(COMPONENT_IMPORT_ERROR_COUNT_KEY);
+        if (CommonUtils.isNotNullEmptyOrWhitespace(errorCountStr)) {
+            importErrorCount = Integer.parseInt(errorCountStr);
+        }
+
         summary.setMessage(convertCollectionToJSONString(messageMap));
+        if (importErrorCount > 0) {
+            log.warn("SBOM import completed with " + importErrorCount + " component error(s) for project: " + project.getId());
+        }
         summary.setRequestStatus(RequestStatus.SUCCESS);
         return summary;
     }
@@ -446,10 +472,14 @@ public class CycloneDxBOMImporter {
         final Set<String> duplicateComponents = new HashSet<>();
         final Set<String> duplicateReleases = new HashSet<>();
         final Set<String> invalidReleases = new HashSet<>();
+        final Set<String> invalidVcsComponents = new HashSet<>();
         final Map<String, ProjectReleaseRelationship> releaseRelationMap = CommonUtils.isNullOrEmptyMap(project.getReleaseIdToUsage()) ? new HashMap<>() : project.getReleaseIdToUsage();
-        countMap.put(COMP_CREATION_COUNT_KEY, 0); countMap.put(COMP_REUSE_COUNT_KEY, 0);
-        countMap.put(REL_CREATION_COUNT_KEY, 0); countMap.put(REL_REUSE_COUNT_KEY, 0);
+        countMap.put(COMP_CREATION_COUNT_KEY, 0);
+        countMap.put(COMP_REUSE_COUNT_KEY, 0);
+        countMap.put(REL_CREATION_COUNT_KEY, 0);
+        countMap.put(REL_REUSE_COUNT_KEY, 0);
         int compCreationCount = 0, compReuseCount = 0, relCreationCount = 0, relReuseCount = 0;
+        int compImportErrorCount = 0;
 
         final List<org.cyclonedx.model.Component> components = vcsToComponentMap.get("");
         for (org.cyclonedx.model.Component bomComp : components) {
@@ -470,6 +500,10 @@ public class CycloneDxBOMImporter {
                     } else {
                         compReuseCount++;
                     }
+                } else if (AddDocumentRequestStatus.INVALID_INPUT.equals(compAddSummary.getRequestStatus())) {
+                    log.warn("Invalid VCS URL for component: " + comp.getName());
+                    invalidVcsComponents.add(comp.getName()+ " (" + comp.getVcs() + ")");
+                    continue;
                 } else {
                     // in case of more than 1 duplicate found, then continue and show error message in UI.
                     log.warn("found multiple components: " + comp.getName());
@@ -483,6 +517,7 @@ public class CycloneDxBOMImporter {
                 if (CommonUtils.isNullEmptyOrWhitespace(release.getVersion()) ) {
                     log.error("release version is not present in SBoM for component: " + comp.getName());
                     invalidReleases.add(comp.getName());
+                    compImportErrorCount++;
                     continue;
                 }
                 relName = SW360Utils.getVersionedName(release.getName(), release.getVersion());
@@ -504,7 +539,7 @@ public class CycloneDxBOMImporter {
                     }
                     releaseRelationMap.putIfAbsent(release.getId(), getDefaultRelation());
                 } catch (SW360Exception e) {
-                    log.error("An error occured while creating/adding release from SBOM: " + e.getMessage());
+                    log.error("An error occurred while creating/adding release from SBOM: " + e.getMessage());
                     continue;
                 }
 
@@ -537,9 +572,12 @@ public class CycloneDxBOMImporter {
                 RequestStatus updateStatus = componentDatabaseHandler.updateComponent(comp, user, true);
                 if (RequestStatus.SUCCESS.equals(updateStatus)) {
                     log.info("updating component successfull: " + comp.getName());
+                } else {
+                    log.error("Failed to update component: " + comp.getName() + " with status: " + updateStatus);
                 }
             } catch (SW360Exception e) {
                 log.error("An error occured while creating/adding component from SBOM: " + e.getMessage());
+                compImportErrorCount++;
                 continue;
             }
         }
@@ -549,41 +587,46 @@ public class CycloneDxBOMImporter {
         messageMap.put(DUPLICATE_COMPONENT, String.join(JOINER, duplicateComponents));
         messageMap.put(DUPLICATE_RELEASE, String.join(JOINER, duplicateReleases));
         messageMap.put(INVALID_RELEASE, String.join(JOINER, invalidReleases));
+        messageMap.put(INVALID_VCS_COMPONENT, String.join(JOINER, invalidVcsComponents));
         messageMap.put(PROJECT_ID, project.getId());
         messageMap.put(PROJECT_NAME, SW360Utils.getVersionedName(project.getName(), project.getVersion()));
         messageMap.put(COMP_CREATION_COUNT_KEY, String.valueOf(compCreationCount));
         messageMap.put(COMP_REUSE_COUNT_KEY, String.valueOf(compReuseCount));
         messageMap.put(REL_CREATION_COUNT_KEY, String.valueOf(relCreationCount));
         messageMap.put(REL_REUSE_COUNT_KEY, String.valueOf(relReuseCount));
+        messageMap.put(COMPONENT_IMPORT_ERROR_COUNT_KEY, String.valueOf(compImportErrorCount));
         return messageMap;
     }
 
-    private Map<String, String> importAllComponentsAsPackages(Map<String, List<org.cyclonedx.model.Component>> vcsToComponentMap, Project project, boolean doNotReplacePackageAndRelease) throws SW360Exception {
+    private Map<String, String> importAllComponentsAsPackages(Map<String, List<org.cyclonedx.model.Component>> vcsToComponentMap,
+                                                              List<org.cyclonedx.model.Component> nonPkgManagedComponents, Project project,
+                                                              boolean doNotReplacePackageAndRelease) {
         final var countMap = new HashMap<String, Integer>();
         final Set<String> duplicateComponents = new HashSet<>();
         final Set<String> duplicateReleases = new HashSet<>();
         final Set<String> duplicatePackages = new HashSet<>();
         final Set<String> invalidReleases = new HashSet<>();
+        final Set<String> nonPkgManagedCompWithoutVCS = new HashSet<>();
         final Set<String> invalidPackages = new HashSet<>();
+        final Set<String> invalidVcsComponents = new HashSet<>();
         final Map<String, ProjectReleaseRelationship> releaseRelationMap = CommonUtils.isNullOrEmptyMap(project.getReleaseIdToUsage()) ? new HashMap<>() : project.getReleaseIdToUsage();
-        final Set<String> projectPkgIds = CommonUtils.isNullOrEmptyCollection(project.getPackageIds()) ? new HashSet<>() : project.getPackageIds();
-        countMap.put(REL_CREATION_COUNT_KEY, 0); countMap.put(REL_REUSE_COUNT_KEY, 0);
-        countMap.put(PKG_CREATION_COUNT_KEY, 0); countMap.put(PKG_REUSE_COUNT_KEY, 0);
+        final Set<String> projectPkgIds = CommonUtils.isNullOrEmptyMap(project.getPackageIds()) ? new HashSet<>() : project.getPackageIds().keySet();
+        countMap.put(REL_CREATION_COUNT_KEY, 0);
+        countMap.put(REL_REUSE_COUNT_KEY, 0);
+        countMap.put(PKG_CREATION_COUNT_KEY, 0);
+        countMap.put(PKG_REUSE_COUNT_KEY, 0);
         int relCreationCount = 0, relReuseCount = 0, pkgCreationCount = 0, pkgReuseCount = 0;
+        int compImportErrorCount = 0;
 
         if (!doNotReplacePackageAndRelease) {
             releaseRelationMap.clear();
             projectPkgIds.clear();
             log.info("Cleared existing releases and packages for project: " + project.getName());
         }
-
+        Map<String, ProjectPackageRelationship> linkedPackages = CommonUtils.isNullOrEmptyMap(project.getPackageIds()) ? new HashMap<>() : project.getPackageIds();
         for (Map.Entry<String, List<org.cyclonedx.model.Component>> entry : vcsToComponentMap.entrySet()) {
             Component comp = createComponent(entry.getKey());
-            List<org.cyclonedx.model.Component> componentsFromBom = entry.getValue();
 
-            Release release = new Release();
-            String relName = "";
-            StringBuilder description = new StringBuilder();
             AddDocumentRequestSummary compAddSummary;
             try {
                 Component dupCompByName = componentDatabaseHandler.getComponentByName(comp.getName());
@@ -599,6 +642,10 @@ public class CycloneDxBOMImporter {
                     comp.setId(compAddSummary.getId());
                     String existingCompName = getComponetNameById(comp.getId(), user);
                     comp.setName(existingCompName);
+                } else if (AddDocumentRequestStatus.INVALID_INPUT.equals(compAddSummary.getRequestStatus())) {
+                    log.warn("Invalid VCS URL for component: " + comp.getName());
+                    invalidVcsComponents.add(comp.getName() + " (" + comp.getVcs() + ")");
+                    continue;
                 } else {
                     // in case of more than 1 duplicate found, then continue and show error message in UI.
                     log.warn("found multiple components: " + comp.getName());
@@ -608,13 +655,14 @@ public class CycloneDxBOMImporter {
 
                 for (org.cyclonedx.model.Component bomComp : entry.getValue()) {
                     Set<String> licenses = getLicenseFromBomComponent(bomComp);
-                    release = createRelease(bomComp.getVersion(), comp, licenses);
+                    Release release = createRelease(bomComp, comp, licenses);
                     if (CommonUtils.isNullEmptyOrWhitespace(release.getVersion()) ) {
                         log.error("release version is not present in SBoM for component: " + comp.getName());
                         invalidReleases.add(comp.getName());
+                        compImportErrorCount++;
                         continue;
                     }
-                    relName = SW360Utils.getVersionedName(release.getName(), release.getVersion());
+                    String relName = SW360Utils.getVersionedName(release.getName(), release.getVersion());
 
                     try {
                         AddDocumentRequestSummary relAddSummary = componentDatabaseHandler.addRelease(release, user);
@@ -632,8 +680,10 @@ public class CycloneDxBOMImporter {
                             duplicateReleases.add(relName);
                             continue;
                         }
+                        releaseRelationMap.putIfAbsent(release.getId(), getDefaultRelation());
                     } catch (SW360Exception e) {
                         log.error("An error occured while creating/adding release from SBOM: " + e.getMessage());
+                        compImportErrorCount++;
                         continue;
                     }
 
@@ -641,11 +691,6 @@ public class CycloneDxBOMImporter {
                     comp = componentDatabaseHandler.getComponent(compAddSummary.getId(), user);
                     if (null != bomComp.getType() && null == comp.getCdxComponentType()) {
                         comp.setCdxComponentType(getCdxComponentType(bomComp.getType()));
-                    }
-                    if (CommonUtils.isNullEmptyOrWhitespace(comp.getDescription()) && CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
-                        description.append(bomComp.getDescription().trim());
-                    } else if (CommonUtils.isNotNullEmptyOrWhitespace(bomComp.getDescription())) {
-                        description.append(" || ").append(bomComp.getDescription().trim());
                     }
                     if (CommonUtils.isNotEmpty(comp.getMainLicenseIds())) {
                         comp.getMainLicenseIds().addAll(licenses);
@@ -664,10 +709,11 @@ public class CycloneDxBOMImporter {
                         }
                     }
 
-                    comp.setDescription(description.toString());
                     RequestStatus updateStatus = componentDatabaseHandler.updateComponent(comp, user, true);
                     if (RequestStatus.SUCCESS.equals(updateStatus)) {
                         log.info("updating component successfull: " + comp.getName());
+                    } else {
+                        log.error("Failed to update component: " + comp.getName() + " with status: " + updateStatus);
                     }
 
                     releaseRelationMap.putIfAbsent(release.getId(), getDefaultRelation());
@@ -676,6 +722,7 @@ public class CycloneDxBOMImporter {
                     if (pkg == null || CommonUtils.isNullEmptyOrWhitespace(pkg.getName()) || CommonUtils.isNullEmptyOrWhitespace(pkg.getVersion())
                             || CommonUtils.isNullEmptyOrWhitespace(pkg.getPurl())) {
                         invalidPackages.add(pkgName);
+                        compImportErrorCount++;
                         log.error(String.format("Invalid package '%s' found in SBoM, missing name or version or purl! ", pkgName));
                         continue;
                     }
@@ -693,7 +740,7 @@ public class CycloneDxBOMImporter {
                                     packageDatabaseHandler.updatePackage(dupPkg, user);
                                     log.error("Release Id of Package from BOM: '%s' and Database: '%s' is not equal!", releaseId, dupPkgReleaseId);
                                 }
-                                if(!CommonUtils.nullToEmptySet(project.getPackageIds()).contains(pkg.getId())){
+                                if(!CommonUtils.nullToEmptyMap(project.getPackageIds()).containsKey(pkg.getId())){
                                     pkgReuseCount++;
                                 }
                             } else {
@@ -705,15 +752,102 @@ public class CycloneDxBOMImporter {
                             duplicatePackages.add(pkgName);
                             continue;
                         }
-                        project.addToPackageIds(pkg.getId());
+                        linkedPackages.put(pkgAddSummary.getId(), createPackageNode(project, user, ""));
+                        project.setPackageIds(linkedPackages);
                     } catch (SW360Exception e) {
                         log.error("An error occured while creating/adding package from SBOM: " + e.getMessage());
+                        compImportErrorCount++;
                         continue;
                     }
                 }
             } catch (SW360Exception e) {
                 log.error("An error occured while creating/adding component from SBOM: " + e.getMessage());
+                compImportErrorCount++;
                 continue;
+            }
+        }
+
+        for(org.cyclonedx.model.Component bomComp: nonPkgManagedComponents) {
+            if (CommonUtils.isNullEmptyOrWhitespace(bomComp.getName())) {
+                log.error("component name is not present in SBoM: " + project.getId());
+                continue;
+            }
+            boolean hasVCS = !CommonUtils.isNullOrEmptyCollection(bomComp.getExternalReferences())
+                    && bomComp.getExternalReferences().stream()
+                    .map(ExternalReference::getType)
+                    .anyMatch(typeFilter);
+
+            if (hasVCS) {
+                Component comp = createComponent(bomComp);
+                AddDocumentRequestSummary compAddSummary;
+                try {
+                    compAddSummary = componentDatabaseHandler.addComponent(comp, user.getEmail());
+
+                    if (CommonUtils.isNotNullEmptyOrWhitespace(compAddSummary.getId())) {
+                        comp.setId(compAddSummary.getId());
+                    } else {
+                        // in case of more than 1 duplicate found, then continue and show error message in UI.
+                        log.warn("found multiple components: " + comp.getName());
+                        duplicateComponents.add(comp.getName());
+                        continue;
+                    }
+
+                    Set<String> licenses = getLicenseFromBomComponent(bomComp);
+                    Release release = createRelease(bomComp, comp, licenses);
+                    if (CommonUtils.isNullEmptyOrWhitespace(release.getVersion()) ) {
+                        log.error("release version is not present in SBoM for component: " + comp.getName());
+                        invalidReleases.add(comp.getName());
+                        compImportErrorCount++;
+                        continue;
+                    }
+
+                    String relName = SW360Utils.getVersionedName(release.getName(), release.getVersion());
+                    try {
+                        AddDocumentRequestSummary relAddSummary = componentDatabaseHandler.addRelease(release, user);
+                        if (CommonUtils.isNotNullEmptyOrWhitespace(relAddSummary.getId())) {
+                            release.setId(relAddSummary.getId());
+                            if (AddDocumentRequestStatus.SUCCESS.equals(relAddSummary.getRequestStatus())) {
+                                relCreationCount = releaseRelationMap.containsKey(release.getId()) ? relCreationCount : relCreationCount + 1;
+                            } else {
+                                relReuseCount = releaseRelationMap.containsKey(release.getId()) ? relReuseCount : relReuseCount + 1;
+                            }
+                        } else {
+                            // in case of more than 1 duplicate found, then continue and show error message in UI.
+                            log.warn("found multiple releases: " + relName);
+                            duplicateReleases.add(relName);
+                            continue;
+                        }
+                        releaseRelationMap.putIfAbsent(release.getId(), getDefaultRelation());
+                    } catch (SW360Exception e) {
+                        log.error("An error occured while creating/adding release from SBOM: " + e.getMessage());
+                        compImportErrorCount++;
+                        continue;
+                    }
+
+                    // update components specific fields
+                    comp = componentDatabaseHandler.getComponent(compAddSummary.getId(), user);
+                    if (null != bomComp.getType() && null == comp.getCdxComponentType()) {
+                        comp.setCdxComponentType(getCdxComponentType(bomComp.getType()));
+                    }
+                    if (CommonUtils.isNotEmpty(comp.getMainLicenseIds())) {
+                        comp.getMainLicenseIds().addAll(licenses);
+                    } else {
+                        comp.setMainLicenseIds(licenses);
+                    }
+                    RequestStatus updateStatus = componentDatabaseHandler.updateComponent(comp, user, true);
+                    if (RequestStatus.SUCCESS.equals(updateStatus)) {
+                        log.info("updating component successfull: " + comp.getName());
+                    } else {
+                        log.error("Failed to update component: " + comp.getName() + " with status: " + updateStatus);
+                    }
+
+                } catch (SW360Exception e) {
+                    log.error("An error occured while creating/adding component from SBOM: " + e.getMessage());
+                    compImportErrorCount++;
+                    continue;
+                }
+            } else {
+                nonPkgManagedCompWithoutVCS.add(bomComp.getName());
             }
         }
 
@@ -723,14 +857,16 @@ public class CycloneDxBOMImporter {
         messageMap.put(DUPLICATE_RELEASE, String.join(JOINER, duplicateReleases));
         messageMap.put(DUPLICATE_PACKAGE, String.join(JOINER, duplicatePackages));
         messageMap.put(INVALID_RELEASE, String.join(JOINER, invalidReleases));
-        messageMap.put(REDIRECTED_VCS, String.join(JOINER, this.redirectedUrls));
+        messageMap.put(NON_PKG_MANAGED_COMP_WITHOUT_VCS, String.join(JOINER, nonPkgManagedCompWithoutVCS));
         messageMap.put(INVALID_PACKAGE, String.join(JOINER, invalidPackages));
+        messageMap.put(INVALID_VCS_COMPONENT, String.join(JOINER, invalidVcsComponents));
         messageMap.put(PROJECT_ID, project.getId());
         messageMap.put(PROJECT_NAME, SW360Utils.getVersionedName(project.getName(), project.getVersion()));
         messageMap.put(REL_CREATION_COUNT_KEY, String.valueOf(relCreationCount));
         messageMap.put(REL_REUSE_COUNT_KEY, String.valueOf(relReuseCount));
         messageMap.put(PKG_CREATION_COUNT_KEY, String.valueOf(pkgCreationCount));
         messageMap.put(PKG_REUSE_COUNT_KEY, String.valueOf(pkgReuseCount));
+        messageMap.put(COMPONENT_IMPORT_ERROR_COUNT_KEY, String.valueOf(compImportErrorCount));
         return messageMap;
     }
 
@@ -766,7 +902,7 @@ public class CycloneDxBOMImporter {
             jsonGenerator.close();
             return jsonObjectWriter.toString();
         } catch (IOException e) {
-            throw new SW360Exception("An exception occured while generating JSON info for BOM import! " + e.getMessage());
+            throw new SW360Exception("An exception occurred while generating JSON info for BOM import! " + e.getMessage());
         }
     }
 
@@ -840,7 +976,22 @@ public class CycloneDxBOMImporter {
     private Component createComponent(org.cyclonedx.model.Component componentFromBom) {
         Component component = new Component();
         component.setName(CommonUtils.nullToEmptyString(componentFromBom.getName()).trim());
-        component.setComponentType(ComponentType.OSS);
+
+        String compVCS = CommonUtils.nullToEmptyList(componentFromBom.getExternalReferences()).stream()
+                .filter(extRef -> ExternalReference.Type.VCS.equals(extRef.getType()))
+                .map(ExternalReference::getUrl)
+                .findFirst()
+                .orElse("");
+
+        if(compVCS.equalsIgnoreCase("cots")){
+            component.setComponentType(ComponentType.COTS);
+        } else if(compVCS.equalsIgnoreCase("freeware")) {
+            component.setComponentType(ComponentType.FREESOFTWARE);
+        } else {
+            component.setComponentType(ComponentType.OSS);
+            component.setVcs(repositoryURL.processURL(compVCS));
+        }
+
         if (null != componentFromBom.getType()) {
             component.setCdxComponentType(getCdxComponentType(componentFromBom.getType()));
         }
@@ -1003,99 +1154,6 @@ public class CycloneDxBOMImporter {
         return comp.getName();
     }
 
-    private String getComponentNameFromVCS(String vcsUrl, boolean isGetVendorandName) {
-        String compName = vcsUrl.replaceAll(SCHEMA_PATTERN, "$1");
-        String[] parts = compName.split("/");
-
-        if (parts.length >= 2) {
-            if (isGetVendorandName) {
-                return String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
-            } else {
-                return parts[parts.length - 1];
-            }
-        }
-        return compName;
-    }
-
-    /*
-     * Sanitize different repository URLS based on their defined schema
-     */
-    public String sanitizeVCS(String vcs) {
-        for (String host : VCS_HOSTS.keySet()) {
-            if (vcs.contains(host)) {
-                return sanitizeVCSByHost(vcs, host);
-            }
-        }
-        return vcs; // Return unchanged if no known host is found
-    }
-
-    private String sanitizeVCSByHost(String vcs, String host) {
-        vcs = "https://" + vcs.substring(vcs.indexOf(host)).trim();
-
-        try {
-            URI uri = URI.create(vcs);
-            String[] urlParts = uri.getPath().split("/");
-            String formattedUrl = formatVCSUrl(host, urlParts);
-
-            if (formattedUrl == null) {
-                log.error("Invalid {} repository URL: {}", host, vcs);
-                return vcs;
-            }
-            return formattedUrl.endsWith("/") ? formattedUrl.substring(0, formattedUrl.length() - 1) : formattedUrl;
-
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid URL format: {}", vcs, e);
-            return vcs;
-        }
-    }
-
-    private String formatVCSUrl(String host, String[] urlParts) {
-        String formattedUrl = null;
-
-        switch (host) {
-            case "github.com":
-            case "bitbucket.org":
-                if (urlParts.length >= 3) {
-                    formattedUrl = String.format(VCS_HOSTS.get(host),
-                            urlParts[1], urlParts[2].replaceAll("\\.git.*|#.*", ""));
-                }
-                break;
-
-            case "gitlab.com":
-                if (urlParts.length >= 2) {
-                    // Join everything after the main host to get the full nested path
-                    String repoPath = String.join("/", Arrays.copyOfRange(urlParts, 1, urlParts.length));
-
-                    // Remove everything from the first occurrence of .git or #
-                    repoPath = repoPath.replaceAll("\\.git.*|#.*", "");
-
-                    formattedUrl = String.format(VCS_HOSTS.get(host), repoPath);
-                }
-                break;
-
-            case "cs.opensource.google":
-                if (urlParts.length >= 3) {
-                    String thirdSegment = urlParts.length > 3 && !urlParts[3].isEmpty() && !urlParts[3].equals("+")
-                            ? urlParts[3] : "";
-                    formattedUrl = String.format(VCS_HOSTS.get(host), urlParts[1], urlParts[2], thirdSegment);
-                }
-                break;
-
-            case "go.googlesource.com":
-                if (urlParts.length >= 2) {
-                    formattedUrl = String.format(VCS_HOSTS.get(host), urlParts[1]);
-                }
-                break;
-
-            case "pypi.org":
-                if (urlParts.length >= 3) {
-                    formattedUrl = String.format(VCS_HOSTS.get(host), urlParts[2].replaceAll("\\.git.*|#.*", ""));
-                }
-                break;
-        }
-
-        return formattedUrl;
-    }
 
     public static boolean containsComp(Map<String, List<org.cyclonedx.model.Component>> map, org.cyclonedx.model.Component element) {
         for (List<org.cyclonedx.model.Component> list : map.values()) {
@@ -1106,60 +1164,15 @@ public class CycloneDxBOMImporter {
         return false;
     }
 
-    public String getFinalURL(String urlString) {
-        URL url;
-        try {
-            url = new URL(urlString);
-        } catch (MalformedURLException e) {
-            log.error("Invalid URL format: {}", e.getMessage());
-            return urlString;
-        }
-
-        int redirectCount = 0;
-
-        while (redirectCount < SW360Constants.VCS_REDIRECTION_LIMIT) {
-            try {
-                HttpURLConnection connection = openConnection(url);
-                int status = connection.getResponseCode();
-
-                if (status == HttpURLConnection.HTTP_MOVED_PERM || status == 308) {
-                    String newUrl = connection.getHeaderField("Location");
-                    connection.disconnect();
-
-                    // Resolve relative URLs
-                    url = new URL(url, newUrl);
-
-                    if (!"https".equalsIgnoreCase(url.getProtocol())) {
-                        log.error("Insecure redirection to non-HTTPS URL: {}", url);
-                        return urlString;
-                    }
-
-                    redirectCount++;
-                    this.redirectedUrls.add(urlString);
-                } else {
-                    connection.disconnect();
-                    break;
-                }
-            } catch (IOException e) {
-                log.error("Error during redirection handling: {}", e.getMessage());
-                return urlString;
-            }
-        }
-
-        if (redirectCount == 0 || redirectCount == SW360Constants.VCS_REDIRECTION_LIMIT) {
-            if (redirectCount == SW360Constants.VCS_REDIRECTION_LIMIT) {
-                log.error("Exceeded maximum redirect limit. Returning original URL.");
-            }
-            return urlString;
-        }
-        return sanitizeVCS(url.toString());
+    public boolean isCompNonPkgManaged(org.cyclonedx.model.Component comp) {
+        List<Property> properties = CommonUtils.nullToEmptyList(comp.getProperties());
+        return (!properties.isEmpty() && properties.stream().anyMatch(prop -> SW360Utils.readConfig(NON_PKG_MANAGED_COMPS_PROP, "").equals(prop.getName()) && "true".equalsIgnoreCase(prop.getValue())));
     }
-
-    private static HttpURLConnection openConnection(URL url) throws IOException{
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setInstanceFollowRedirects(false);
-        connection.setConnectTimeout(SW360Constants.VCS_REDIRECTION_TIMEOUT_LIMIT);
-        connection.setReadTimeout(SW360Constants.VCS_REDIRECTION_TIMEOUT_LIMIT);
-        return connection;
+    public  ProjectPackageRelationship createPackageNode(Project project, User user, String comment) {
+        ProjectPackageRelationship projectPackageRelationship = new ProjectPackageRelationship();
+        projectPackageRelationship.setCreatedBy(user.getEmail());
+        projectPackageRelationship.setCreatedOn(SW360Utils.getCreatedOn());
+        projectPackageRelationship.setComment(comment);
+        return projectPackageRelationship;
     }
 }

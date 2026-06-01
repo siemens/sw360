@@ -10,20 +10,22 @@
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.obligation.Sw360ObligationService;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
 import java.util.*;
@@ -55,7 +57,7 @@ public class ObligationSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360ObligationService obligationServiceMock;
 
     private Obligation obligation;
@@ -80,13 +82,24 @@ public class ObligationSpecTest extends TestRestDocsSpecBase {
         obligationList.add(obligation);
         obligationList.add(obligation2);
 
-        given(this.obligationServiceMock.getObligations()).willReturn(obligationList);
-        given(this.obligationServiceMock.getObligationById(eq(obligation.getId()))).willReturn(obligation);
+        PaginationData pageData = new PaginationData();
+        pageData.setSortColumnNumber(0);
+        pageData.setDisplayStart(0);
+        pageData.setRowsPerPage(obligationList.size());
+        pageData.setTotalRowCount(obligationList.size());
+        pageData.setAscending(true);
+
+        // Setup service mocks
+        given(this.obligationServiceMock.getObligationsFiltered(any(), any(), any())).willReturn(Map.of(pageData, obligationList));
+        given(this.obligationServiceMock.getObligationById(eq(obligation.getId()), any())).willReturn(obligation);
         given(this.obligationServiceMock.deleteObligation(eq(obligation.getId()), any())).willReturn(RequestStatus.SUCCESS);
+        given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
 
         when(this.obligationServiceMock.createObligation(any(), any())).then(invocation ->
-        new Obligation("This is the text of my Test Obligation")
+        new Obligation()
                 .setId("1234567890")
+                .setText("This is the text of my Test Obligation")
                 .setTitle("Test Obligation")
                 .setObligationLevel(ObligationLevel.LICENSE_OBLIGATION)
                 .setObligationType(ObligationType.PERMISSION));
@@ -134,6 +147,7 @@ public class ObligationSpecTest extends TestRestDocsSpecBase {
                                 linkWithRel("self").description("The <<resources-obligations, Obligations resource>>")
                         ),
                         responseFields(
+                                fieldWithPath("id").description("ID of the Obligation"),
                                 fieldWithPath("title").description("The title of the obligation"),
                                 fieldWithPath("text").description("The text of the obligation"),
                                 fieldWithPath("obligationLevel").description("The level of the obligation: [ORGANISATION_OBLIGATION, PROJECT_OBLIGATION, COMPONENT_OBLIGATION, LICENSE_OBLIGATION]"),
@@ -164,6 +178,7 @@ public class ObligationSpecTest extends TestRestDocsSpecBase {
                                 fieldWithPath("obligationType").description("The type of the obligation: [RESTRICTION, OBLIGATION, PERMISSION, EXCEPTION, RISK]")
                         ),
                         responseFields(
+                                fieldWithPath("id").description("ID of the Obligation"),
                                 fieldWithPath("title").description("The title of the obligation"),
                                 fieldWithPath("text").description("The text of the obligation"),
                                 fieldWithPath("obligationLevel").description("The level of the obligation: [COMPONENT_OBLIGATION, ORGANISATION_OBLIGATION, PROJECT_OBLIGATION, LICENSE_OBLIGATION]"),

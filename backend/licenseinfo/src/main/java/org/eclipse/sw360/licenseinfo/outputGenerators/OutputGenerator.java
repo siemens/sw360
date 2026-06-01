@@ -15,6 +15,8 @@ package org.eclipse.sw360.licenseinfo.outputGenerators;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.commons.io.IOUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.Velocity;
 import org.apache.velocity.runtime.RuntimeConstants;
@@ -33,12 +35,14 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.StringWriter;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public abstract class OutputGenerator<T> {
+    private static final Logger log = LogManager.getLogger(OutputGenerator.class);
     protected static final String VELOCITY_TOOLS_FILE = "velocity-tools.xml";
     protected static final String LICENSE_REFERENCE_ID_MAP_CONTEXT_PROPERTY = "licenseNameWithTextToReferenceId";
     protected static final String ACKNOWLEDGEMENTS_CONTEXT_PROPERTY = "acknowledgements";
@@ -177,19 +181,94 @@ public abstract class OutputGenerator<T> {
                 .orElse(defaultEmpty.get()).stream();
     }
 
+
+    protected Map<String, Set<String>> buildAcknowledgements(
+            SortedMap<String, LicenseInfoParsingResult> sortedLicenseInfos) {
+        Map<String, Set<String>> acknowledgements = new LinkedHashMap<>();
+
+        for (Map.Entry<String, LicenseInfoParsingResult> e : sortedLicenseInfos.entrySet()) {
+            LicenseInfoParsingResult pr = e.getValue();
+            if (pr == null) continue;
+
+            LicenseInfo li = pr.getLicenseInfo();
+            if (li == null) continue;
+
+            Set<LicenseNameWithText> licenses = li.getLicenseNamesWithTexts();
+            if (licenses == null || licenses.isEmpty()) continue;
+
+            Set<String> ackSet = new HashSet<>();
+
+            for (LicenseNameWithText l : licenses) {
+                String acks = l.getAcknowledgements();
+                if (acks != null && !acks.isBlank()) {
+                    ackSet.add(acks);
+                }
+            }
+
+            if (!ackSet.isEmpty()) {
+                acknowledgements.put(e.getKey(), ackSet);
+            }
+        }
+
+        return acknowledgements;
+    }
+
+
+    public static String normaliseLicenseText(LicenseNameWithText lnt) {
+        String name = lnt.getLicenseName();
+        String text = lnt.getLicenseText();
+
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        int len = text.length();
+
+        StringBuilder sb = new StringBuilder(name.length() + 1 + len);
+
+        for (int i = 0; i < len; i++) {
+            char c = text.charAt(i);
+
+            if ((c >= '0' && c <= '9') ||
+                    (c >= 'a' && c <= 'z')) {
+
+                sb.append(c);
+
+            } else if (c >= 'A' && c <= 'Z') {
+                sb.append((char) (c + 32));
+            }
+        }
+
+        //if the text is not in English or contains only special characters, retain the original text
+        if(sb.length() == 0) return name + '\0' + text;
+        return  name + '\0' + sb;
+    }
+
     @NotNull
-    protected SortedMap<String, Set<String>> getSortedAcknowledgements(Map<String, LicenseInfoParsingResult> sortedLicenseInfos) {
-        Map<String, Set<String>> acknowledgements = Maps.filterValues(Maps.transformValues(sortedLicenseInfos, pr -> Optional
-                .ofNullable(pr.getLicenseInfo())
-                .map(LicenseInfo::getLicenseNamesWithTexts)
-                .filter(Objects::nonNull)
-                .map(s -> s
-                        .stream()
-                        .map(LicenseNameWithText::getAcknowledgements)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet()))
-                .orElse(Collections.emptySet())), set -> !set.isEmpty());
-        return sortStringKeyedMap(acknowledgements);
+    protected SortedMap<String, Map<String, Set<String>>> getSortedAcknowledgements(Map<String, LicenseInfoParsingResult> sortedLicenseInfos) {
+        Map<String, Map<String, Set<String>>> acknowledgements = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        for (Map.Entry<String, LicenseInfoParsingResult> entry : sortedLicenseInfos.entrySet()) {
+            String releaseName = entry.getKey();
+            LicenseInfoParsingResult parsingResult = entry.getValue();
+            LicenseInfo licenseInfo = parsingResult.getLicenseInfo();
+
+            if (licenseInfo != null && licenseInfo.getLicenseNamesWithTexts() != null) {
+                Map<String, Set<String>> licenseAckMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+                for (LicenseNameWithText lnt : licenseInfo.getLicenseNamesWithTexts()) {
+                    String licenseName = lnt.getLicenseName();
+                    String ack = lnt.getAcknowledgements();
+                    if (licenseName != null && ack != null && !ack.trim().isEmpty()) {
+                        licenseAckMap.computeIfAbsent(licenseName, k -> new TreeSet<>()).add(ack.trim());
+                    }
+                }
+                if (!licenseAckMap.isEmpty()) {
+                    acknowledgements.put(releaseName, licenseAckMap);
+                }
+            }
+        }
+
+        return new TreeMap<>(acknowledgements);
     }
 
     @NotNull
@@ -247,46 +326,76 @@ public abstract class OutputGenerator<T> {
      * @return rendered template
      */
     protected String renderTemplateWithDefaultValues(Collection<LicenseInfoParsingResult> projectLicenseInfoResults,
-            String file, String projectTitle, String licenseInfoHeaderText, String obligationsText,
-            Map<String, String> externalIds, boolean excludeReleaseVersion) {
+                                                     String file, String projectTitle, String licenseInfoHeaderText, String obligationsText,
+                                                     Map<String, String> externalIds, boolean excludeReleaseVersion) {
         VelocityContext vc = getConfiguredVelocityContext();
         // set header
         vc.put(LICENSE_INFO_PROJECT_TITLE, projectTitle);
         vc.put(LICENSE_INFO_HEADER_TEXT, licenseInfoHeaderText);
         vc.put(OBLIGATIONS_TEXT, obligationsText);
 
-        // sorted lists of all license to be displayed at the end of the file at once
-        List<LicenseNameWithText> licenseNamesWithTexts = getSortedLicenseNameWithTexts(projectLicenseInfoResults);
-        vc.put(ALL_LICENSE_NAMES_WITH_TEXTS, licenseNamesWithTexts);
-        // assign a reference id to each license in order to only display references for
-        // each release. The references will point to
-        // the list with all details at the and of the file (see above)
-        int referenceId = 1;
-        Map<LicenseNameWithText, Integer> licenseToReferenceId = Maps.newHashMap();
-        for (LicenseNameWithText licenseNamesWithText : licenseNamesWithTexts) {
-            licenseToReferenceId.put(licenseNamesWithText, referenceId++);
+        SortedMap<String, LicenseNameWithText> uniqueLicenses = new TreeMap<>();
+        Map<LicenseNameWithText, String> objToString= new LinkedHashMap<>();
+
+        for (LicenseInfoParsingResult r : projectLicenseInfoResults) {
+            if (r == null || r.getLicenseInfo() == null) continue;
+
+            Set<LicenseNameWithText> set = r.getLicenseInfo().getLicenseNamesWithTexts();
+            if (set == null || set.isEmpty()) continue;
+
+            for (LicenseNameWithText lnt : set) {
+                if (lnt == null || LicenseNameWithTextUtils.isEmpty(lnt)) continue;
+
+                String key = normaliseLicenseText(lnt);
+                uniqueLicenses.putIfAbsent(key, lnt);
+                objToString.put(lnt,key);
+            }
         }
-        vc.put(LICENSE_REFERENCE_ID_MAP_CONTEXT_PROPERTY, licenseToReferenceId);
 
-        Map<Boolean, List<LicenseInfoParsingResult>> partitionedResults =
-                projectLicenseInfoResults.stream().collect(Collectors.partitioningBy(r -> r.getStatus() == LicenseInfoRequestStatus.SUCCESS));
-        List<LicenseInfoParsingResult> goodResults = partitionedResults.get(true);
+        Map<String, Integer> licenseToReferenceId = new LinkedHashMap<>();
+        Map<Integer, LicenseNameWithText> allLicensesForVm = new LinkedHashMap<>();
 
-        Map<String, List<LicenseInfoParsingResult>> badResultsPerRelease = excludeReleaseVersion
-                ? partitionedResults.get(false).stream()
-                        .collect(Collectors.groupingBy(this::getComponentLongNameWithoutVersion))
-                : partitionedResults.get(false).stream().collect(Collectors.groupingBy(this::getComponentLongName));
-        vc.put(LICENSE_INFO_ERROR_RESULTS_CONTEXT_PROPERTY, badResultsPerRelease);
+        int refId = 1;
 
-        // be sure that the licenses inside a release are sorted by id. This looks nicer
-        SortedMap<String, LicenseInfoParsingResult> sortedLicenseInfos = getSortedLicenseInfos(goodResults, excludeReleaseVersion);
-        // this will effectively change the objects in the collection and therefore the
-        // objects in the sorted map above
-        sortLicenseNamesWithinEachLicenseInfoById(sortedLicenseInfos.values(), licenseToReferenceId);
-        vc.put(LICENSE_INFO_RESULTS_CONTEXT_PROPERTY, sortedLicenseInfos);
+        for (Map.Entry<String, LicenseNameWithText> entry : uniqueLicenses.entrySet()) {
+            licenseToReferenceId.put(entry.getKey(),refId);
+            allLicensesForVm.put(refId, entry.getValue());
+            refId++;
+        }
+
+        vc.put(ALL_LICENSE_NAMES_WITH_TEXTS, allLicensesForVm);
+
+        Map<String, LicenseInfoParsingResult> successResults = new HashMap<>();
+        Map<String, List<LicenseInfoParsingResult>> failedResults= new HashMap<>();
+        Map<LicenseNameWithText,Integer> licenseNameWithTextToRefId = new HashMap<>();
+
+        parseAllReleases(projectLicenseInfoResults, excludeReleaseVersion, failedResults, successResults);
+
+        //sort licenseNameWithText object within each Release
+        for (LicenseInfoParsingResult r : successResults.values()) {
+            LicenseInfo li = r.getLicenseInfo();
+            if (li == null) continue;
+            Set<LicenseNameWithText> set = li.getLicenseNamesWithTexts();
+            if (set == null) continue;
+            for(LicenseNameWithText lnt : set) {
+                String key = objToString.get(lnt);
+                licenseNameWithTextToRefId.put(lnt,licenseToReferenceId.get(key));
+            }
+            if (set.size() > 1) {
+                SortedSet<LicenseNameWithText> sortedSet = new TreeSet<>(Comparator.comparing(a->a.getLicenseName()));
+                sortedSet.addAll(set);
+                li.setLicenseNamesWithTexts(sortedSet);
+            }
+        }
+
+        SortedMap<String, LicenseInfoParsingResult> sortedReleases =
+                sortStringKeyedMap(successResults);
+        vc.put(LICENSE_REFERENCE_ID_MAP_CONTEXT_PROPERTY, licenseNameWithTextToRefId);
+        vc.put(LICENSE_INFO_RESULTS_CONTEXT_PROPERTY, sortedReleases);
+        vc.put(LICENSE_INFO_ERROR_RESULTS_CONTEXT_PROPERTY, failedResults);
 
         // also display acknowledgments
-        SortedMap<String, Set<String>> acknowledgements = getSortedAcknowledgements(sortedLicenseInfos);
+        Map<String, Set<String>> acknowledgements = buildAcknowledgements(sortedReleases);
         vc.put(ACKNOWLEDGEMENTS_CONTEXT_PROPERTY, acknowledgements);
 
         vc.put(EXTERNAL_IDS, externalIds);
@@ -297,21 +406,81 @@ public abstract class OutputGenerator<T> {
         return sw.toString();
     }
 
+    private void parseAllReleases(Collection<LicenseInfoParsingResult> projectLicenseInfoResults, boolean excludeReleaseVersion,
+                                  Map<String, List<LicenseInfoParsingResult>> failedResults, Map<String, LicenseInfoParsingResult> successResults) {
+        for (LicenseInfoParsingResult r : projectLicenseInfoResults) {
+            if (r == null) continue;
+            String key = excludeReleaseVersion
+                    ? getComponentLongNameWithoutVersion(r)
+                    : getComponentLongName(r);
+
+            if (r.getStatus() != LicenseInfoRequestStatus.SUCCESS) {
+                failedResults
+                        .computeIfAbsent(key, k -> new ArrayList<>())
+                        .add(r);
+                continue;
+            }
+            LicenseInfoParsingResult existing = successResults.get(key);
+            if (existing == null) {
+                successResults.put(key, r);
+                continue;
+            }
+
+            LicenseInfo target = existing.getLicenseInfo();
+            LicenseInfo incoming = r.getLicenseInfo();
+
+            if (target == null) {
+                existing.setLicenseInfo(incoming);
+                continue;
+            }
+
+            if (incoming == null) {
+                continue;
+            }
+
+            // merge license names
+            if (incoming.isSetLicenseNamesWithTexts()) {
+                if (!target.isSetLicenseNamesWithTexts()) {
+                    target.setLicenseNamesWithTexts(new HashSet<>());
+                }
+                target.getLicenseNamesWithTexts()
+                        .addAll(incoming.getLicenseNamesWithTexts());
+            }
+
+            // merge copyrights
+            if (incoming.isSetCopyrights()) {
+                if (!target.isSetCopyrights()) {
+                    target.setCopyrights(new HashSet<>());
+                }
+                target.getCopyrights()
+                        .addAll(incoming.getCopyrights());
+            }
+
+            // merge filenames
+            if (incoming.isSetFilenames()) {
+                if (!target.isSetFilenames()) {
+                    target.setFilenames(new ArrayList<>());
+                }
+                target.getFilenames()
+                        .addAll(incoming.getFilenames());
+            }
+        }
+    }
+
+
     /**
      * Uses the given map to sort the licenses inside a license of by id. The given
-     * map must contain an id for each license name present in the license info
-     * objects.
-     *
+     * map must contain an id for each license name present in the license info objects.
      * @param licenseInfoResults
-     *            parsing results with license infos and licenses to be sorted
+     *          parsing results with license infos and licenses to be sorted
      * @param licenseToReferenceId
-     *            mapping of license name to id to be able to sort the licenses
+     *          mapping of license name to id to be able to sort the licenses
      */
     private void sortLicenseNamesWithinEachLicenseInfoById(Collection<LicenseInfoParsingResult> licenseInfoResults,
             Map<LicenseNameWithText, Integer> licenseToReferenceId) {
         licenseInfoResults.stream().map(LicenseInfoParsingResult::getLicenseInfo).filter(Objects::nonNull)
                 .forEach((LicenseInfo li) -> li.setLicenseNamesWithTexts(
-                        sortSet(li.getLicenseNamesWithTexts(), licenseNameWithText -> licenseToReferenceId.get(licenseNameWithText))));
+                        sortSet(li.getLicenseNamesWithTexts(), licenseNameWithText -> Optional.ofNullable(licenseToReferenceId.get(licenseNameWithText)).orElse(Integer.MAX_VALUE))));
     }
 
     /**

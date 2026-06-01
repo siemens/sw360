@@ -4,13 +4,14 @@ SPDX-License-Identifier: EPL-2.0
 */
 package org.eclipse.sw360.http;
 
+import java.io.IOException;
 import java.net.http.HttpRequest.BodyPublisher;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.nio.file.Path;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
 /**
  * <p>
@@ -35,6 +36,12 @@ class NewRequestBodyBuilderImpl implements RequestBodyBuilder {
     private BodyPublisher body;
 
     /**
+     * Stores the name of a file to be uploaded. This field is only defined if
+     * a body of type file has been set.
+     */
+    private String fileName;
+
+    /**
      * Creates a new {@code RequestBodyBuilderImpl} object and initializes it
      * with the JSON object mapper.
      *
@@ -42,7 +49,7 @@ class NewRequestBodyBuilderImpl implements RequestBodyBuilder {
      */
     public NewRequestBodyBuilderImpl(ObjectMapper mapper) {
         this.mapper = mapper;
-        mapper.setPropertyNamingStrategy(PropertyNamingStrategy.LOWER_CAMEL_CASE);
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.LOWER_CAMEL_CASE);
     }
 
     @Override
@@ -52,7 +59,13 @@ class NewRequestBodyBuilderImpl implements RequestBodyBuilder {
 
     @Override
     public void file(Path path, String mediaType) {
-        //TODO: implementation pending.
+        try {
+            initBody(BodyPublishers.ofFile(path));
+            Path fileNamePath = path.getFileName();
+            fileName = (fileNamePath != null) ? fileNamePath.toString() : null;
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Override
@@ -78,6 +91,16 @@ class NewRequestBodyBuilderImpl implements RequestBodyBuilder {
             throw new IllegalStateException("A RequestBodyBuilder was requested, but no body was defined.");
         }
         return body;
+    }
+
+    /**
+     * Returns the file name for a file upload request. A file name is only
+     * defined if the {@code file()} method was called.
+     *
+     * @return a file name for an upload request
+     */
+    public String getFileName() {
+        return fileName;
     }
 
     /**

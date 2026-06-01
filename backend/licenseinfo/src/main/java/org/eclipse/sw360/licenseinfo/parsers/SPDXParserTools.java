@@ -13,13 +13,14 @@ package org.eclipse.sw360.licenseinfo.parsers;
 
 import com.google.common.collect.Sets;
 
-import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.*;
 import org.apache.jena.util.XMLChar;
 
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -39,8 +40,6 @@ import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhit
 import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.USE_LICENSE_INFO_FROM_FILES;
 
 public class SPDXParserTools {
-    private static final String PROPERTIES_FILE_PATH = "/sw360.properties";
-
     private static final String XML_LITERAL = "^^http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral";
     private static final String LICENSE_REF_PREFIX = "LicenseRef-";
     private static final String RELATIONSHIP_TYPE_DESCRIBES = "relationshipType_describes";
@@ -89,10 +88,6 @@ public class SPDXParserTools {
     // Store spdx:referencesFile index by their nodeID
     private static HashMap<String, Element> nodeIDFileMap = new HashMap<String, Element>();
 
-    static {
-        Properties properties = CommonUtils.loadProperties(SPDXParserTools.class, PROPERTIES_FILE_PATH);
-    }
-
     // Make NodeList be iterable
     private static Iterable<Node> iterable(final NodeList nodeList) {
         return () -> new Iterator<Node>() {
@@ -124,14 +119,14 @@ public class SPDXParserTools {
                 if (Util.splitNamespaceXML(label) == label.length()) {
                     try {
                         label = URLDecoder.decode(label, StandardCharsets.UTF_8);
-                        URL url = new URL(label);
+                        URL url = new URI(label).toURL();
                         if (null != url.getRef()) {
                             return url.getRef();
                         } else {
                             String path = url.getPath();
                             return path.substring(path.lastIndexOf('/') + 1);
                         }
-                    } catch (MalformedURLException e) {
+                    } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
                         return "";
                     }
                 }

@@ -25,6 +25,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import com.google.gson.Gson;
+import org.apache.maven.api.model.Model;
+import org.apache.maven.model.v4.MavenStaxReader;
 import org.apache.thrift.protocol.TType;
 import org.eclipse.sw360.datahandler.couchdb.DatabaseMixInForChangeLog.ProjectProjectRelationshipMixin;
 import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
@@ -53,14 +55,13 @@ import org.eclipse.sw360.datahandler.thrift.spdx.documentcreationinformation.Doc
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.maven.model.Model;
-import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.thrift.TEnum;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityService;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -94,6 +95,7 @@ public class SW360Utils {
     public static final Comparator<ReleaseLink> RELEASE_LINK_COMPARATOR = Comparator.comparing(rl -> getReleaseFullname(rl.getVendor(), rl.getName(), rl.getVersion()).toLowerCase());
     private static final ObjectMapper objectMapper;
     private static final String DIGIT_AND_DECIMAL_REGEX = "[^\\d.]";
+    private static final Gson GSON = new Gson();
     private static final Comparator<Entry<String, ObligationStatusInfo>> COMPARE_BY_OBLIGATIONTYPE = Comparator
             .comparing(Entry<String, ObligationStatusInfo>::getValue, (osi1, osi2) -> {
                 String type1 = "", type2 = "";
@@ -109,13 +111,13 @@ public class SW360Utils {
     public static Joiner spaceJoiner = Joiner.on(" ");
     public static Joiner commaJoiner = Joiner.on(", ");
 
-    public static String INACCESSIBLE_RELEASE ="RestrictedRelease";
+    public static String INACCESSIBLE_RELEASE = "RestrictedRelease";
 
     private SW360Utils() {
         // Utility class with only static functions
     }
 
-    static{
+    static {
         objectMapper = new ObjectMapper();
         SimpleModule customModule = new SimpleModule("SW360 serializers");
         customModule.setMixInAnnotation(ProjectProjectRelationship.class, ProjectProjectRelationshipMixin.class);
@@ -285,7 +287,7 @@ public class SW360Utils {
             LocalDate currLocalDate = LocalDate.parse(currRequestedClearingDate, format);
             LocalDate requestedLocalDate = LocalDate.parse(newRequestedClearingDate, format);
 
-            return requestedLocalDate.isAfter(currLocalDate);
+            return requestedLocalDate.isEqual(currLocalDate) || requestedLocalDate.isAfter(currLocalDate);
         } catch (DateTimeParseException e) {
             return false;
         }
@@ -399,13 +401,13 @@ public class SW360Utils {
     }
 
     public static String getSW360Version() {
-        final MavenXpp3Reader reader = new MavenXpp3Reader();
+        final MavenStaxReader reader = new MavenStaxReader();
         try (InputStreamReader iStreamReader = new InputStreamReader(
                 SW360Utils.class.getResourceAsStream(SW360Constants.DATA_HANDLER_POM_FILE_PATH))) {
             Model model = reader.read(iStreamReader);
             return model.getVersion();
         } catch (Exception e) {
-            log.error("Error while getting SW360 version information: "+ e);
+            log.error("Error while getting SW360 version information: {}", String.valueOf(e));
             return SW360Constants.NA;
         }
     }
@@ -446,7 +448,7 @@ public class SW360Utils {
                         releaseIds.addAll(project.getReleaseIdToUsage().keySet());
                     }
                     if (project.getPackageIdsSize() > 0) {
-                        packageIds.addAll(project.getPackageIds());
+                        packageIds.addAll(project.getPackageIds().keySet());
                     }
                     if (project.getLinkedProjectsSize() > 0) {
                         getLinkedReleaseIdsOfAllSubProjectsAsFlatList(project, projectIds, releaseIds, packageIds, client, user);
@@ -815,15 +817,30 @@ public class SW360Utils {
     public static Map<String, ObligationStatusInfo> getProjectComponentOrganisationLicenseObligationToDisplay(
             Map<String, ObligationStatusInfo> obligationStatusMap, List<Obligation> obligations,
             ObligationLevel oblLevel, boolean addFromDB) {
+        return getProjectComponentOrganisationLicenseObligationToDisplay(obligationStatusMap, obligations,
+                EnumSet.of(oblLevel), addFromDB);
+    }
+
+    public static Map<String, ObligationStatusInfo> getProjectComponentOrganisationLicenseObligationToDisplay(
+            Map<String, ObligationStatusInfo> obligationStatusMap, List<Obligation> obligations, boolean addFromDB) {
+        return getProjectComponentOrganisationLicenseObligationToDisplay(obligationStatusMap, obligations,
+                EnumSet.of(ObligationLevel.PROJECT_OBLIGATION, ObligationLevel.COMPONENT_OBLIGATION,
+                        ObligationLevel.ORGANISATION_OBLIGATION),
+                addFromDB);
+    }
+
+    private static Map<String, ObligationStatusInfo> getProjectComponentOrganisationLicenseObligationToDisplay(
+            Map<String, ObligationStatusInfo> obligationStatusMap, List<Obligation> obligations,
+            Set<ObligationLevel> obligationLevels, boolean addFromDB) {
         Map<String, ObligationStatusInfo> obligationAlreadyPresent = obligationStatusMap.entrySet().stream()
                 .filter(Objects::nonNull).filter(e -> Objects.nonNull(e.getValue()))
                 .filter(e -> Objects.nonNull(e.getValue().getObligationLevel()))
-                .filter(e -> e.getValue().getObligationLevel().equals(oblLevel)).collect(Collectors.toMap(
+                .filter(e -> obligationLevels.contains(e.getValue().getObligationLevel())).collect(Collectors.toMap(
                         e -> e.getKey(), e -> e.getValue(), (oldValue, newValue) -> oldValue));
         obligationAlreadyPresent.entrySet().stream().forEach(e -> obligationStatusMap.remove(e.getKey()));
 
         Map<String, ObligationStatusInfo> mapOfObligations = obligations.stream().filter(Objects::nonNull)
-                .filter(o -> Objects.nonNull(o.getObligationLevel()) && oblLevel.equals(o.getObligationLevel()))
+                .filter(o -> Objects.nonNull(o.getObligationLevel()) && obligationLevels.contains(o.getObligationLevel()))
                 .filter(o -> addFromDB || obligationAlreadyPresent
                         .containsKey(CommonUtils.nullToEmptyString(o.getTitle()).replaceAll("\r\n", " ")))
                 .collect(Collectors.toMap(
@@ -833,7 +850,7 @@ public class SW360Utils {
                                 return obligationAlreadyPresent.remove(key);
                             } else {
                                 return new ObligationStatusInfo().setComment(o.getComments())
-                                        .setObligationLevel(oblLevel).setObligationType(o.getObligationType())
+                                        .setObligationLevel(o.getObligationLevel()).setObligationType(o.getObligationType())
                                         .setReleaseIdToAcceptedCLI(new HashMap<>()).setText(o.getText());
                             }
                         }, (oldValue, newValue) -> oldValue));
@@ -1030,7 +1047,7 @@ public class SW360Utils {
                 dependencyNetwork.add(node);
             }
         }
-        project.setReleaseRelationNetwork(new Gson().toJson(dependencyNetwork));
+        project.setReleaseRelationNetwork(GSON.toJson(dependencyNetwork));
     }
 
     /**
@@ -1131,6 +1148,7 @@ public class SW360Utils {
                             break;
                         case TType.BOOL:
                             packageInfo.setFieldValue(field, true);
+                            break;
                         default:
                             break;
                     }
@@ -1146,7 +1164,7 @@ public class SW360Utils {
             SW360ConfigsService.Iface configClient = new ThriftClients().makeSW360ConfigsClient();
             return configClient.getConfigByKey(key);
         } catch (TException exception) {
-            throw new SW360Exception("Unable to get configuration");
+            throw new SW360Exception("Unable to get configuration " + key);
         }
     }
 
@@ -1168,7 +1186,9 @@ public class SW360Utils {
                 case null, default -> (T) value; // Assume it's a String
             };
         } catch (Exception e) {
-            log.error(e.getMessage());
+            if (!(e instanceof SW360Exception)) {
+                log.error(e.getMessage());
+            }
             return defaultValue;
         }
     }

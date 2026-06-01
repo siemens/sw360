@@ -16,6 +16,7 @@ namespace php sw360.thrift.vulnerabilities
 
 typedef sw360.RequestSummary RequestSummary
 typedef users.User User
+typedef sw360.PaginationData PaginationData
 typedef sw360.SW360Exception SW360Exception
 typedef sw360.RequestStatus RequestStatus
 typedef sw360.VerificationState VerificationState
@@ -249,6 +250,14 @@ enum VulnerabilityAccessVector {
     NETWORK = 2,
 }
 
+enum VulnerabilitySortColumn {
+    BY_EXTERNALID = -1,
+    BY_TITLE = 0,
+    BY_WEIGHTING = 1,
+    BY_PUBLISHDATE = 2,
+    BY_LASTUPDATED = 3,
+}
+
 struct VulnerabilityCheckStatus{
     1: required string checkedOn,
     2: required string checkedBy,
@@ -275,20 +284,26 @@ struct VulnerabilityWithReleaseRelations{
 
 service VulnerabilityService {
     // General information
-     /**
-       * returns a list with all vulnerabilites in the SW360 database if the user is valid
-       * returns empty list if user is not valid
-       **/
-    list<Vulnerability> getVulnerabilities(1: User user);
+    /**
+      * returns a list with all vulnerabilities in the SW360 database if the user is valid
+      * returns empty list if user is not valid
+      **/
+    map<PaginationData, list<Vulnerability>> getVulnerabilities(1: User user, 2: PaginationData pageData);
 
-     /**
-       * returns a list with the latest vulnerabilites in the SW360 database if the user is valid
+    /**
+      * returns a list with all vulnerabilities matching searchText or CVE ID in the SW360 database if the user
+      * is valid returns empty list if user is not valid
+      **/
+    map<PaginationData, list<Vulnerability>> searchVulnerabilities(1: string searchText, 2: string cveId, 3: User user, 4: PaginationData pageData);
+
+      /**
+       * returns a list with the latest vulnerabilities in the SW360 database if the user is valid
        * returns empty list if user is not valid, or if the limit is smaller than zero
        **/
     list<Vulnerability> getLatestVulnerabilities(1: User user, 2: i32 limit = 20);
 
     /**
-      * Returns the total number of vulnerabilites in the database
+      * Returns the total number of vulnerabilities in the database
       **/
     i32 getTotalVulnerabilityCount(1: User user);
 

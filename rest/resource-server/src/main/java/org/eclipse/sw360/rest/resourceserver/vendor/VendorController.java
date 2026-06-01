@@ -21,6 +21,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -46,7 +47,9 @@ import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.data.domain.Pageable;
 
 import java.io.IOException;
@@ -55,6 +58,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import java.util.List;
 import jakarta.servlet.http.HttpServletResponse;
@@ -64,7 +68,7 @@ import static org.eclipse.sw360.datahandler.common.SW360Constants.CONTENT_TYPE_O
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -82,7 +86,12 @@ public class VendorController implements RepresentationModelProcessor<Repository
             description = "List all of the service's vendors.",
             tags = {"Vendor"}
     )
-    @RequestMapping(value = VENDORS_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Vendors successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No vendors found.",
+                content = @Content)
+    })
+    @GetMapping(value = VENDORS_URL)
     public ResponseEntity<CollectionModel<EntityModel<Vendor>>> getVendors(
             @Parameter(description = "Search text")
             @RequestParam(value = "searchText", required = false) String searchText,
@@ -90,14 +99,28 @@ public class VendorController implements RepresentationModelProcessor<Repository
             Pageable pageable,
             HttpServletRequest request
     ) throws URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
-        List<Vendor> vendors = null;
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        List<Vendor> sw360Vendors = new ArrayList<>();
+        Map<PaginationData, List<Vendor>> paginatedVendors = null;
         if (!isNullOrEmpty(searchText)) {
-            vendors = vendorService.searchVendors(searchText);
+            paginatedVendors = vendorService.searchVendors(searchText, pageable);
         } else {
-            vendors = vendorService.getVendors();
+            paginatedVendors = vendorService.getVendors(pageable);
         }
 
-        PaginationResult<Vendor> paginationResult = restControllerHelper.createPaginationResult(request, pageable, vendors, SW360Constants.TYPE_VENDOR);
+        PaginationResult<Vendor> paginationResult;
+        if (paginatedVendors != null) {
+            sw360Vendors.addAll(paginatedVendors.values().iterator().next());
+            int totalCount = Math.toIntExact(paginatedVendors.keySet().stream()
+                    .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+            paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                    request, pageable, sw360Vendors, SW360Constants.TYPE_VENDOR, totalCount);
+        } else {
+            paginationResult = restControllerHelper.createPaginationResult(request, pageable,
+                    sw360Vendors, SW360Constants.TYPE_VENDOR);
+        }
+
         List<EntityModel<Vendor>> vendorResources = new ArrayList<>();
         for (Vendor v: paginationResult.getResources()) {
             Vendor embeddedVendor = restControllerHelper.convertToEmbeddedVendor(v);
@@ -105,7 +128,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
         }
 
         CollectionModel<EntityModel<Vendor>> resources;
-        if (vendors.isEmpty()) {
+        if (vendorResources.isEmpty()) {
             resources = restControllerHelper.emptyPageResource(Vendor.class, paginationResult);
         } else {
             resources = restControllerHelper.generatePagesResource(paginationResult, vendorResources);
@@ -120,11 +143,16 @@ public class VendorController implements RepresentationModelProcessor<Repository
             description = "Get a single vendor by id.",
             tags = {"Vendor"}
     )
-    @RequestMapping(value = VENDORS_URL + "/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Vendor successfully retrieved.")
+    })
+    @GetMapping(value = VENDORS_URL + "/{id}")
     public ResponseEntity<EntityModel<Vendor>> getVendor(
             @Parameter(description = "The id of the vendor to get.")
             @PathVariable("id") String id
     ) {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Vendor sw360Vendor = vendorService.getVendorById(id);
         HalResource<Vendor> halResource = createHalVendor(sw360Vendor);
         return new ResponseEntity<>(halResource, HttpStatus.OK);
@@ -135,11 +163,21 @@ public class VendorController implements RepresentationModelProcessor<Repository
             description = "Get the releases by vendor id.",
             tags = {"Vendor"}
     )
-    @RequestMapping(value = VENDORS_URL + "/{id}/releases", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Releases for vendor successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No releases found for this vendor.",
+                content = @Content)
+    })
+    @GetMapping(value = VENDORS_URL + "/{id}/releases")
     public ResponseEntity<CollectionModel<EntityModel<Release>>> getReleases(
             @Parameter(description = "The id of the vendor to get.")
             @PathVariable("id") String id
     ) throws SW360Exception {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
+        if(vendorService.getVendorById(id) == null){
+            throw new ResourceNotFoundException("Vendor with id " + id + " not found.");
+        }
         try {
             Set<Release> releases = vendorService.getAllReleaseList(id);
             List<EntityModel<Release>> resources = new ArrayList<>();
@@ -161,12 +199,19 @@ public class VendorController implements RepresentationModelProcessor<Repository
             description = "Delete vendor by id.",
             tags = {"Vendor"}
     )
-    @RequestMapping(value = VENDORS_URL + "/{id}", method = RequestMethod.DELETE)
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Vendor deleted successfully.")
+    })
+    @DeleteMapping(value = VENDORS_URL + "/{id}")
     public ResponseEntity<?> deleteVendor(
             @Parameter(description = "The id of the vendor to be deleted.")
             @PathVariable("id") String id
-    ) {
+    ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to delete vendors");
+        }
         Vendor sw360Vendor = vendorService.getVendorById(id);
         if (sw360Vendor == null) {
             throw new ResourceNotFoundException("Vendor with id " + id + " not found.");
@@ -174,9 +219,8 @@ public class VendorController implements RepresentationModelProcessor<Repository
         RequestStatus requestStatus = vendorService.deleteVendorByid(id, sw360User);
         if (requestStatus == RequestStatus.SUCCESS) {
             return new ResponseEntity<>("Vendor with full name " + sw360Vendor.getFullname() + " deleted successfully.", HttpStatus.OK);
-        } else {
-            throw new BadRequestClientException("Vendor with full name " + sw360Vendor.getFullname() + " cannot be deleted.");
         }
+        throw new BadRequestClientException("Vendor with full name " + sw360Vendor.getFullname() + " cannot be deleted.");
     }
 
     @Operation(
@@ -184,12 +228,19 @@ public class VendorController implements RepresentationModelProcessor<Repository
             description = "Create a new vendor.",
             tags = {"Vendor"}
     )
-    @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = VENDORS_URL, method = RequestMethod.POST)
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Vendor created successfully.")
+    })
+    @PostMapping(value = VENDORS_URL)
     public ResponseEntity<?> createVendor(
             @Parameter(description = "The vendor to be created.")
             @RequestBody Vendor vendor
     ) {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to create vendors");
+        }
         vendor = vendorService.createVendor(vendor);
         HalResource<Vendor> halResource = createHalVendor(vendor);
 
@@ -231,8 +282,8 @@ public class VendorController implements RepresentationModelProcessor<Repository
                     }
             )
     })
-    @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = VENDORS_URL + "/{id}", method = RequestMethod.PATCH)
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @PatchMapping(value = VENDORS_URL + "/{id}")
     public ResponseEntity<?> updateVendor(
             @Parameter(description = "The id of the vendor")
             @PathVariable("id") String id,
@@ -240,6 +291,9 @@ public class VendorController implements RepresentationModelProcessor<Repository
             @RequestBody Vendor vendor
     ) {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to update vendors");
+        }
         if (vendor.getFullname() == null && vendor.getShortname() == null && vendor.getUrl() == null) {
             throw new BadRequestClientException("Vendor cannot be null");
         }
@@ -274,21 +328,32 @@ public class VendorController implements RepresentationModelProcessor<Repository
                             @Content(mediaType = CONTENT_TYPE_OPENXML_SPREADSHEET)
                     })
     })
-    @PreAuthorize("hasAuthority('WRITE')")
+    @PreAuthorize("hasAuthority('ADMIN')")
     @GetMapping(value = VENDORS_URL + "/exportVendorDetails")
     public ResponseEntity<?> exportVendor(HttpServletResponse response) throws TException {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to export vendors");
+        }
+        restControllerHelper.throwIfSecurityUser(sw360User);
         try {
             ByteBuffer buffer = vendorService.exportExcel();
             String filename = String.format("vendors-%s.xlsx", SW360Utils.getCreatedOn());
             response.setHeader("Content-Disposition", String.format("attachment; filename=\"%s\"", filename));
             copyDataStreamToResponse(response, buffer);
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (BadRequestClientException e) {
+            throw e;
         } catch (Exception e) {
             throw new TException(e.getMessage());
         }
         return ResponseEntity.ok(HttpStatus.OK);
     }
 
-    @PreAuthorize("hasAuthority('WRITE')")
+    @PreAuthorize("hasAuthority('ADMIN')")
     @Operation(
             summary = "Merge two vendors.",
             responses = {
@@ -323,7 +388,7 @@ public class VendorController implements RepresentationModelProcessor<Repository
             },
             tags = {"Vendor"}
     )
-    @RequestMapping(value = VENDORS_URL + "/mergeVendors", method = RequestMethod.PATCH)
+    @PatchMapping(value = VENDORS_URL + "/mergeVendors")
     public ResponseEntity<RequestStatus> mergeVendors(
             @Parameter(description = "The id of the merge target vendor.")
             @RequestParam(value = "mergeTargetId", required = true) String mergeTargetId,
@@ -333,6 +398,9 @@ public class VendorController implements RepresentationModelProcessor<Repository
             @RequestBody Vendor mergeSelection
     ) throws TException, ResourceClassNotFoundException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to merge vendors");
+        }
         // perform the real merge, update merge target and delete merge sources
         RequestStatus requestStatus = vendorService.mergeVendors(mergeTargetId, mergeSourceId, mergeSelection, sw360User);
         return new ResponseEntity<>(requestStatus, HttpStatus.OK);

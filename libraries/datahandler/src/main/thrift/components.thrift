@@ -256,6 +256,7 @@ struct Release {
     // string details
     30: optional string createdBy, // person who created the release
     131: optional string creatorDepartment, // department of user in `createdBy`. transient
+    132: optional MainlineState projectMainlineState, // Project's mainline state for this release. transient
     32: optional set<string> contributors, // contributors to the release
     34: optional set<string> moderators, // people who can modify the data
     36: optional set<string> subscribers, // List of subscribers
@@ -407,6 +408,10 @@ struct ComponentDTO {
     51: optional string mailinglist,
     52: optional string wiki,
     53: optional string blog,
+    54: optional string vcs,
+
+    // Moderation comment passed during PATCH request (not persisted on Component)
+    90: optional string comment,
 }
 
 struct ReleaseLink{
@@ -457,6 +462,22 @@ enum BulkOperationResultState {
     FAILED = 1,
     CONFLICTED = 2,
     EXCLUDED = 3,
+}
+
+enum ComponentSortColumn {
+    BY_CREATEDON = -1,
+    BY_VENDOR = 0,
+    BY_NAME = 1,
+    BY_MAINLICENSE = 2,
+    BY_TYPE = 3,
+}
+
+enum ReleaseSortColumn {
+    BY_CREATEDON = -1,
+    BY_NAME = 0,
+    BY_VERSION = 1,
+    BY_CLEARING_STATE = 2,
+    BY_MAINLINE_STATE = 3,
 }
 
 enum BulkOperationNodeType {
@@ -555,7 +576,7 @@ service ComponentService {
      * search components in database that match subQueryRestrictions
      * They are only the components which are visible to user.
      **/
-    list<Component> refineSearchAccessibleComponents(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);
+    map<PaginationData, list<Component>> refineSearchAccessibleComponents(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user, 4: PaginationData pageData);
 
     /**
      * search components with the accessibility in database that match subQueryRestrictions
@@ -563,14 +584,9 @@ service ComponentService {
     list<Component> refineSearchWithAccessibility(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);
 
     /**
-     * global search function to list releases which match the text argument
-     */
-    list<Release> searchReleases(1: string text);
-
-    /**
      * global search function to list accessible releases which match the text argument
      */
-    list<Release> searchAccessibleReleases(1: string text, 2: User user);
+    map<PaginationData, list<Release>> searchAccessibleReleases(1: string text, 2: User user, 3: PaginationData pageData);
 
     /**
      *  list accessible releases with pagination for ECC page
@@ -581,6 +597,32 @@ service ComponentService {
      * get short summary of release by release name prefix
      **/
     list<Release> searchReleaseByNamePrefix(1: string name);
+
+    /**
+     * get short summary of release by name paginated
+     **/
+    map<PaginationData, list<Release>> searchReleaseByNamePaginated(1: string name, 2: PaginationData pageData) throws (1: SW360Exception exp);
+
+    /**
+     * get releases that are in NEW state and have a SRC/SRS attachment
+     **/
+    map<PaginationData, list<Release>> getAccessibleNewReleasesWithSrc(1: User user, 2: PaginationData pageData) throws (1: SW360Exception exp);
+
+    /**
+     * Get Components with name prefix and paginated
+     **/
+    map<PaginationData, list<Component>> searchComponentByNamePrefixPaginated(1: User user, 2: string name, 3: PaginationData pageData);
+
+    /**
+     * Get Components with exact name and paginated
+     **/
+    map<PaginationData, list<Component>> searchComponentByExactNamePaginated(1: User user, 2: string name, 3: PaginationData pageData);
+
+    /**
+     * search components in database that match subQueryRestrictions
+     * Gets the components with mango query and pagination.
+     **/
+    map<PaginationData, list<Component>> searchComponentByExactValues(1: map<string, set<string>> subQueryRestrictions, 2: User user, 3: PaginationData pageData) throws (1: SW360Exception exp);
 
     /**
      * information for home portlet
@@ -617,7 +659,7 @@ service ComponentService {
     /**
      * get component from database filled with releases and permissions for user
      **/
-    Component getComponentById(1: string id, 2: User user);
+    Component getComponentById(1: string id, 2: User user) throws (1: SW360Exception exp);
 
     /**
      * get component from database filled with releases and permissions for user
@@ -831,6 +873,8 @@ service ComponentService {
 
     list<Release> getReleasesFullDocsFromComponentId(1: string id, 2: User user);
 
+    map<PaginationData, list<Release>> getReleasesFromComponentIdWithPagination(1: string id, 2: User user, 3: PaginationData pageData);
+
     /**
      * get components belonging to linked releases of the release specified by releaseId
      **/
@@ -872,7 +916,7 @@ service ComponentService {
     bool releaseIsUsed(1: string releaseId);
 
      /**
-       * check if one of the releases of the compnent is used by other releases, components or projects
+       * check if one of the releases of the component is used by other releases, components or projects
        **/
     bool componentIsUsed(1: string componentId);
 

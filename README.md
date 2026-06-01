@@ -1,3 +1,10 @@
+# SW360
+
+[![Website](https://img.shields.io/badge/website-SW360-blue)](https://eclipse.dev/sw360/)
+
+SW360 is a software component catalogue application designed to provide a central hub for managing software components and their metadata.
+
+Visit the [official project homepage](https://eclipse.dev/sw360/) for more information.
 
 <img width="1280" alt="homeImage" src="https://github.com/user-attachments/assets/3c2e6712-97a7-4637-80b5-915cdd3af1e8" />
 <br></br>
@@ -46,10 +53,45 @@ If you run in any issues with documentation or software, please be kind and repo
 
 ### Deployment
 
-Is recommended using the docker based setup,
+It is recommended to use the Docker-based setup,
 [described here](https://github.com/eclipse/sw360/blob/main/README_DOCKER.md).
 
 If you intend to install in a bare metal machine or use in your own virtualized system, [bare metal instructions are provided here](https://www.eclipse.org/sw360/docs/deployment/baremetal/deploy-natively/).
+
+### Security Configuration
+
+SW360 exposes several security flags that should be reviewed before production
+deployment.
+
+#### HTTP Basic Authentication
+
+HTTP Basic auth is **disabled by default** in production profiles. It can be
+enabled for local development and testing.
+
+| Deployment | How to enable |
+|---|---|
+| **Docker** | Set `SW360_SECURITY_HTTP_BASIC_ENABLED=true` in `config/sw360/.env.backend` |
+| **Bare metal** | Set `sw360.security.http-basic.enabled=true` in `application.yml` (or pass as JVM arg) |
+| **Spring profile** | Activate the `prod` profile; it sets the flag to `false`. Omit `prod` for dev defaults. |
+
+> ⚠️ **Do not enable Basic auth in production.** Use OAuth2/JWT (built-in
+> authorization server or Keycloak) or API tokens instead.
+
+#### Spring Profiles
+
+| Profile | Purpose |
+|---|---|
+| *(none / default)* | Development defaults — Basic auth enabled, permissive settings |
+| `prod` | Production overrides — Basic auth disabled |
+
+Activate the production profile with:
+```bash
+# As JVM argument
+-Dspring.profiles.active=prod
+
+# Or as environment variable
+export SPRING_PROFILES_ACTIVE=prod
+```
 
 ### Development
 
@@ -57,21 +99,21 @@ If you intend to develop over SW360, few steps are needed as equal you need have
 requirements
 
 * Base build requirements
-  * Java 11
+  * Java 21
   * Maven 3.8.7
   * pre-commit
-  * thrift 0.16.0 runtime
+  * thrift 0.20.0 runtime
   * Python environment ( to [pre-commit](https://pre-commit.com/) ) - SW360 use Eclipse formatting rules
   through [Spotless maven plugin](https://github.com/diffplug/spotless/tree/main/plugin-maven)
 
-If you can't install thrift 0.16 runtime, you will need the following requirements:
+If you can't install thrift 0.20 runtime, you will need the following requirements:
 
 * C++ dev environment
 * cmake
 Then run the current build script:
 
 ```bash
-./scripts/install-thrift.sh
+./third-party/thrift/install-thrift.sh
 ```
 
 #### Local Building
@@ -85,15 +127,23 @@ pip install pre-commit
 pre-commit install
 ```
 
+### Note on build requirements
+
+Please note that even partial or module-level Maven builds require deploy-related
+properties to be set due to enforced build rules.
+
+At a minimum, the `base.deploy.dir` property must be provided pointing towards
+your Tomcat's home directory, otherwise the build will fail.
+
+This applies even when building individual modules (for example, `libraries`).
+
 **Step 2**: Build the code
 
 ```bash
 mvn package -P deploy \
     -Dhelp-docs=false \
     -DskipTests \
-    -Djars.deploy.dir=deploy \
-    -Drest.deploy.dir=webapps \
-    -Dbackend.deploy.dir=webapps
+    -Dbase.deploy.dir=$TOMCAT_HOME
 ```
 
 If you want to run the tests, we need start a local couchdb server and Docker is required:

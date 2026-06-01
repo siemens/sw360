@@ -26,6 +26,7 @@ import org.apache.thrift.TException;
 import org.apache.thrift.transport.TTransportException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
+import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.thrift.ModerationState;
@@ -83,7 +84,7 @@ import static org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360Moder
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -108,29 +109,32 @@ public class ModerationRequestController implements RepresentationModelProcessor
     @NonNull
     private final Sw360ComponentService componentService;
 
-    @NonNull
-    private final com.fasterxml.jackson.databind.Module sw360Module;
-
     @Operation(
             summary = "List all of the service's moderation requests.",
             description = "List all of the service's moderation requests.",
             tags = {"Moderation Requests"}
     )
-    @RequestMapping(value = MODERATION_REQUEST_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Moderation requests successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No moderation requests found.",
+                content = @Content)
+    })
+    @GetMapping(value = MODERATION_REQUEST_URL)
     public ResponseEntity<CollectionModel<ModerationRequest>> getModerationRequests(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             HttpServletRequest request,
             @Parameter(description = "Fetch all details of the moderation request")
             @RequestParam(value = "allDetails", required = false) boolean allDetails
-    ) throws TException, ResourceClassNotFoundException, URISyntaxException {
+    ) throws TException, ResourceClassNotFoundException, URISyntaxException, PaginationParameterException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         List<ModerationRequest> moderationRequests = sw360ModerationRequestService.getRequestsByModerator(sw360User, pageable);
 
         Map<PaginationData, List<ModerationRequest>> modRequestsWithPageData =
                 new HashMap<>();
         PaginationData paginationData = new PaginationData();
-        paginationData.setTotalRowCount(sw360ModerationRequestService.getTotalCountOfRequests(sw360User));
+        paginationData.setTotalRowCount(sw360ModerationRequestService.getTotalCountByModerationStateAndRequestingUser(sw360User,sw360User));
         modRequestsWithPageData.put(paginationData, moderationRequests);
 
         return getModerationResponseEntity(pageable, request, allDetails, modRequestsWithPageData);
@@ -141,12 +145,18 @@ public class ModerationRequestController implements RepresentationModelProcessor
             description = "Get a single moderation request by id.",
             tags = {"Moderation Requests"}
     )
-    @RequestMapping(value = MODERATION_REQUEST_URL + "/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Moderation request successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No moderation request found.",
+                content = @Content)
+    })
+    @GetMapping(value = MODERATION_REQUEST_URL + "/{id}")
     public ResponseEntity<HalResource<Map<String, Object>>> getModerationRequestById(
             @Parameter(description = "The id of the moderation request to be retrieved.")
             @PathVariable String id
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         ModerationRequest moderationRequest = filterModerationRequestNoDuplicates(
                 sw360ModerationRequestService.getModerationRequestById(id));
         Map<String, Object> modObjectMapper = getModObjectMapper(moderationRequest);
@@ -164,7 +174,9 @@ public class ModerationRequestController implements RepresentationModelProcessor
     private Map<String, Object> getModObjectMapper(ModerationRequest moderationRequest) {
         ObjectMapper oMapper = new ObjectMapper();
         oMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        oMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        oMapper.setDefaultPropertyInclusion(
+                JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.NON_NULL)
+        );
         oMapper.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE); // but only public getters
         oMapper.setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE); // and none of "is-setters"
         return oMapper.convertValue(moderationRequest, Map.class);
@@ -172,10 +184,15 @@ public class ModerationRequestController implements RepresentationModelProcessor
 
     @Operation(
             summary = "Get moderation based on state.",
-            description = "List all the ModerationRequest visible to the user based on the state.",
+            description = "List all the ModerationRequest visible to the user based on the state and  respond with MR where user is a moderator",
             tags = {"Moderation Requests"}
     )
-    @RequestMapping(value = MODERATION_REQUEST_URL + "/byState", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Moderation requests by state successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No moderation requests found for this state.",
+                content = @Content)
+    })
+    @GetMapping(value = MODERATION_REQUEST_URL + "/byState")
     public ResponseEntity<CollectionModel<ModerationRequest>> getModerationRequestsByState(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -187,16 +204,17 @@ public class ModerationRequestController implements RepresentationModelProcessor
             @RequestParam(value = "state", defaultValue = "open", required = true) String state,
             @Parameter(description = "Fetch all details of the moderation request.")
             @RequestParam(value = "allDetails", required = false) boolean allDetails
-    ) throws TException, URISyntaxException, ResourceClassNotFoundException {
+    ) throws TException, URISyntaxException, ResourceClassNotFoundException, PaginationParameterException {
         List<String> stateOptions = new ArrayList<>();
         stateOptions.add("open");
         stateOptions.add("closed");
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         if (!stateOptions.contains(state)) {
             throw new BadRequestClientException(String.format(
                     "Invalid ModerationRequest state '%s', possible values are: %s", state, stateOptions));
         }
 
-        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         boolean stateOpen = stateOptions.get(0).equalsIgnoreCase(state);
         Map<PaginationData, List<ModerationRequest>> modRequestsWithPageData =
                 sw360ModerationRequestService.getRequestsByState(sw360User, pageable, stateOpen, allDetails);
@@ -251,7 +269,7 @@ public class ModerationRequestController implements RepresentationModelProcessor
                     )}
             )}
     )
-    @RequestMapping(value = MODERATION_REQUEST_URL + "/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = MODERATION_REQUEST_URL + "/{id}")
     public ResponseEntity<HalResource<Map<String, String>>> updateModerationRequestById(
             @Parameter(description = "The id of the moderation request to be updated.")
             @PathVariable String id,
@@ -339,13 +357,19 @@ public class ModerationRequestController implements RepresentationModelProcessor
                     "\"timestamp\", \"documentName\" and \"moderationState\".",
             tags = {"Moderation Requests"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User submissions successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No submissions found.",
+                content = @Content)
+    })
     @GetMapping(value = MODERATION_REQUEST_URL + "/mySubmissions")
     public ResponseEntity<CollectionModel<ModerationRequest>> getSubmissions(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             HttpServletRequest request
-    ) throws TException, URISyntaxException, ResourceClassNotFoundException {
+    ) throws TException, URISyntaxException, ResourceClassNotFoundException, PaginationParameterException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Map<PaginationData, List<ModerationRequest>> modRequestsWithPageData =
                 sw360ModerationRequestService.getRequestsByRequestingUser(sw360User, pageable);
         return getModerationResponseEntity(pageable, request, false, modRequestsWithPageData);
@@ -363,7 +387,7 @@ public class ModerationRequestController implements RepresentationModelProcessor
     private ResponseEntity<CollectionModel<ModerationRequest>> getModerationResponseEntity(
             Pageable pageable, HttpServletRequest request, boolean allDetails,
             Map<PaginationData, List<ModerationRequest>> modRequestsWithPageData
-    ) throws ResourceClassNotFoundException, URISyntaxException {
+    ) throws ResourceClassNotFoundException, URISyntaxException, PaginationParameterException {
         List<ModerationRequest> moderationRequests = new ArrayList<>();
         int totalCount = 0;
         if (!CommonUtils.isNullOrEmptyMap(modRequestsWithPageData)) {
@@ -577,7 +601,7 @@ public class ModerationRequestController implements RepresentationModelProcessor
                 }
             )
         })
-    @RequestMapping(value = MODERATION_REQUEST_URL + "/validate", method = RequestMethod.POST)
+    @PostMapping(value = MODERATION_REQUEST_URL + "/validate")
     public ResponseEntity<String> validateModerationRequest(
             @Parameter(description = "Entity type", example = "PROJECT",
                     schema = @Schema(allowableValues = {"PROJECT", "COMPONENT", "RELEASE"}))
@@ -631,7 +655,12 @@ public class ModerationRequestController implements RepresentationModelProcessor
             tags = {"Moderation Requests"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = MODERATION_REQUEST_URL + "/delete", method = RequestMethod.DELETE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Moderation request deleted."),
+            @ApiResponse(responseCode = "409", description = "Cannot delete - moderation request in use.",
+                content = @Content(mediaType = "application/json"))
+    })
+    @DeleteMapping(value = MODERATION_REQUEST_URL + "/delete")
     public ResponseEntity<?> deleteModerationRequest(
             @Parameter(description = "List of moderation request IDs to delete")
             @RequestBody List<String> ids

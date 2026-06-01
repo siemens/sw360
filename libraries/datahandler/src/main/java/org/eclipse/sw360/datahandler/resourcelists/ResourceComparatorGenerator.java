@@ -20,12 +20,14 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.NaturalVersionComparator;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.thrift.Comment;
 import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.EccInformation;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationRequest;
@@ -51,6 +53,7 @@ public class ResourceComparatorGenerator<T> {
     private static final Map<License._Fields, Comparator<License>> licenseMap = generateLicenseMap();
     private static final Map<Obligation._Fields, Comparator<Obligation>> obligationMap = generateObligationMap();
     private static final Map<Package._Fields, Comparator<Package>> packageMap = generatePackageMap();
+    private static final Map<ReleaseLink._Fields, Comparator<ReleaseLink>> releaseLinkMap = generateReleaseLinkMap();
     private static final Map<SearchResult._Fields, Comparator<SearchResult>> searchResultMap = generateSearchResultMap();
     private static final Map<ChangeLogs._Fields, Comparator<ChangeLogs>> changeLogMap = generateChangeLogMap();
     private static final Map<VulnerabilityDTO._Fields, Comparator<VulnerabilityDTO>> vDtoMap = generateVulDtoMap();
@@ -59,6 +62,8 @@ public class ResourceComparatorGenerator<T> {
     private static final Map<ModerationRequest._Fields, Comparator<ModerationRequest>> moderationRequestMap = generateModerationRequestMap();
     private static final Map<Comment._Fields, Comparator<Comment>> commentMap = generateCommentMap();
     private static final Map<ClearingRequest._Fields, Comparator<ClearingRequest>> clearingRequestMap = generateClearingRequestMap();
+    private static final Comparator<Boolean> booleanComparator = Comparator.comparing(Boolean::booleanValue, Comparator.nullsFirst(Boolean::compareTo));
+    private static final Comparator<Double> doubleComparator = Comparator.comparing(Double::doubleValue, Comparator.nullsFirst(Double::compareTo));
 
 
     private static Map<Component._Fields, Comparator<Component>> generateComponentMap() {
@@ -84,12 +89,18 @@ public class ResourceComparatorGenerator<T> {
         Map<User._Fields, Comparator<User>> userMap = new HashMap<>();
         userMap.put(User._Fields.FULLNAME, Comparator.comparing(User::getFullname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         userMap.put(User._Fields.EMAIL, Comparator.comparing(User::getEmail, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        userMap.put(User._Fields.GIVENNAME, Comparator.comparing(User::getGivenname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        userMap.put(User._Fields.LASTNAME, Comparator.comparing(User::getLastname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        userMap.put(User._Fields.DEACTIVATED, Comparator.comparing(User::isDeactivated, Comparator.nullsFirst(booleanComparator)));
+        userMap.put(User._Fields.DEPARTMENT, Comparator.comparing(User::getDepartment, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        userMap.put(User._Fields.USER_GROUP, Comparator.comparing(u -> Optional.ofNullable(u.getUserGroup()).map(Object::toString).orElse(null), Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(userMap);
     }
 
     private static Map<License._Fields, Comparator<License>> generateLicenseMap() {
         Map<License._Fields, Comparator<License>> licenseMap = new HashMap<>();
-        licenseMap.put(License._Fields.FULLNAME, Comparator.comparing(License::getShortname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        licenseMap.put(License._Fields.FULLNAME, Comparator.comparing(License::getFullname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        licenseMap.put(License._Fields.SHORTNAME, Comparator.comparing(License::getShortname, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(licenseMap);
     }
 
@@ -97,6 +108,8 @@ public class ResourceComparatorGenerator<T> {
         Map<Release._Fields, Comparator<Release>> releaseMap = new HashMap<>();
         releaseMap.put(Release._Fields.NAME, Comparator.comparing(Release::getName, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         releaseMap.put(Release._Fields.CLEARING_STATE, Comparator.comparing(p -> Optional.ofNullable(p.getClearingState()).map(Object::toString).orElse(null), Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        releaseMap.put(Release._Fields.CREATED_ON, Comparator.comparing(Release::getCreatedOn, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        releaseMap.put(Release._Fields.VERSION, Comparator.comparing(Release::getVersion, NaturalVersionComparator.NULLS_FIRST_INSTANCE));
         return Collections.unmodifiableMap(releaseMap);
     }
 
@@ -111,7 +124,7 @@ public class ResourceComparatorGenerator<T> {
         releaseMapForEcc.put(Release._Fields.NAME,
                 Comparator.comparing(Release::getName, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         releaseMapForEcc.put(Release._Fields.VERSION,
-                Comparator.comparing(Release::getVersion, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+                Comparator.comparing(Release::getVersion, NaturalVersionComparator.NULLS_FIRST_INSTANCE));
         releaseMapForEcc.put(Release._Fields.CREATOR_DEPARTMENT, Comparator.comparing(Release::getCreatorDepartment,
                 Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(releaseMapForEcc);
@@ -132,6 +145,12 @@ public class ResourceComparatorGenerator<T> {
         eccInfoMap.put(EccInformation._Fields.ECC_STATUS,
                 Comparator.comparing(r -> CommonUtils.nullToEmptyString(r.getEccInformation().getEccStatus()),
                         Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        // Add comparator for containsCryptography using a local nullsFirst Boolean comparator
+        eccInfoMap.put(EccInformation._Fields.CONTAINS_CRYPTOGRAPHY,
+                Comparator.comparing(r -> Optional.ofNullable(r.getEccInformation())
+                                .map(e -> e.isSetContainsCryptography() ? (Boolean) e.isContainsCryptography() : null)
+                                .orElse(null),
+                        Comparator.nullsFirst(Boolean::compareTo)));
         return Collections.unmodifiableMap(eccInfoMap);
     }
 
@@ -146,6 +165,15 @@ public class ResourceComparatorGenerator<T> {
         Map<Package._Fields, Comparator<Package>> packageMap = new HashMap<>();
         packageMap.put(Package._Fields.NAME, Comparator.comparing(Package::getName, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(packageMap);
+    }
+
+    private static Map<ReleaseLink._Fields, Comparator<ReleaseLink>> generateReleaseLinkMap() {
+        Map<ReleaseLink._Fields, Comparator<ReleaseLink>> releaseLinkMap = new HashMap<>();
+        releaseLinkMap.put(ReleaseLink._Fields.NAME, Comparator.comparing(ReleaseLink::getName, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        releaseLinkMap.put(ReleaseLink._Fields.VERSION, Comparator.comparing(ReleaseLink::getVersion, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        releaseLinkMap.put(ReleaseLink._Fields.CLEARING_STATE, Comparator.comparing(rl -> Optional.ofNullable(rl.getClearingState()).map(Object::toString).orElse(null), Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        releaseLinkMap.put(ReleaseLink._Fields.MAINLINE_STATE, Comparator.comparing(rl -> Optional.ofNullable(rl.getMainlineState()).map(Object::toString).orElse(null), Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        return Collections.unmodifiableMap(releaseLinkMap);
     }
 
     private static Map<SearchResult._Fields, Comparator<SearchResult>> generateSearchResultMap() {
@@ -176,6 +204,9 @@ public class ResourceComparatorGenerator<T> {
         vulMap.put(Vulnerability._Fields.EXTERNAL_ID, Comparator.comparing(Vulnerability::getExternalId, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         vulMap.put(Vulnerability._Fields.TITLE, Comparator.comparing(Vulnerability::getTitle, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         vulMap.put(Vulnerability._Fields.PRIORITY, Comparator.comparing(Vulnerability::getPriority, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        vulMap.put(Vulnerability._Fields.CVSS, Comparator.comparing(Vulnerability::getCvss, Comparator.nullsFirst(doubleComparator)));
+        vulMap.put(Vulnerability._Fields.PUBLISH_DATE, Comparator.comparing(Vulnerability::getPublishDate, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
+        vulMap.put(Vulnerability._Fields.LAST_UPDATE_DATE, Comparator.comparing(Vulnerability::getLastUpdateDate, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return Collections.unmodifiableMap(vulMap);
     }
 
@@ -260,6 +291,8 @@ public class ResourceComparatorGenerator<T> {
                 return (Comparator<T>)defaultObligationComparator();
             case SW360Constants.TYPE_COMMENT:
                 return (Comparator<T>)defaultCommentComparator();
+            case SW360Constants.TYPE_RELEASELINK:
+                return (Comparator<T>)defaultReleaseLinkComparator();
             default:
                 throw new ResourceClassNotFoundException("No default comparator for resource class with name " + type);
         }
@@ -419,6 +452,24 @@ public class ResourceComparatorGenerator<T> {
                     }
                 }
                 return generateObligationComparatorWithFields(type, obligationFields);
+            case SW360Constants.TYPE_LICENSE:
+                List<License._Fields> licenseFields = new ArrayList<>();
+                for (String property : properties) {
+                    License._Fields field = License._Fields.findByName(property);
+                    if (field != null) {
+                        licenseFields.add(field);
+                    }
+                }
+                return generateLicenseComparatorWithFields(type, licenseFields);
+            case SW360Constants.TYPE_RELEASELINK:
+                List<ReleaseLink._Fields> releaseLinkFields = new ArrayList<>();
+                for (String property : properties) {
+                    ReleaseLink._Fields field = ReleaseLink._Fields.findByName(property);
+                    if (field != null) {
+                        releaseLinkFields.add(field);
+                    }
+                }
+                return (Comparator<T>) generateReleaseLinkComparatorWithFields(releaseLinkFields);
             default:
                 throw new ResourceClassNotFoundException("No comparator for resource class with name " + type);
         }
@@ -567,6 +618,14 @@ public class ResourceComparatorGenerator<T> {
             String type, List<Obligation._Fields> fields) throws ResourceClassNotFoundException {
         if (type.equals(SW360Constants.TYPE_OBLIGATION)) {
             return (Comparator<T>) obligationComparator(fields);
+        }
+        throw new ResourceClassNotFoundException("No comparator for resource class with name " + type);
+    }
+
+    public Comparator<T> generateLicenseComparatorWithFields(
+            String type, List<License._Fields> fields) throws ResourceClassNotFoundException {
+        if (type.equals(SW360Constants.TYPE_LICENSE)) {
+            return (Comparator<T>) licenseComparator(fields);
         }
         throw new ResourceClassNotFoundException("No comparator for resource class with name " + type);
     }
@@ -778,6 +837,18 @@ public class ResourceComparatorGenerator<T> {
         return comparator;
     }
 
+    private Comparator<License> licenseComparator(List<License._Fields> fields) {
+        Comparator<License> comparator = Comparator.comparing(x -> true);
+        for (License._Fields field : fields) {
+            Comparator<License> fieldComparator = licenseMap.get(field);
+            if (fieldComparator != null) {
+                comparator = comparator.thenComparing(fieldComparator);
+            }
+        }
+        comparator = comparator.thenComparing(defaultLicenseComparator());
+        return comparator;
+    }
+
     private Comparator<Component> defaultComponentComparator() {
         return componentMap.get(Component._Fields.NAME);
     }
@@ -843,5 +914,21 @@ public class ResourceComparatorGenerator<T> {
     }
     public Comparator<Comment> defaultCommentComparator() {
         return commentMap.get(Comment._Fields.COMMENTED_ON);
+    }
+
+    private Comparator<ReleaseLink> generateReleaseLinkComparatorWithFields(List<ReleaseLink._Fields> fields) {
+        Comparator<ReleaseLink> comparator = defaultReleaseLinkComparator();
+        for (ReleaseLink._Fields field : fields) {
+            Comparator<ReleaseLink> fieldComparator = releaseLinkMap.get(field);
+            if (fieldComparator != null) {
+                comparator = fieldComparator;
+                break;
+            }
+        }
+        return comparator;
+    }
+
+    private Comparator<ReleaseLink> defaultReleaseLinkComparator() {
+        return releaseLinkMap.get(ReleaseLink._Fields.NAME);
     }
 }

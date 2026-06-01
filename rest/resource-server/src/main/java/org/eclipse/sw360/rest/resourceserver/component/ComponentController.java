@@ -12,7 +12,6 @@
 
 package org.eclipse.sw360.rest.resourceserver.component;
 
-import com.google.common.collect.Sets;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.StringToClassMapItem;
@@ -21,7 +20,9 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
@@ -29,8 +30,10 @@ import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseCo
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.ImportBomRequestPreparation;
 import org.eclipse.sw360.datahandler.thrift.RestrictedResource;
 import org.eclipse.sw360.datahandler.thrift.Source;
@@ -59,17 +62,16 @@ import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.UserController;
 import org.eclipse.sw360.rest.resourceserver.vendor.Sw360VendorService;
 import org.eclipse.sw360.rest.resourceserver.vendor.VendorController;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.rest.resourceserver.vulnerability.Sw360VulnerabilityService;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.*;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.http.HttpStatus;
@@ -96,14 +98,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.WrappedException.wrapSW360Exception;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -126,9 +127,6 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
     private final Sw360VendorService vendorService;
 
     @NonNull
-    private final Sw360UserService userService;
-
-    @NonNull
     private final Sw360AttachmentService attachmentService;
 
     @NonNull
@@ -142,7 +140,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "List all of the service's components.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paginated list of components.")
+    })
+    @GetMapping(value = COMPONENTS_URL)
     public ResponseEntity<CollectionModel<EntityModel<Component>>> getComponents(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -179,42 +180,42 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
 
-        List<Component> allComponents = new ArrayList<>();
-        String queryString = request.getQueryString();
-        Map<String, String> params = restControllerHelper.parseQueryString(queryString);
+        Map<PaginationData, List<Component>> paginatedComponents = null;
 
+        Map<String, Set<String>> filterMap = getFilterMap(categories, componentType, languages, softwarePlatforms,
+                operatingSystems, vendors, mainLicenses, createdBy, createdOn);
+        if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
+            Set<String> values = Collections.singleton(name);
+            filterMap.put(Component._Fields.NAME.getFieldName(), values);
+        }
         if (luceneSearch) {
-            Map<String, Set<String>> filterMap = getFilterMap(categories, componentType, languages, softwarePlatforms,
-                    operatingSystems, vendors, mainLicenses, createdBy, createdOn);
-            if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
-                Set<String> values = CommonUtils.splitToSet(name);
-                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+            if (filterMap.containsKey(Component._Fields.NAME.getFieldName())) {
+                Set<String> values = filterMap.get(Component._Fields.NAME.getFieldName()).stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
                         .collect(Collectors.toSet());
                 filterMap.put(Component._Fields.NAME.getFieldName(), values);
             }
-            allComponents.addAll(componentService.refineSearch(filterMap, sw360User));
+            paginatedComponents = componentService.refineSearch(filterMap, sw360User, pageable);
         } else {
-            if (name != null && !name.isEmpty()) {
-                allComponents.addAll(componentService.searchComponentByName(params.get("name")));
+            if (filterMap.isEmpty()) {
+                paginatedComponents = componentService.getRecentComponentsSummaryWithPagination(sw360User, pageable);
             } else {
-                allComponents.addAll(componentService.getComponentsForUser(sw360User));
-            }
-            Map<String, Set<String>> restrictions = getFilterMap(categories, componentType, languages,
-                    softwarePlatforms, operatingSystems, vendors, mainLicenses, createdBy, createdOn);
-            if (!restrictions.isEmpty()) {
-                allComponents = new ArrayList<>(allComponents.stream()
-                        .filter(filterComponentMap(restrictions)).toList());
+                paginatedComponents = componentService.searchComponentByExactValues(filterMap, sw360User, pageable);
             }
         }
 
-        PaginationResult<Component> paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-                allComponents, SW360Constants.TYPE_COMPONENT);
+        PaginationResult<Component> paginationResult;
+        List<Component> allComponents = new ArrayList<>(paginatedComponents.values().iterator().next());
+        int totalCount = Math.toIntExact(paginatedComponents.keySet().stream()
+                .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+        paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                request, pageable, allComponents, SW360Constants.TYPE_COMPONENT, totalCount);
 
-        CollectionModel resources = getFilteredComponentResources(fields, allDetails, sw360User, paginationResult);
+        CollectionModel<EntityModel<Component>> resources = getFilteredComponentResources(fields, allDetails, sw360User, paginationResult);
         return new ResponseEntity<>(resources, HttpStatus.OK);
     }
 
-    private CollectionModel getFilteredComponentResources(
+    private CollectionModel<EntityModel<Component>> getFilteredComponentResources(
             List<String> fields, boolean allDetails, User sw360User, PaginationResult<Component> paginationResult
     ) throws URISyntaxException {
         List<EntityModel<Component>> componentResources = new ArrayList<>();
@@ -238,7 +239,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
         paginationResult.getResources().forEach(consumer);
 
-        CollectionModel resources;
+        CollectionModel<EntityModel<Component>> resources;
         if (componentResources.isEmpty()) {
             resources = restControllerHelper.emptyPageResource(Component.class, paginationResult);
         } else {
@@ -252,7 +253,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get all the resources where the component is used.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/usedBy" + "/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Projects and components using this component.")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/usedBy" + "/{id}")
     public ResponseEntity<CollectionModel<EntityModel>> getUsedByResourceDetails(
             @Parameter(description = "The id of the component.")
             @PathVariable("id") String id
@@ -285,7 +289,12 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get a single component by its id.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Single component with embedded resources."),
+            @ApiResponse(responseCode = "403", description = "Forbidden - user does not have permission to access this component",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class)))
+    })
+    @GetMapping(value = COMPONENTS_URL + "/{id}")
     public ResponseEntity<EntityModel<Component>> getComponent(
             @Parameter(description = "The id of the component to be retrieved.")
             @PathVariable("id") String id
@@ -302,7 +311,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Return 5 of the service's most recently created components.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/recentComponents", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Up to 5 recent components.")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/recentComponents")
     public ResponseEntity<CollectionModel<EntityModel<Component>>> getRecentComponent() throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
         List<Component> sw360Components = componentService.getRecentComponents(user);
@@ -322,7 +334,12 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "List all of the service's mysubscriptions components.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/mySubscriptions", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of subscribed components."),
+            @ApiResponse(responseCode = "204", description = "No subscriptions; no response body.",
+                content = @Content)
+    })
+    @GetMapping(value = COMPONENTS_URL + "/mySubscriptions")
     public ResponseEntity<CollectionModel<EntityModel<Component>>> getMySubscriptions() throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
         List<Component> sw360Components = componentService.getComponentSubscriptions(user);
@@ -343,7 +360,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Subscribes or unsubscribes the user to a specified component based on their current subscription status.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}/subscriptions", method = RequestMethod.POST)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Subscription toggled successfully.")
+    })
+    @PostMapping(value = COMPONENTS_URL + "/{id}/subscriptions")
     public ResponseEntity<String> toggleComponentSubscription(
             @Parameter(description = "The ID of the component.")
             @PathVariable("id") String componentId
@@ -368,7 +388,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get components by external ID.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/searchByExternalIds", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Components matching external IDs.")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/searchByExternalIds")
     public ResponseEntity<CollectionModel<EntityModel<Component>>> searchByExternalIds(
             @Parameter(
                     description = "The external IDs of the components to be retrieved.",
@@ -383,36 +406,82 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
     @PreAuthorize("hasAuthority('WRITE')")
     @Operation(
             summary = "Update an existing component.",
-            description = "Update an existing component by its id.",
-            tags = {"Components"}
+            description = "Partially update an existing component. Only provided fields will be updated. " +
+                         "If the user lacks direct write access, a moderation request will be created. " +
+                         "Include a 'comment' field in the request body when submitting moderation requests.",
+            tags = {"Components"},
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Component updated successfully"),
+                    @ApiResponse(responseCode = "202", description = "Moderation request created"),
+                    @ApiResponse(responseCode = "400", description = "Invalid input or missing required fields"),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                    @ApiResponse(responseCode = "403", description = "Write access forbidden"),
+                    @ApiResponse(responseCode = "404", description = "Component not found")
+            }
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}", method = RequestMethod.PATCH)
+    @PatchMapping(value = COMPONENTS_URL + "/{id}")
     public ResponseEntity<EntityModel<Component>> patchComponent(
             @Parameter(description = "The id of the component to be updated.")
             @PathVariable("id") String id,
-            @Parameter(description = "The component with updated fields.")
-            @RequestBody ComponentDTO updateComponentDto,
-            @Parameter(description = "Comment message.")
-            @RequestParam(value = "comment", required = false) String comment
+            @Parameter(description = "Updated component fields. Add 'comment' field in body for moderation request.")
+            @RequestBody ComponentDTO updateComponentDto
     ) throws TException {
-        User user = restControllerHelper.getSw360UserFromAuthentication();
-        Component sw360Component = componentService.getComponentForUserById(id, user);
-        user.setCommentMadeDuringModerationRequest(comment);
+        final User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(user);
+        Component sw360Component = validateAndGetComponent(id, updateComponentDto, user);
+        String comment = extractModerationComment(updateComponentDto);
         if (!restControllerHelper.isWriteActionAllowed(sw360Component, user)
                 && (comment == null || comment.isBlank())) {
             throw new BadRequestClientException(RESPONSE_BODY_FOR_MODERATION_REQUEST_WITH_COMMIT.toString());
         }
-        if (updateComponentDto.getAttachments() != null) {
-            updateComponentDto.getAttachments().forEach(attachment -> wrapSW360Exception(
-                    () -> this.attachmentService.fillCheckedAttachmentData(attachment, user)));
+        user.setCommentMadeDuringModerationRequest(comment);
+
+        if (updateComponentDto.getAttachments() != null && !updateComponentDto.getAttachments().isEmpty()) {
+            attachmentService.preserveImmutableAttachmentFields(
+                    updateComponentDto.getAttachments(), sw360Component.getAttachments(), user);
+            updateComponentDto.getAttachments().forEach(attachment ->
+                wrapSW360Exception(() -> attachmentService.fillCheckedAttachmentData(attachment, user))
+            );
         }
-        sw360Component = this.restControllerHelper.updateComponent(sw360Component, updateComponentDto);
+
+        sw360Component = restControllerHelper.updateComponent(sw360Component, updateComponentDto);
         RequestStatus updateComponentStatus = componentService.updateComponent(sw360Component, user);
-        HalResource<Component> userHalResource = createHalComponent(sw360Component, user);
+
         if (updateComponentStatus == RequestStatus.SENT_TO_MODERATOR) {
             return new ResponseEntity(RESPONSE_BODY_FOR_MODERATION_REQUEST, HttpStatus.ACCEPTED);
         }
-        return new ResponseEntity<>(userHalResource, HttpStatus.OK);
+
+        HalResource<Component> halResource = createHalComponent(sw360Component, user);
+        return ResponseEntity.ok(halResource);
+    }
+
+    private String extractModerationComment(ComponentDTO updateComponentDto) {
+        try {
+            String comment = updateComponentDto.getComment();
+            return (comment != null && !comment.isBlank()) ? comment.trim() : null;
+        } catch (Exception e) {
+            log.debug("Comment field not available in ComponentDTO: {}", e.getMessage());
+            return null;
+        }
+    }
+
+
+    private Component validateAndGetComponent(String id, ComponentDTO updateComponentDto, User user) throws TException {
+        if (isNullOrEmpty(id)) {
+            throw new BadRequestClientException("Component ID cannot be null or empty");
+        }
+
+        Component sw360Component = componentService.getComponentForUserById(id, user);
+
+        if (sw360Component == null) {
+            throw new ResourceNotFoundException("Component not found with ID: " + id);
+        }
+
+        if (updateComponentDto == null) {
+            throw new BadRequestClientException("Component data cannot be null");
+        }
+
+        return sw360Component;
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
@@ -421,12 +490,20 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Delete existing components by ids.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{ids}", method = RequestMethod.DELETE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "207", description = "Multi-status - per-component delete result")
+    })
+    @DeleteMapping(value = COMPONENTS_URL + "/{ids}")
     public ResponseEntity<List<MultiStatus>> deleteComponents(
             @Parameter(description = "The ids of the components to be deleted.")
-            @PathVariable("ids") List<String> idsToDelete
+            @PathVariable("ids") List<String> idsToDelete,
+            @Parameter(description = "Comment message")
+            @RequestParam(value = "comment", required = false) String comment
     ) throws TException {
         User user = restControllerHelper.getSw360UserFromAuthentication();
+        if (StringUtils.isNotEmpty(comment)) {
+            user.setCommentMadeDuringModerationRequest(comment);
+        }
         List<MultiStatus> results = new ArrayList<>();
         for(String id:idsToDelete) {
             RequestStatus requestStatus = componentService.deleteComponent(id, user);
@@ -449,7 +526,12 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Create a new component.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL, method = RequestMethod.POST)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Component created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input or missing required fields",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class)))
+    })
+    @PostMapping(value = COMPONENTS_URL)
     public ResponseEntity<EntityModel<Component>> createComponent(
             @Parameter(description = "The component to be created.")
             @RequestBody Component component
@@ -492,12 +574,16 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get all attachment information of a component.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}/attachments", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Component attachments successfully retrieved.")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/{id}/attachments")
     public ResponseEntity<CollectionModel<EntityModel<Attachment>>> getComponentAttachments(
             @Parameter(description = "The id of the component.")
             @PathVariable("id") String id
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Component sw360Component = componentService.getComponentForUserById(id, sw360User);
         final CollectionModel<EntityModel<Attachment>> resources = attachmentService.getAttachmentResourcesFromList(sw360User, sw360Component.getAttachments(), Source.componentId(id));
         return new ResponseEntity<>(resources, HttpStatus.OK);
@@ -505,18 +591,45 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
     @Operation(
             summary = "Get all releases of a component.",
-            description = "Get all releases of a component.",
+            description = "Get all releases of a component with pagination support.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}/releases", method = RequestMethod.GET)
-    public ResponseEntity<CollectionModel<ReleaseLink>> getReleaseLinksByComponentId(
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Component releases successfully retrieved.")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/{id}/releases")
+    public ResponseEntity<CollectionModel<EntityModel<ReleaseLink>>> getReleaseLinksByComponentId(
             @Parameter(description = "The id of the component.")
-            @PathVariable("id") String id
-    ) throws TException {
+            @PathVariable("id") String id,
+            @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
+            Pageable pageable,
+            HttpServletRequest request
+    ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-        final List<ReleaseLink> releaseLinks = componentService.convertReleaseToReleaseLink(id, sw360User);
-        CollectionModel<ReleaseLink> resources = CollectionModel.of(releaseLinks);
-        return new ResponseEntity<>(resources, HttpStatus.OK);
+
+        Map<PaginationData, List<ReleaseLink>> paginatedReleaseLinks =
+                componentService.getReleaseLinksByComponentIdWithPagination(id, sw360User, pageable);
+
+        List<ReleaseLink> releaseLinks = new ArrayList<>(paginatedReleaseLinks.values().iterator().next());
+        int totalCount = Math.toIntExact(paginatedReleaseLinks.keySet().stream()
+                .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+
+        PaginationResult<ReleaseLink> paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                request, pageable, releaseLinks, SW360Constants.TYPE_RELEASELINK, totalCount);
+
+        List<EntityModel<ReleaseLink>> resources = paginationResult.getResources().stream()
+                .map(EntityModel::of)
+                .collect(Collectors.toList());
+
+        if (resources.isEmpty()) {
+            CollectionModel<EntityModel<ReleaseLink>> empty =
+                    restControllerHelper.emptyPageResource(ReleaseLink.class, paginationResult);
+            return new ResponseEntity<>(empty, HttpStatus.OK);
+        }
+
+        CollectionModel<EntityModel<ReleaseLink>> collectionModel =
+                restControllerHelper.generatePagesResource(paginationResult, resources);
+        return new ResponseEntity<>(collectionModel, HttpStatus.OK);
     }
 
     @PreAuthorize("hasAuthority('WRITE')")
@@ -525,7 +638,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Update attachment info a component.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{id}/attachment/{attachmentId}", method = RequestMethod.PATCH)
+    @PatchMapping(value = COMPONENTS_URL + "/{id}/attachment/{attachmentId}")
     public ResponseEntity<EntityModel<Attachment>> patchComponentAttachmentInfo(
             @Parameter(description = "The id of the component.")
             @PathVariable("id") String id,
@@ -576,12 +689,16 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
                             }
                     ),
                     @ApiResponse(
-                            responseCode = "500", description = "Failed to upload attachment."
+                            responseCode = "500", description = "Failed to upload attachment.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class))
+                            }
                     )
             },
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{componentId}/attachments", method = RequestMethod.POST, consumes = {"multipart/mixed", "multipart/form-data"})
+    @PostMapping(value = COMPONENTS_URL + "/{componentId}/attachments", consumes = {"multipart/mixed", "multipart/form-data"})
     public ResponseEntity<HalResource> addAttachmentToComponent(
             @Parameter(description = "The id of the component.")
             @PathVariable("componentId") String componentId,
@@ -623,7 +740,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             },
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/{componentId}/attachments/{attachmentId}", method = RequestMethod.GET, produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Attachment file stream")
+    })
+    @GetMapping(value = COMPONENTS_URL + "/{componentId}/attachments/{attachmentId}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public void downloadAttachmentFromComponent(
             @Parameter(description = "The id of the component.")
             @PathVariable("componentId") String componentId,
@@ -632,6 +752,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             HttpServletResponse response
     ) throws TException {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         final Component component = componentService.getComponentForUserById(componentId, sw360User);
         attachmentService.downloadAttachmentWithContext(component, attachmentId, response, sw360User);
     }
@@ -644,6 +765,9 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             },
             tags = {"Components"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Attachment bundle (ZIP) stream")
+    })
     @GetMapping(value = COMPONENTS_URL + "/{componentId}/attachments/download", produces="application/zip")
     public void downloadAttachmentBundleFromComponent(
             @Parameter(description = "The id of the component.")
@@ -651,6 +775,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             HttpServletResponse response
     ) throws TException, IOException {
         final User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(user);
         final Component component = componentService.getComponentForUserById(componentId, user);
         Set<Attachment> attachments = component.getAttachments();
         attachmentService.downloadAttachmentBundleWithContext(component, attachments, user, response);
@@ -658,14 +783,22 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
 
     @Operation(
             summary = "Delete one or multiple attachments of a component.",
-            description = "Delete one or multiple attachments from a component.\n\n" +
-                    "Note that attachments can only be deleted if they are not used by a project.\n" +
-                    "Requests that cannot delete any of the attachments specified fail with response\n" +
-                    "status 500.",
+            description = """
+                    Delete one or multiple attachments from a component.
+
+                    Note that attachments can only be deleted if they are not used by a project.
+                    Requests that cannot delete any of the attachments specified fail with response
+                    status 500.""",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Attachments deleted successfully"),
                     @ApiResponse(responseCode = "202", description = "Deletion sent for moderation"),
-                    @ApiResponse(responseCode = "500", description = "Attachment in use, can't delete")
+                    @ApiResponse(
+                            responseCode = "500", description = "Attachment in use, can't delete",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class))
+                            }
+                    )
             },
             tags = {"Components"}
     )
@@ -709,6 +842,9 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get vulnerabilities of a single component.",
             tags = {"Components"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Component vulnerabilities successfully retrieved.")
+    })
     @GetMapping(value = COMPONENTS_URL + "/{id}/vulnerabilities")
     public ResponseEntity<CollectionModel<VulnerabilityDTO>> getVulnerabilitiesOfComponent(
             @Parameter(description = "The id of the component.")
@@ -783,7 +919,12 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Get all components associated to the user.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/mycomponents", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paginated list of user's components."),
+            @ApiResponse(responseCode = "204", description = "No components; no response body.",
+                content = @Content)
+    })
+    @GetMapping(value = COMPONENTS_URL + "/mycomponents")
     public ResponseEntity<CollectionModel<EntityModel<Component>>> getMyComponents(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
@@ -795,7 +936,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
                 sw360Components, SW360Constants.TYPE_COMPONENT);
         List<EntityModel<Component>> componentResources = new ArrayList<>();
 
-        paginationResult.getResources().stream().forEach(c -> {
+        paginationResult.getResources().forEach(c -> {
             Component embeddedComponent = restControllerHelper.convertToEmbeddedComponent(c, null);
             EntityModel<Component> embeddedComponentResource = EntityModel.of(embeddedComponent);
             if (embeddedComponentResource == null) {
@@ -816,6 +957,11 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Update the vulnerability of a component.",
             tags = {"Components"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Vulnerability state updated successfully."),
+            @ApiResponse(responseCode = "400", description = "Invalid vulnerability data or missing required fields",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class)))
+    })
     @PatchMapping(value = COMPONENTS_URL + "/{id}/vulnerabilities")
     public ResponseEntity<CollectionModel<EntityModel<VulnerabilityDTO>>> patchReleaseVulnerabilityRelation(
             @Parameter(description = "The id of the component.")
@@ -947,9 +1093,9 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
     private boolean validateReleaseVulnerabilityRelationDTO(Map<String,Set<String>> releaseIdsWithExternalIdsFromRequest, VulnerabilityState vulnerabilityState ) {
         long countExternalIdsActual = 0;
         for (Map.Entry<String, Set<String>> releaseIdWithVulnerabilityId: releaseIdsWithExternalIdsFromRequest.entrySet()){
-            countExternalIdsActual += releaseIdWithVulnerabilityId.getValue().stream().count();
+            countExternalIdsActual += releaseIdWithVulnerabilityId.getValue().size();
         }
-        long countExternalIdsFromRequest = vulnerabilityState.getReleaseVulnerabilityRelationDTOs().stream().count();
+        long countExternalIdsFromRequest = vulnerabilityState.getReleaseVulnerabilityRelationDTOs().size();
         return countExternalIdsActual != countExternalIdsFromRequest;
     }
 
@@ -966,12 +1112,16 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
                             }
                     ),
                     @ApiResponse(
-                            responseCode = "500", description = "Failed to upload attachment."
+                            responseCode = "500", description = "Failed to upload attachment.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class))
+                            }
                     )
             },
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/import/SBOM", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping(value = COMPONENTS_URL + "/import/SBOM", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> importSBOM(
             @Parameter(description = "Type of SBOM being uploaded.",
                     schema = @Schema(type = "string", allowableValues = {"SPDX"})
@@ -990,6 +1140,14 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             attachment = attachmentService.uploadAttachment(file, new Attachment(), sw360User);
             try {
                 requestSummary = componentService.importSBOM(sw360User, attachment.getAttachmentContentId());
+            } catch (ResourceNotFoundException e) {
+                throw e;
+            } catch (AccessDeniedException e) {
+                throw e;
+            } catch (SW360Exception e) {
+                throw e;
+            } catch (TException e) {
+                throw e;
             } catch (Exception e) {
                 throw new RuntimeException(e.getMessage());
             }
@@ -1020,12 +1178,16 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
                             }
                     ),
                     @ApiResponse(
-                            responseCode = "500", description = "Failed to upload attachment."
+                            responseCode = "500", description = "Failed to upload attachment.",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class))
+                            }
                     )
             },
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/prepareImport/SBOM", method = RequestMethod.POST, consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping(value = COMPONENTS_URL + "/prepareImport/SBOM", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> prepareImportSBOM(
             @Parameter(description = "Type of SBOM being uploaded.",
                     schema = @Schema(type = "string", allowableValues = {"SPDX"})
@@ -1044,6 +1206,14 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             attachment = attachmentService.uploadAttachment(file, new Attachment(), sw360User);
             try {
                 importBomRequestPreparation = componentService.prepareImportSBOM(sw360User, attachment.getAttachmentContentId());
+            } catch (ResourceNotFoundException e) {
+                throw e;
+            } catch (AccessDeniedException e) {
+                throw e;
+            } catch (SW360Exception e) {
+                throw e;
+            } catch (TException e) {
+                throw e;
             } catch (Exception e) {
                 throw new RuntimeException(e.getMessage());
             }
@@ -1072,7 +1242,10 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             description = "Merge source component into target component.",
             tags = {"Components"}
     )
-    @RequestMapping(value = COMPONENTS_URL + "/mergecomponents", method = RequestMethod.PATCH)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Components merged successfully.")
+    })
+    @PatchMapping(value = COMPONENTS_URL + "/mergecomponents")
     public ResponseEntity<RequestStatus> mergeComponents(
             @Parameter(description = "The id of the merge target component.")
             @RequestParam(value = "mergeTargetId", required = true) String mergeTargetId,
@@ -1147,7 +1320,7 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
                     )
             }
     )
-    @RequestMapping(value = COMPONENTS_URL + "/splitComponents", method = RequestMethod.PATCH)
+    @PatchMapping(value = COMPONENTS_URL + "/splitComponents")
     public ResponseEntity<RequestStatus> splitComponents(
             @Parameter(description = "Source and target components.",
                     schema = @Schema(
@@ -1247,34 +1420,5 @@ public class ComponentController implements RepresentationModelProcessor<Reposit
             filterMap.put(Component._Fields.CREATED_ON.getFieldName(), CommonUtils.splitToSet(createdOn));
         }
         return filterMap;
-    }
-
-    /**
-     * Create a filter predicate to remove all components which do not satisfy the restriction set.
-     * @param restrictions Restrictions set to filter components on
-     * @return Filter predicate for stream.
-     */
-    private static @NonNull Predicate<Component> filterComponentMap(Map<String, Set<String>> restrictions) {
-        return component -> {
-            for (Map.Entry<String, Set<String>> restriction : restrictions.entrySet()) {
-                final Set<String> filterSet = restriction.getValue();
-                Component._Fields field = Component._Fields.findByName(restriction.getKey());
-                Object fieldValue = component.getFieldValue(field);
-                if (fieldValue == null) {
-                    return false;
-                }
-                if (field == Component._Fields.COMPONENT_TYPE && !filterSet.contains(component.componentType.name())) {
-                    return false;
-                } else if ((field == Component._Fields.CREATED_BY || field == Component._Fields.CREATED_ON)
-                        && !fieldValue.toString().equalsIgnoreCase(filterSet.iterator().next())) {
-                    return false;
-                } else if (fieldValue instanceof Set) {
-                    if (Sets.intersection(filterSet, (Set<String>) fieldValue).isEmpty()) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
     }
 }

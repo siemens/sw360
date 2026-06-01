@@ -13,6 +13,9 @@ package org.eclipse.sw360.rest.resourceserver.attachment;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +46,7 @@ import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -54,7 +58,7 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
 @Slf4j
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -81,13 +85,16 @@ public class AttachmentController implements RepresentationModelProcessor<Reposi
             description = "Get attachment information.",
             tags = {"Attachments"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Attachment successfully retrieved.")
+    })
     @GetMapping(value = ATTACHMENTS_URL + "/{id}")
     public ResponseEntity<EntityModel<Attachment>> getAttachmentForId(
             @Parameter(description = "id of the attachment")
             @PathVariable("id") String id
     ) throws TException {
-
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         AttachmentInfo attachmentInfo = attachmentService.getAttachmentById(id);
         HalResource<Attachment> attachmentResource = createHalAttachment(attachmentInfo, sw360User);
         return new ResponseEntity<>(attachmentResource, HttpStatus.OK);
@@ -98,12 +105,17 @@ public class AttachmentController implements RepresentationModelProcessor<Reposi
             description = "Get attachment information by sha1 and the resource having it.",
             tags = {"Attachments"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Attachments successfully retrieved."),
+            @ApiResponse(responseCode = "204", description = "No attachments found.", content = @Content)
+    })
     @GetMapping(value = ATTACHMENTS_URL)
     public ResponseEntity<CollectionModel<EntityModel<Attachment>>> getAttachments(
             @Parameter(description = "sha1 of the attachment", required = true)
             @RequestParam String sha1
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         List<AttachmentInfo> attachmentInfos = attachmentService.getAttachmentsBySha1(sha1);
 
         List<EntityModel<Attachment>> attachmentResources = new ArrayList<>();
@@ -125,7 +137,14 @@ public class AttachmentController implements RepresentationModelProcessor<Reposi
             description = "Create an attachment.",
             tags = {"Attachments"}
     )
-    @RequestMapping(value = ATTACHMENTS_URL , method = RequestMethod.POST, consumes = {MediaType.MULTIPART_MIXED_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Attachments successfully created.")
+    })
+    @PreAuthorize("hasAuthority('WRITE')")
+    @PostMapping(
+            value = ATTACHMENTS_URL,
+            consumes = {MediaType.MULTIPART_MIXED_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE}
+    )
     public ResponseEntity<CollectionModel<EntityModel<Attachment>>> createAttachment(
             @Parameter(description = "List of files to attach",
                     schema = @Schema(
@@ -141,6 +160,7 @@ public class AttachmentController implements RepresentationModelProcessor<Reposi
         }
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         List<EntityModel<Attachment>> attachments = new ArrayList<>();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         for (MultipartFile file: files) {
             Attachment attachment = attachmentService.addAttachment(file, sw360User);
             attachments.add(EntityModel.of(attachment));

@@ -11,9 +11,12 @@ package org.eclipse.sw360.vendors;
 
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -27,6 +30,7 @@ import java.util.List;
  * @author cedric.bodet@tngtech.com
  */
 public class TestVendorClient {
+    private static final Logger log = LogManager.getLogger(TestVendorClient.class);
 
     @SuppressWarnings("unused")
     public static void InitDatabase() throws SW360Exception {
@@ -41,20 +45,25 @@ public class TestVendorClient {
         THttpClient thriftClient = new THttpClient("http://127.0.0.1:8080/vendorservice/thrift");
         TProtocol protocol = new TCompactProtocol(thriftClient);
         VendorService.Iface client = new VendorService.Client(protocol);
+        PaginationData pageData = new PaginationData();
+        pageData.setAscending(true);
+        pageData.setRowsPerPage(10);
+        pageData.setDisplayStart(0);
+        pageData.setSortColumnNumber(0);
 
         List<Vendor> vendors = client.getAllVendors();
 
         reportFindings(vendors);
 
-        System.out.println("Now looking for matches starting with 'm' from vendor service");
+        log.info("Now looking for matches starting with 'm' from vendor service");
 
-        reportFindings(client.searchVendors("m"));
+        reportFindings(client.searchVendors("m", pageData).values().iterator().next());
     }
 
     private static void reportFindings(List<Vendor> vendors) {
-        System.out.println("Fetched " + vendors.size() + " from vendor service");
+        log.info("Fetched {} from vendor service", vendors.size());
         for (Vendor vendor : vendors) {
-            System.out.println(vendor.getId() + ": " + vendor.getFullname() + " (" + vendor.getShortname() + ")");
+            log.info("{}: {} ({})", vendor.getId(), vendor.getFullname(), vendor.getShortname());
         }
     }
 

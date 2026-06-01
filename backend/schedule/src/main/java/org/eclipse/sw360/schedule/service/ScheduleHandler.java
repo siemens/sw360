@@ -13,7 +13,6 @@ package org.eclipse.sw360.schedule.service;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestStatusWithBoolean;
@@ -109,6 +108,40 @@ public class ScheduleHandler implements ScheduleService.Iface {
             return RequestStatus.FAILURE;
         }
         return Scheduler.cancelSyncJobOfService(serviceName);
+    }
+
+    @Override
+    public RequestStatus triggerManualService(String serviceName, User user) throws TException {
+        if (!PermissionUtils.isAdmin(user)) {
+            return RequestStatus.ACCESS_DENIED;
+        }
+        try {
+            return switch (serviceName) {
+                case ThriftClients.CVESEARCH_SERVICE ->
+                        new ThriftClients().makeCvesearchClient().update();
+                case ThriftClients.SVMSYNC_SERVICE ->
+                        new ThriftClients().makeVMClient().synchronizeComponents().getRequestStatus();
+                case ThriftClients.SVMMATCH_SERVICE ->
+                        new ThriftClients().makeVMClient().triggerReverseMatch().getRequestStatus();
+                case ThriftClients.DELETE_ATTACHMENT_SERVICE ->
+                        new ThriftClients().makeAttachmentClient().deleteOldAttachmentFromFileSystem();
+                case ThriftClients.SVM_LIST_UPDATE_SERVICE ->
+                        new ThriftClients().makeProjectClient().exportForMonitoringList();
+                case ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE ->
+                        new ThriftClients().makeComponentClient().updateReleasesWithSvmTrackingFeedback();
+                case ThriftClients.IMPORT_DEPARTMENT_SERVICE ->
+                        new ThriftClients().makeUserClient().importDepartmentSchedule();
+                case ThriftClients.SRC_UPLOAD_SERVICE ->
+                        new ThriftClients().makeComponentClient().uploadSourceCodeAttachmentToReleases();
+                default -> {
+                    log.error("Could not trigger service: {}. Reason: service is not registered.", serviceName);
+                    yield RequestStatus.FAILURE;
+                }
+            };
+        } catch (TException e) {
+            log.error("Error while manually triggering service '{}': {}", serviceName, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @Override

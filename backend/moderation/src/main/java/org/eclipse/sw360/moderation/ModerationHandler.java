@@ -360,14 +360,6 @@ public class ModerationHandler implements ModerationService.Iface {
     }
 
     @Override
-    public void updateClearingRequestForChangeInClearingSize(String crId, ClearingRequestSize size) throws TException {
-        assertId(crId);
-        assertNotNull(size);
-
-        handler.updateClearingRequestForChangeInClearingSize(crId, size);
-    }
-
-    @Override
     public RequestStatus addCommentToClearingRequest(String id, Comment comment, User user) throws TException {
         assertId(id);
         assertNotNull(comment);
@@ -395,6 +387,13 @@ public class ModerationHandler implements ModerationService.Iface {
     }
 
     @Override
+    public Map<String, Long> getCountByModerationStateAndRequestingUser(User moderator, User requestingUser) throws TException {
+        assertUser(moderator);
+        assertUser(requestingUser);
+        return handler.getCountByModerationStateAndRequestingUser(moderator.getEmail(), requestingUser.getEmail());
+    }
+
+    @Override
     public Map<PaginationData, List<ModerationRequest>> getRequestsByModeratorWithPagination(User user,
             PaginationData pageData, boolean open) throws TException {
         assertUser(user);
@@ -413,5 +412,30 @@ public class ModerationHandler implements ModerationService.Iface {
     @Override
     public Set<String> getRequestingUserDepts() {
         return handler.getRequestingUserDepts();
+    }
+
+    @Override
+    public Map<PaginationData, List<ClearingRequest>> getRecentClearingRequestsWithPagination(User user, PaginationData pageData) throws TException {
+        assertUser(user);
+        assertNotNull(pageData);
+
+        return handler.getRecentClearingRequestsWithPagination(user, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<ClearingRequest>> searchClearingRequestsByFilters(User user, Map<String, Set<String>> filterMap, PaginationData pageData) throws TException {
+        assertUser(user);
+        assertNotNull(filterMap);
+        assertNotNull(pageData);
+
+        return handler.searchClearingRequestsByFilters(user, filterMap, pageData);
+    }
+
+    @Override
+    public RequestStatus deleteClearingRequest(String id, User user) throws TException {
+        assertId(id);
+        assertUser(user);
+
+        return handler.deleteClearingRequest(id, user);
     }
 }

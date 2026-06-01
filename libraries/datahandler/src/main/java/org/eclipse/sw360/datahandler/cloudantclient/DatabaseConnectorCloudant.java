@@ -12,8 +12,6 @@ package org.eclipse.sw360.datahandler.cloudantclient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -21,15 +19,20 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.ibm.cloud.cloudant.v1.Cloudant;
 import com.ibm.cloud.cloudant.v1.model.*;
+import com.ibm.cloud.sdk.core.service.exception.ConflictException;
 import com.ibm.cloud.sdk.core.service.exception.NotFoundException;
 import com.ibm.cloud.sdk.core.service.exception.ServiceResponseException;
+import com.ibm.cloud.sdk.core.service.exception.TooManyRequestsException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TFieldIdEnum;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
@@ -39,17 +42,20 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import static org.eclipse.sw360.datahandler.common.DatabaseSettings.LUCENE_SEARCH_LIMIT;
 
 /**
  * Database Connector to a CouchDB database
@@ -62,9 +68,24 @@ public class DatabaseConnectorCloudant {
 
     private final String dbName;
     private final DatabaseInstanceCloudant instance;
+    private final AttachmentAwareDatabase attachmentInstance;
+
+    private static final String OPERATOR_EQ = "$eq";
+    private static final String OPERATOR_IN = "$in";
+    private static final String OPERATOR_ALL = "$all";
+    private static final String OPERATOR_AND = "$and";
+    private static final String OPERATOR_OR = "$or";
+    private static final String OPERATOR_EXISTS = "$exists";
+    private static final String OPERATOR_ELEM_MATCH = "$elemMatch";
+    private static final String OPERATOR_REGEX = "$regex";
+    private static final Set<String> OPERATORS = Set.of(
+            OPERATOR_EQ, OPERATOR_IN, OPERATOR_ALL, OPERATOR_AND, OPERATOR_OR,
+            OPERATOR_EXISTS, OPERATOR_ELEM_MATCH
+    );
 
     public DatabaseConnectorCloudant(Cloudant client, String dbName) {
         this.instance = new DatabaseInstanceCloudant(client);
+        this.attachmentInstance = DatabaseSettings.getAttachmentClient();
         this.dbName = dbName;
         // Create the database if it does not exist yet
         instance.createDB(dbName);
@@ -78,9 +99,36 @@ public class DatabaseConnectorCloudant {
         DocumentResult resp;
         if (document != null) {
             if (document instanceof AttachmentContent content) {
-                InputStream in = getAttachment(content.getId(), content.getFilename());
+                // Retrieve all attachment names from the existing document
+                // before the update replaces it (losing inline attachments).
+                // This is only called by
+                // AttachmentStreamConnector::downloadRemoteAttachmentAndUpdate
+                // to download remote attachment and set remote only as false.
+                Map<String, InputStream> attachmentStreams = new LinkedHashMap<>();
+                try {
+                    Document existingDoc = getDocument(content.getId());
+                    Map<String, Attachment> existingAttachments = existingDoc.getAttachments();
+                    if (existingAttachments != null) {
+                        for (String attachmentName : existingAttachments.keySet()) {
+                            try {
+                                attachmentStreams.put(attachmentName,
+                                        getAttachment(content.getId(), attachmentName));
+                            } catch (Exception e) {
+                                log.warn("Could not read attachment '{}' from document {}",
+                                        attachmentName, content.getId(), e);
+                            }
+                        }
+                    }
+                } catch (SW360Exception e) {
+                    log.error("Cannot find document for attachment content: {}",
+                            content.getId(), e);
+                }
                 resp = this.updateWithResponse(document);
-                createAttachment(resp.getId(), content.getFilename(), in, content.getContentType());
+                // Re-attach all attachments (base file + any _partN files)
+                for (Map.Entry<String, InputStream> entry : attachmentStreams.entrySet()) {
+                    createAttachment(resp.getId(), entry.getKey(),
+                            entry.getValue(), content.getContentType());
+                }
             } else {
                 resp = this.updateWithResponse(document);
             }
@@ -100,7 +148,17 @@ public class DatabaseConnectorCloudant {
                     .document(doc)
                     .build();
 
-            resp = this.instance.getClient().putDocument(putDocumentOption).execute().getResult();
+            try {
+                resp = this.instance.getClient().putDocument(putDocumentOption).execute().getResult();
+            } catch (ConflictException | TooManyRequestsException e) {
+                // Retry one more time with a backoff 100 ms sleep. Then rethrow the exception
+                try {
+                    Thread.sleep(Duration.ofMillis(100));
+                    resp = this.instance.getClient().putDocument(putDocumentOption).execute().getResult();
+                } catch (InterruptedException ex) {
+                    throw e;
+                }
+            }
         }
         return resp;
     }
@@ -199,7 +257,18 @@ public class DatabaseConnectorCloudant {
                     .includeDocs(true)
                     .build();
 
-            ViewResult response = this.instance.getClient().postView(viewOptions).execute().getResult();
+            ViewResult response;
+            try {
+                response = this.instance.getClient().postView(viewOptions).execute().getResult();
+            } catch (ConflictException | TooManyRequestsException e) {
+                // Retry one more time with a backoff 100 ms sleep. Then rethrow the exception
+                try {
+                    Thread.sleep(Duration.ofMillis(100));
+                    response = this.instance.getClient().postView(viewOptions).execute().getResult();
+                } catch (InterruptedException ex) {
+                    throw e;
+                }
+            }
             List<ViewResultRow> rows = response.getRows();
 
             list = rows.stream().map(r -> this.getPojoFromDocument(r.getDoc(), type)).collect(Collectors.toList());
@@ -428,17 +497,22 @@ public class DatabaseConnectorCloudant {
     }
 
     public <T> PostViewOptions.Builder getPostViewQueryBuilder(
-            @NotNull Class<T> type, String queryName) {
+            @NotNull Class<T> type, String viewName) {
         return new PostViewOptions.Builder()
                 .db(this.dbName)
                 .ddoc(type.getSimpleName())
-                .view(queryName);
+                .view(viewName);
     }
 
     public ViewResult getPostViewQueryResponse(PostViewOptions options) {
-        return this.instance.getClient().postView(options)
-                .execute()
-                .getResult();
+        try {
+            return this.instance.getClient().postView(options)
+                    .execute()
+                    .getResult();
+        } catch (ServiceResponseException e) {
+            log.error("Unable to run query on view {}. Check response: {}", options.view(), e.getMessage());
+            throw new RuntimeException("Something went wrong. Please try again later.", e);
+        }
     }
 
     public InputStream getAttachment(String docId, String attachmentName) {
@@ -449,7 +523,7 @@ public class DatabaseConnectorCloudant {
                         .attachmentName(attachmentName)
                         .build();
 
-        return this.instance.getClient().getAttachment(attachmentOptions).execute()
+        return this.attachmentInstance.getAttachment(attachmentOptions).execute()
                 .getResult();
     }
 
@@ -472,7 +546,7 @@ public class DatabaseConnectorCloudant {
                         .rev(revision)
                         .build();
 
-        this.instance.getClient().putAttachment(attachmentOptions).execute()
+        this.attachmentInstance.putAttachment(attachmentOptions).execute()
                 .getResult();
     }
 
@@ -529,7 +603,18 @@ public class DatabaseConnectorCloudant {
                     .document(document)
                     .build();
 
-            DocumentResult createResp = this.instance.getClient().postDocument(postDocOption).execute().getResult();
+            DocumentResult createResp;
+            try {
+                createResp = this.instance.getClient().postDocument(postDocOption).execute().getResult();
+            } catch (ConflictException | TooManyRequestsException e) {
+                // Retry one more time with a backoff 100 ms sleep. Then rethrow the exception
+                try {
+                    Thread.sleep(Duration.ofMillis(100));
+                    createResp = this.instance.getClient().postDocument(postDocOption).execute().getResult();
+                } catch (InterruptedException ex) {
+                    throw e;
+                }
+            }
             InputStream in = new ByteArrayInputStream(content.getFilename()
                     .getBytes(StandardCharsets.UTF_8));
             createAttachment(createResp.getId(), content.getFilename(), in, content.getContentType());
@@ -564,10 +649,26 @@ public class DatabaseConnectorCloudant {
                 .ddoc(ddoc)
                 .build();
 
-        DocumentResult response =
-            this.instance.getClient()
-                .putDesignDocument(designDocumentOptions).execute()
-                .getResult();
+        DocumentResult response;
+        try {
+            response = this.instance.getClient()
+                    .putDesignDocument(designDocumentOptions).execute()
+                    .getResult();
+        } catch (ConflictException | TooManyRequestsException e) {
+            try {
+                Thread.sleep(Duration.ofMillis(100));
+                existingDoc = getDesignDocument(ddoc);
+                if (existingDoc != null) {
+                    designDocument.setId(existingDoc.getId());
+                    designDocument.setRev(existingDoc.getRev());
+                }
+                response = this.instance.getClient()
+                        .putDesignDocument(designDocumentOptions).execute()
+                        .getResult();
+            } catch (InterruptedException ex) {
+                throw e;
+            }
+        }
         boolean success = response.isOk();
         if (!success) {
             log.error("Unable to put design document {} to {}. Error: {}",
@@ -594,10 +695,11 @@ public class DatabaseConnectorCloudant {
         }
     }
 
-    public void createIndex(IndexDefinition indexDefinition, String indexName,
-                            String indexType) {
+    public void createIndex(IndexDefinition indexDefinition, String ddocId,
+                            String indexName, String indexType) {
         PostIndexOptions indexOptions = new PostIndexOptions.Builder()
                 .db(this.dbName)
+                .ddoc(ddocId)
                 .index(indexDefinition)
                 .name(indexName)
                 .type(indexType)
@@ -629,6 +731,39 @@ public class DatabaseConnectorCloudant {
         return results;
     }
 
+    public <T> List<T> getQueryResultPaginated(
+            PostFindOptions.Builder qb, Class<T> type, PaginationData pageData,
+            Map<String, String> sortSelector
+    ) {
+        final int rowsPerPage = pageData.getRowsPerPage();
+        final int skip = pageData.getDisplayStart();
+
+        long rowQueryLimit = Math.max(rowsPerPage, LUCENE_SEARCH_LIMIT);
+
+        PostFindOptions countQuery = qb.build().newBuilder()
+                .fields(Collections.singletonList("_id"))
+                .limit(rowQueryLimit)
+                .useIndex(Collections.singletonList("PaginationIdx"))
+                .build();
+
+        try {
+            FindResult result = this.instance.getClient().postFind(countQuery).execute().getResult();
+            if (result != null) {
+                pageData.setTotalRowCount(result.getDocs().size());
+            }
+        } catch (ServiceResponseException e) {
+            log.error("Error getting query result", e);
+        }
+
+        PostFindOptions query = qb
+                .limit(rowsPerPage)
+                .skip(skip)
+                .addSort(sortSelector)
+                .build();
+
+        return getQueryResult(query, type);
+    }
+
     public <T> Set<String> getDistinctSortedStringKeys(@NotNull Class<T> type, String viewName) {
         PostViewOptions viewOptions = new PostViewOptions.Builder()
                 .db(this.dbName)
@@ -639,7 +774,10 @@ public class DatabaseConnectorCloudant {
         try {
             ViewResult response = this.instance.getClient().postView(viewOptions).execute().getResult();
             return response.getRows().stream()
-                    .map(r -> r.getKey().toString()).collect(Collectors.toCollection(TreeSet::new));
+                    .filter(Objects::nonNull)
+                    .map(ViewResultRow::getKey)
+                    .map(CommonUtils::nullToEmptyString)
+                    .collect(Collectors.toCollection(TreeSet::new));
         } catch (ServiceResponseException e) {
             log.error("Error in getting project groups", e);
         }
@@ -717,7 +855,10 @@ public class DatabaseConnectorCloudant {
         return doc;
     }
 
-    public <T> T getPojoFromDocument(@NotNull Document document, Class<T> type) {
+    public <T> T getPojoFromDocument(Document document, Class<T> type) {
+        if (document == null) {
+            return null;
+        }
         T doc = null;
         try {
             if (type.getSimpleName().equals("OAuthClientEntity"))  {
@@ -754,7 +895,7 @@ public class DatabaseConnectorCloudant {
         }
     }
 
-    private <T> boolean isInstanceOfOAuthClientEntity(T doc) {    
+    private <T> boolean isInstanceOfOAuthClientEntity(T doc) {
         return doc.getClass().getSimpleName().equals("OAuthClientEntity");
     }
 
@@ -777,14 +918,79 @@ public class DatabaseConnectorCloudant {
     }
 
     /**
+     * Replace the first `$` in field name with `\$` as described in couchdb doc
+     * @param field Field name to check
+     * @return Sanitized field name
+     */
+    private static @NotNull String replaceFirstSymbol(String field) {
+        if (field.startsWith("$") && !OPERATORS.contains(field)) {
+            field = "\\$" + field.substring(1);
+        }
+        return field;
+    }
+
+    /**
      * Generates an $eq selector for given field with given value.
      * @param field Field name
      * @param value Value to match
      * @return New selector
      */
     public static @NotNull Map<String, Object> eq(String field, String value) {
+        field = replaceFirstSymbol(field);
         return Collections.singletonMap(field,
-                Collections.singletonMap("$eq", value));
+                Collections.singletonMap(OPERATOR_EQ, value));
+    }
+
+    /**
+     * Generates a $regex selector for case-insensitive exact match of the field value.
+     * Uses regex anchors (^...$) for exact matching and (?i) flag for case insensitivity.
+     * Special regex characters in the value are escaped before use.
+     * @param field Field name
+     * @param value Value to match (will be regex-escaped)
+     * @return New selector
+     */
+    public static @NotNull Map<String, Object> eqIgnoreCase(String field, String value) {
+        field = replaceFirstSymbol(field);
+        String escapedValue = escapeRegexSpecialChars(value);
+        return Collections.singletonMap(field,
+                Collections.singletonMap(OPERATOR_REGEX, "(?i)^" + escapedValue + "$"));
+    }
+
+    private static @NotNull String escapeRegexSpecialChars(@NotNull String value) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : value.toCharArray()) {
+            if ("\\^$.|?*+()[]{}".indexOf(c) >= 0) {
+                sb.append('\\');
+            }
+            sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Generates an $in selector for given field with given value.
+     * @param field Field name
+     * @param value Values to match
+     * @return New selector
+     */
+    @Contract("_, _ -> new")
+    public static @NotNull Map<String, Object> in(String field, List<String> value) {
+        field = replaceFirstSymbol(field);
+        return Collections.singletonMap(field,
+                Collections.singletonMap(OPERATOR_IN, value));
+    }
+
+    /**
+     * Generates an $all selector for given field with given value.
+     * @param field Field name
+     * @param value Values to match
+     * @return New selector
+     */
+    @Contract("_, _ -> new")
+    public static @NotNull Map<String, Object> all(String field, List<String> value) {
+        field = replaceFirstSymbol(field);
+        return Collections.singletonMap(field,
+                Collections.singletonMap(OPERATOR_ALL, value));
     }
 
     /**
@@ -794,8 +1000,9 @@ public class DatabaseConnectorCloudant {
      * @return New selector
      */
     public static @NotNull Map<String, Object> exists(String field, boolean value) {
+        field = replaceFirstSymbol(field);
         return Collections.singletonMap(field,
-                Collections.singletonMap("$exists", value));
+                Collections.singletonMap(OPERATOR_EXISTS, value));
     }
 
     /**
@@ -804,7 +1011,7 @@ public class DatabaseConnectorCloudant {
      * @return New selector
      */
     public static @NotNull Map<String, Object> and(List<Map<String, Object>> selectors) {
-        return Collections.singletonMap("$and",
+        return Collections.singletonMap(OPERATOR_AND,
                 selectors);
     }
 
@@ -814,7 +1021,7 @@ public class DatabaseConnectorCloudant {
      * @return New selector
      */
     public static @NotNull Map<String, Object> or(List<Map<String, Object>> selectors) {
-        return Collections.singletonMap("$or",
+        return Collections.singletonMap(OPERATOR_OR,
                 selectors);
     }
 
@@ -825,7 +1032,20 @@ public class DatabaseConnectorCloudant {
      * @return New selector
      */
     public static @NotNull Map<String, Object> elemMatch(String field, String value) {
+        field = replaceFirstSymbol(field);
         return Collections.singletonMap(field,
-                eq("$elemMatch", value));
+                eq(OPERATOR_ELEM_MATCH, value));
+    }
+
+    /**
+     * Generates an $elemMatch selector with and custom selector for the field and selector
+     * @param field Field name
+     * @param selector Value to match
+     * @return New selector
+     */
+    public static @NotNull Map<String, Object> elemMatch(String field, Map<String, Object> selector) {
+        field = replaceFirstSymbol(field);
+        return Collections.singletonMap(field,
+                Collections.singletonMap("$elemMatch", selector));
     }
 }

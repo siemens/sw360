@@ -134,8 +134,8 @@ public class ComponentHandler implements ComponentService.Iface {
     }
 
     @Override
-    public List<Component> refineSearchAccessibleComponents(String text, Map<String,Set<String>> subQueryRestrictions, User user) throws TException {
-        return componentSearchHandler.searchAccessibleComponents(text, subQueryRestrictions, user);
+    public Map<PaginationData, List<Component>> refineSearchAccessibleComponents(String text, Map<String,Set<String>> subQueryRestrictions, User user, PaginationData pageData) {
+        return componentSearchHandler.searchAccessibleComponents(text, subQueryRestrictions, user, pageData);
     }
 
     @Override
@@ -151,18 +151,41 @@ public class ComponentHandler implements ComponentService.Iface {
     }
 
     @Override
-    public List<Release> searchReleases(String searchText) throws TException {
-        return releaseSearchHandler.search(searchText);
-    }
-
-    @Override
-    public List<Release> searchAccessibleReleases(String searchText, User user) throws TException {
-        return handler.searchAccessibleReleasesByText(releaseSearchHandler, searchText, user) ;
+    public Map<PaginationData, List<Release>> searchAccessibleReleases(String searchText, User user, PaginationData pageData) throws TException {
+        return handler.searchAccessibleReleasesByText(releaseSearchHandler, searchText, user, pageData) ;
     }
 
     @Override
     public List<Release> searchReleaseByNamePrefix(String name) throws TException {
         return handler.searchReleaseByNamePrefix(name);
+    }
+
+    @Override
+    public Map<PaginationData, List<Release>> searchReleaseByNamePaginated(String name, PaginationData pageData) throws TException {
+        return handler.searchReleaseByNamePaginated(name, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Release>> getAccessibleNewReleasesWithSrc(User user, PaginationData pageData) throws TException {
+        assertUser(user);
+        return handler.getAccessibleNewReleasesWithSrc(user, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Component>> searchComponentByNamePrefixPaginated(User user, String name, PaginationData pageData) {
+        return handler.searchComponentByNamePrefixPaginated(user, name, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Component>> searchComponentByExactNamePaginated(User user, String name, PaginationData pageData) {
+        return handler.searchComponentByExactNamePaginated(user, name, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Component>> searchComponentByExactValues(Map<String,Set<String>> subQueryRestrictions, User user, PaginationData pageData) throws TException {
+        assertUser(user);
+
+        return handler.searchComponentByExactValues(subQueryRestrictions, user, pageData);
     }
 
     @Override
@@ -506,6 +529,14 @@ public class ComponentHandler implements ComponentService.Iface {
 
         return handler.getReleasesFullDocsFromComponentId(id, user);
 
+    }
+
+    @Override
+    public Map<PaginationData, List<Release>> getReleasesFromComponentIdWithPagination(String id, User user, PaginationData pageData) throws TException {
+        assertUser(user);
+        assertId(id);
+
+        return handler.getReleasesFromComponentIdWithPagination(id, user, pageData);
     }
 
     @Override

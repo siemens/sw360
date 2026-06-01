@@ -46,7 +46,7 @@ public class ScheduleServlet extends Sw360ThriftServlet {
         String[] servicesToSchedule = ScheduleConstants.autostartServices;
         for (String serviceName : servicesToSchedule) {
             String cleanServiceName = serviceName.trim();
-            if(! "".equals(cleanServiceName)){
+            if (!cleanServiceName.isEmpty()) {
                 handler.scheduleService(cleanServiceName);
             }
         }

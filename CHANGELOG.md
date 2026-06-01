@@ -4,7 +4,1249 @@ This is the changelog file of the sw360 project. It starts with the first
 release being provided at eclipse/sw360. For older releases, please refer to
 the first project location:
 
-https://github.com/sw360/sw360portal/releases
+https://github.com/eclipse-sw360/sw360/releases
+
+## sw360-20.1.0-rc-2
+This is the second release candidate for SW360 in the line of the next minor
+release version 20.1.0 of SW360. The candidate includes numerous features,
+corrections, and improvements over the previous release
+[20.1.0-rc-1](https://github.com/eclipse-sw360/sw360/releases/tag/sw360-20.1.0-rc-1)
+
+This release serves as a preview of the upcoming minor version 20.1.0 for
+testing and should not be used in production environments.
+
+Highlight of the changes includes:
+* **Authentication & Authorization:** Added multi-issuer JWT support with a
+  per-issuer `jwk-set-uri` override, accepted JWTs from trusted issuers, wired
+  `JWT_KEYSTORE`, returned the plaintext `client_secret` once on creation, and
+  associated each OAuth client with its owning user (**breaking change**,
+  see `fix(auth)!: associate user with client`).
+* **REST API Enhancements:** Added an `attachmentAuthor` filter on
+  `GET /projects`, manual scheduler-trigger APIs with scheduler refactoring,
+  authenticated report download links, and search flags for empty BU and empty
+  tags on projects.
+* **Obligations & Reports:** Allowed updating obligations of all levels at once,
+  and RFC 5987-encoded the `Content-Disposition` filename in report downloads.
+* **SVM Integration:** Optimized SW360 & SVM delta synchronization and
+  simplified the SVM delta sync configuration.
+* **Build & CI:** Added Spotless as a Maven plugin, required Maven 3.9,
+  added a GitHub Actions step summary, and many dependencies bumped via
+  Dependabot.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> ADITYA-CODE-SOURCE <adityavishe67@gmail.com>
+> amritkv <er.akverma8@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> Dearsh Oberoi <oberoidearsh@gmail.com>
+> dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+> developharsh <harsh237hk@gmail.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> rudra-superrr <prabhuchopra@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `df2a49e5c` feat: add batch summary endpoint for release lookups
+* `c23ea8d66` feat(authorization): support multi-issuers
+* `f06255f34` feat(rest): add attachmentAuthor filter parameter to GET /projects endpoint
+* `ef7fa8a47` feat(rest): per-issuer jwk-set-uri override
+* `6865f9a4f` feat(Scheduler): Added api to  manually  trigger the  schedulers and refactor the apis
+* `8e09f74f3` feat(SVM): Optimize the sync between SW360 and SVM
+* `9ad41c460` feat(report): authenticating the report download link.
+* `884002335` feat(search): flag to search empty tags in projects
+* `a685a9ffc` feat(search): flag to search empty bu in projects
+
+### Corrections
+* `a23a010d4` fix(components): prevent duplicate components by name only, case insensitive
+* `4f8967a08` fix(rest): fetch sub-project attachment usages for LicenseInfo report
+* `2f70346b4` fix(project): show transitive sub-project releases in licenseClearing and attachmentUsage endpoints
+* `fe216246b` fix(report): RFC 5987 encode Content-Disposition filename and reduce debug log verbosity
+* `ec7903049` fix(obligations): add functionality to update obligations of all levels
+* `3bb28a0aa` fix(pom): require maven 3.9 needed
+* `10102bec5` fix(lucene): remove leading wildcard configuration since Nouveau does not support it.
+* `bc2eab4ff` fix(docker): wire JWT_KEYSTORE and key
+* `ea6fa51a4` fix(auth): persist JWT signing key from keystore
+* `2ab7ffadf` fix(rest): preserve user roles, enforcing scope
+* `faa394244` fix(rest): accept JWTs from trusted issuers
+* `d258e0a66` fix(auth): accept JWT token from frontend
+* `80e5f495d` fix(auth)!: associate user with client
+* `8b60c44ab` fix(auth): return plaintext client_secret once
+* `533876e03` fix(cloudant): set URL before anything else
+* `d65cd86fa` fix(obligations): add obligations of status deferred to parent project to all obligations endpoint
+* `30354026e` fix(DBConnector): prevent NPE in getDistinctSortedStringKeys
+
+### Infrastructure
+* `ba641d2f4` chore(vulnerability): guards against NPE
+* `e220f7ecf` perf(DB): use singleton for design and indexes
+* `c95528d34` chore(spotless): add spotless as a plugin
+* `77aead739` chore(deps): bump org.junit.platform:junit-platform-launcher
+* `25537a451` chore(deps): bump junit.version from 6.0.3 to 6.1.0
+* `ed4e8926f` chore(deps): bump step-security/harden-runner from 2.19.3 to 2.19.4
+* `106c4030d` chore(deps): bump keycloak.version from 26.6.1 to 26.6.2
+* `53235a988` chore(deps): bump docker/build-push-action from 7.1.0 to 7.2.0
+* `751146e6a` chore(deps): bump github/codeql-action from 4.35.4 to 4.35.5
+* `a1c956fbb` chore(deps): bump keycloak/keycloak from 26.6.1 to 26.6.2
+* `b93cc55f6` chore(deps-dev): bump org.apache.maven.plugins:maven-enforcer-plugin
+* `19e5329b3` perf(obligation): optimize the steams
+* `86333ea78` chore(deps): bump com.google.code.gson:gson from 2.13.2 to 2.14.0
+* `a71baccf3` chore(deps-dev): bump io.github.git-commit-id:git-commit-id-maven-plugin
+* `fbe707f18` chore(deps): bump commons-cli:commons-cli from 1.10.0 to 1.11.0
+* `cce7dafa3` chore(deps): bump org.mockito:mockito-core from 5.21.0 to 5.23.0
+* `42b794e32` chore(deps): bump org.json:json from 20250517 to 20251224
+* `d56c59d00` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `e9991b30c` chore(deps): bump ch.qos.logback:logback-classic from 1.5.18 to 1.5.32
+* `50e4e71a9` chore(deps): bump jakarta.xml.bind:jakarta.xml.bind-api
+* `ad653f2f5` chore(deps): bump org.spdx:java-spdx-library from 2.0.2 to 2.0.3
+* `4cb50dd26` chore(deps): bump org.projectlombok:lombok from 1.18.38 to 1.18.46
+* `4964d11dc` chore(deps): bump org.apache.maven.plugins:maven-resources-plugin
+* `ba18507ec` chore(deps): bump org.jboss.logging:jboss-logging
+* `d80f0fd8d` chore(deps): bump jaxen:jaxen from 2.0.0 to 2.0.3
+* `a6a95b111` chore(deps): bump commons-io:commons-io from 2.20.0 to 2.22.0
+* `835dda3e4` chore(deps): bump org.apache.maven.plugins:maven-failsafe-plugin
+* `05ca948c8` chore(deps): bump org.jetbrains:annotations from 26.0.2-1 to 26.1.0
+* `5933a825a` chore(deps): bump joda-time:joda-time from 2.14.0 to 2.14.2
+* `b5eb5734b` chore(deps-dev): bump org.apache.maven.plugins:maven-assembly-plugin
+* `81f032588` chore(deps-dev): bump org.codehaus.mojo:versions-maven-plugin
+* `a6e9f835b` chore(deps): bump org.owasp.encoder:encoder from 1.3.1 to 1.4.0
+* `5bd330001` chore(deps): bump org.jacoco:jacoco-maven-plugin from 0.8.13 to 0.8.14
+* `aba0ea009` chore(deps-dev): bump org.apache.maven.plugins:maven-war-plugin
+* `e12613460` chore(deps): bump log4j2.version from 2.25.4 to 2.26.0
+* `8c2bd8c5a` chore(deps): bump org.ow2.asm.version from 9.9.1 to 9.10
+* `5ba4da017` chore(deps-dev): bump net.bytebuddy:byte-buddy from 1.17.8 to 1.18.8
+* `72a4910ee` chore(deps): bump org.wiremock:wiremock-standalone from 3.13.1 to 3.13.2
+* `c00bb0674` chore(deps): bump org.glassfish.jaxb:jaxb-runtime from 4.0.6 to 4.0.8
+* `e77e2920b` chore(deps): bump step-security/harden-runner from 2.19.1 to 2.19.3
+* `400e2b7d7` chore(deps): bump actions/dependency-review-action from 4.9.0 to 5.0.0
+* `e9bfa51c2` chore(deps): bump org.springframework.security:spring-security-oauth2-authorization-server
+* `dcdda3c64` chore(deps): bump com.google.guava:guava from 33.5.0-jre to 33.6.0-jre
+* `59e398084` chore(deps): bump slf4j.version from 2.0.17 to 2.0.18
+* `c490401cd` chore(deps): bump org.apache.maven.plugins:maven-surefire-plugin
+* `1d94b6814` chore(deps): bump commons-codec:commons-codec from 1.20.0 to 1.22.0
+* `70db3d143` chore(rest): remove unused spring properties
+* `be2726522` chore(auth): align JWT keystore helper scripts
+* `e2914b5ec` chore(docker): sync docker with actual config
+* `ec56521b0` refactor(svm): simplify SVM delta sync config
+* `1a4c392b4` chore(ci): Added github step summary
+
+## sw360-20.1.0-rc-1
+This is the first release candidate for SW360 in the line of the next minor
+release version 20.1.0 of SW360. The candidate includes numerous features,
+corrections, and improvements over the previous release
+[20.0.0](https://github.com/eclipse-sw360/sw360/releases/tag/sw360-20.0.0)
+
+This release serves as a preview of the upcoming minor version 20.1.0 for
+testing and should not be used in production environments.
+
+Highlight of the changes includes:
+* **REST API Enhancements:** Added `PATCH /ecc/{releaseId}` with ECC status
+  filtering, file-based caching for the releases endpoint, and a project detail
+  tab pill-count endpoint with updated response structure.
+* **Export Improvements:** Extended project report export options with CSV,
+  JSON, and XML formats in addition to spreadsheet output.
+* **Security Hardening:** Added `@PreAuthorize` guards to license and
+  attachment admin endpoints, strengthened authentication/authorization paths,
+  sanitized attachment filenames to prevent path traversal, and hardened
+  CORS/CSP behavior including Swagger CSP fixes. This release also allows
+  disabling of basic auth and unifies Bearer token authentication across the
+  board.
+* **Performance Optimizations:** Removed an N+1 package query by release IDs,
+  improved LicenseInfo cache lookup from O(n) to O(1), and switched
+  license-type usage counting to an indexed CouchDB view.
+* **Keycloak Provider Packaging:** Consolidated provider packaging via shading,
+  reduced provider artifacts to 3 jars, lowered classpath conflicts, and
+  improved Keycloak startup time.
+* **Framework Upgrades:** Upgraded runtime and security baselines to Spring
+  Boot 4.x and Spring Security 7.x, and migrated tests from JUnit 4 to JUnit 5.
+* **Bug Fixes:** Resolved thread-safety issues in `ProjectDatabaseHandler` and
+  department import scheduling, fixed resource leaks across streams and Thrift
+  clients, and improved HTTP error mapping for 404/403/409 paths.
+* **Container & CI:** Added Sigstore/Cosign image signing in CD and published
+  JaCoCo coverage reports as CI artifacts.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> aaryan359 <aaryanmeena96@gmail.com>
+> Abhay349 <pandeyabhay967@gmail.com>
+> Aditya Vishe <adityavishe67@gmail.com>
+> afsahsyeda <afsah.syeda@siemens-healthineers.com>
+> Agastya Kataria <katariaa@tcd.ie>
+> Alex <alextanzhao22@gmail.com>
+> Aman-Cool <aman017102007@gmail.com>
+> amritkv <er.akverma8@gmail.com>
+> Bhawani Shanker Sharma <bhawanishanker2005@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> Dearsh Oberoi <oberoidearsh@gmail.com>
+> dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+> developharsh <harsh237hk@gmail.com>
+> Elbialy0 <mahmoudelbialy109@gmail.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> himanshu07gupta <himanshu29gupta0703@gmail.com>
+> Kareem74x <kareemmostafa74x@gmail.com>
+> Kaushlendra Pratap <kaushlendra-pratap.singh@siemens.com>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Mahmoud Abdulmawlaa <m.elbaadishy@gmail.com>
+> manhuu14 <umanhuu@gmail.com>
+> Nikesh Kumar <kumar.nikesh@siemens.com>
+> Priya Sharma <priyasharma1001a@gmail.com>
+> rudra-superrr <prabhuchopra@gmail.com>
+> Sandip Mandal <sandipsmmandal02@gmail.com>
+> Shivamrut <gshivamrut@gmail.com>
+> Suhyeon Park <ssantta999@gmail.com>
+> Sushant Kumar <sushant.kumar@siemens-healthineers.com>
+> Uddeshya <srivastavauddeshya98@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `a1468ca38` feat(security): unify Bearer auth
+* `8e2ff4f02` feat(security): make basic auth configurable
+* `c938d39a2` feat(UI): Add expand/collapse functionality for projects with sub-projects
+* `9fb25453d` feat(rest): unify authentication authorities
+* `c3f4c6762` feat(ci): upload JaCoCo reports to artifacts
+* `c8a7811c9` feat(rest): add PATCH /ecc/{releaseId} and eccStatus filter to GET /ecc
+* `552804a36` feat(release): catch and log exception silently
+* `3a02df85d` feat(Component): Added pagination and sorting  for release overview in components
+* `fe17994e3` feat(projects): get sorted groups
+* `fba763c5a` feat(project-pill): simplify code
+* `c8803e5b9` feat(project): enhance project detail tab counts with new response structure and tests
+* `c3f4576da` feat(project): add endpoint and tests for project detail tab pill counts
+* `c473c1db9` feat(cd): sign container images
+* `00a0e04f1` feat(cache): update default cache directory
+* `06a7fb602` feat(rest): add file-based API response cache for releases endpoint
+* `c6edadfe7` feat(export): add CSV, JSON, XML export formats for project reports
+* `b92b07274` feat(keycloak): update old README.md
+* `014c57440` feat(kc-tf): add helper script to migrate tokens
+* `3cfdb9590` feat(thrift): add build dependencies
+
+### Corrections
+* `2236df6c1` fix(csrf): enable and document CSRF
+* `7f7eb90c7` Fix(Rest): Added code to fix exactmatch search if name is case-insensitive
+* `3d7b9121e` fix(users): revert default behavior
+* `85bd7d11a` fix(rest): Added code to filter user based on givenname lastname emailid.
+* `5d3913d23` fix(docs): fix docker application template
+* `fc4e4045e` fix(rest): register JwtAuthenticationProvider
+* `eb694593a` fix(rest): allow /api root read for READ tokens
+* `bdfaa110f` fix(rest): handle broken pipe gracefully
+* `7b99a4d15` fix(backend): prevent thread blocking in scheduler
+* `22780de39` fix(backend): upgrade SVM client, add custom JKS
+* `57786ed2b` fix(user): catch Runtime error of unknown user
+* `bc8d31677` fix(ExportSpreadsheet): Fixed export spreadsheet in project with search results
+* `4eaf7ac4d` fix(changelog): fix timestamp format to show just the date
+* `0c953166e` fix(keycloak): gson dependency issue.
+* `5596befa2` fix(surefire): fix args and mockito jar path
+* `a19247a36` fix(test): remove System.out and System.err
+* `643094cac` fix(changelog): add sorting by change timestamp in changelog
+* `ded8aa233` fix(rest): use BadRequestClientException instead of RuntimeException
+* `98d5daddd` fix(rest): correct status code, improve error messages, add test
+* `2c1e30d09` fix(rest): return 500 instead of 200 on license update failure
+* `8a127bb4d` fix(rest): Preserve 404/403 and others when mapping controller exceptions
+* `7f1347d59` fix(rest): extract PasswordEncoder config to fix circular dependency
+* `7029ef920` fix(rest): filter license obligations by project release main...
+* `dfbd81a4a` fix(Rest) : Backend API for All Obligation Tab
+* `0ff1aa515` fix(UserHandler): fix compiler symbol not found
+* `3568c988e` fix: Prevent externalId overwrite in getByEmailOrExternalId
+* `5c90f3a57` fix(users): :Update differing externalId in getByEmailOrExternalId
+* `75e5aaf89` fix(http-support): implement native file request body support
+* `3b812a63f` fix(http-support): correct native request builder URI/body/header semantics
+* `3a4ce2737` fix(security): add @PreAuthorize ADMIN check to AttachmentCleanUpController
+* `ec5eba472` fix(base): remove duplicate @PreAuthorize annotation from ScheduleAdminController
+* `6b223609f` fix(rest): Add missing @PreAuthorize annotations on license endpoints
+* `813381a34` fix(css): fix code scanning alert no. 96
+* `ebd497894` fix(css): fix code scanning alert no. 95
+* `cf2f6a365` fix(rest): prevent empty email backend queries
+* `ac6add4c9` fix(rest): migrate custom serializers to Jackson 3
+* `64e4a15d5` fix(rest): update CSP configuration for swagger
+* `e44954bf2` fix(LicenseInfo): use SPDX ID for obligation-to-license mapping
+* `41fa5997f` fix(rest): harden headers and fix CORS origin
+* `787b5aa7f` fix(rest): add detailed exception handling for patchClearingRequest
+* `f7ab7bf36` fix(vul): hande not found exceptions for loading releases/candidates while fetching vulnerabilities
+* `1701644b9` fix(backend): fix thread safety in ProjectDatabaseHandler
+* `d466912dd` fix(licenseinfo): accumulate all obligations per license in DOCX report
+* `687ca811c` fix(db): csv-reader resource leak in UserDatabaseHandler
+* `4a84ee580` fix(vmcomponents): resource leak in svmutils
+* `9f3ab07b8` fix(rest): avoid NPE on JWKS API-token auth when user or OIDC client metadata is missing
+* `068c3c667` fix(docker): use tag name and sha for dependabot
+* `806f15ee6` fix(rest): restricting modification of fields.
+* `d2329d341` fix(fossology): revert clearing state on upload/scan trigger failure
+* `048faa2d9` fix(backend): add SLF4J provider to backend WARs
+* `f23134295` fix: corrected the pagination counts for vendor search
+* `76a1bf898` fix(thrift): add sudo in thrift docker build stage
+* `371ac33fc` fix(rest): validate department log date as yyyy-MM-dd before Thrift call
+* `102c10692` fix(release): check set for NPE
+* `a947e0228` fix(rest): resolve Authorization header lookup via servlet getHeader
+* `2020b2d44` fix(rest): sanitize filename in addAttachment to prevent path traversal
+* `f34128ed6` fix(release-service): ensure proper lock handling in Fossology process
+* `1c79fa170` fix(http-support): make NewHttpClientImpl.execute non-blocking
+* `1835e799c` fix(licenseinfo): Fix project clearing report issues
+* `b57ec9665` fix(user): prevent permanent import lockout on unchecked exceptions...
+* `46699bfc8` fix(projects): fix NPE and Thrift client leak in attachment usage inheritance
+* `b33414e4a` fix(jwt): remove nbf claim which is optional in kc
+* `45c5c6265` fix(project): reduce memory consumption by using optimized CouchDB view for project cache
+* `eb1c46bdd` fix(schedule): follow deploy.name pattern
+* `4fb3f28e7` fix(rest): fix NPEs and missing security annotation in ProjectController
+* `c2c08674d` fix(keycloak): add missing sl4j deps
+* `6f2c37c5c` fix(license): Improve exception handling
+* `e3f484f31` fix(attachment): Restrict access to security user.
+* `f381c05ce` fix(sbom): exclude component main licenses from release license aggregation
+* `44e7eeae6` fix(rest): prevent IndexOutOfBoundsException for out-of-range pagination
+* `f6b5154d4` fix(logging): correct spelling of occured to occurred in log messages
+* `480635f01` fix(component): close FileInputStream in uploadAttachment
+* `d32f3e0d8` fix(rest): handle DUPLICATE status in updateProjectForAttachment
+* `d04bf0678` fix(rest): return 409 Conflict on duplicate name/version for release,...
+* `f712b5b60` fix(cyclonedx): count validation failures in compImportErrorCount
+* `4be5409fb` fix: report errors instead of unconditional SUCCESS in CycloneDX SBOM import
+* `b65b700a4` fix(sorting): use natural version ordering instead of lexicographic
+* `4c5e0aceb` fix(http-support): return null for missing native response headers
+* `e5208792e` fix(cyclonedx): use full createRelease overload to preserve metadata
+* `98c91155d` fix(rest): avoid NPE in obligation Boolean filter
+* `931b19f12` fix(component): fix unreachable forceDelete logic in deleteComponent
+* `810532bb1` fix(REST): Remove extra brackets from embedded attachment response
+* `788bcb41c` fix(clearingrequest): surface CR cleanup failure in response body
+* `e56fb73b3` fix(rest): delete clearing request only after project deletion succeeds
+* `db12fd524` fix(rest):  Fixed typo in Sw360AuthorizationServerConfiguration
+* `dd5bfeb8f` fix(report): fix the file traversal path vulnerability.
+* `0aba60c36` fix(compile): fix annotation processing for lombok
+* `8c5d1190e` fix(test): align JUnit 5 and resolve WireMock
+* `3d554fd96` fix(junit): upgrade to JUnit5
+* `86e578885` fix(Rest) : Acknowledgement missing from ReadmeOSS for license with same name
+* `f8e63854d` fix(keycloak-tf): fix client_id for null
+
+### Infrastructure
+* `5211c4beb` chore(codeowners): add @rudra-superrr as CODEOWNERS
+* `6f163c6d2` chore(deps): bump org.cyclonedx:cyclonedx-core-java
+* `615c8bf1c` chore(deps): bump keycloak/keycloak from `26ae264` to `dea2640`
+* `deac05e7d` chore(deps): bump com.puppycrawl.tools:checkstyle from 10.21.4 to 13.4.2
+* `fcb56e4a3` chore(deps): bump sigstore/cosign-installer from 4.1.1 to 4.1.2
+* `9a3eaf3de` chore(deps): bump step-security/harden-runner from 2.19.0 to 2.19.1
+* `31d82a4d1` chore(deps): bump github/codeql-action from 4.35.2 to 4.35.4
+* `1135f0fa6` chore(deps): bump org.apache.httpcomponents.client5:httpclient5
+* `acc1b9576` chore(deps): bump poi.version from 5.5.0 to 5.5.1
+* `92bcc6777` chore(deps): bump org.apache.maven.plugins:maven-shade-plugin
+* `37492c950` chore(deps): bump com.ibm.cloud:cloudant from 0.10.16 to 0.10.17
+* `584862469` chore(deps): bump com.jayway.jsonpath:json-path from 2.10.0 to 3.0.0
+* `88604afe5` chore(deps): bump jackson.version from 2.21.1 to 2.21.3
+* `532965928` chore(deps): bump webiny/action-conventional-commits from 1.3.1 to 1.4.2
+* `ccd3dbf24` chore(deps): bump com.tngtech.archunit:archunit-junit5
+* `a21a4e52b` chore(deps): bump spring-boot.version from 4.0.5 to 4.0.6
+* `94f80ea33` chore(rest): add visible-for-testing comment and note @Value limitation in test
+* `357f16d4a` test(rest): add service-level unit test and fix controller test for license update failure
+* `898bf57aa` chore(rest): avoid extra object by injecting shared PasswordEncoder in auth server
+* `4050c1e3a` chore(rest): removed the unused logger in ResourceServerConfiguration
+* `a6daf8b6c` test(licenseinfo): add edge-case test coverage for CLIParser
+* `dcf63aae5` chore(resource): implement review comments
+* `51043fe4d` chore(deps): bump springframework.version from 7.0.6 to 7.0.7
+* `3c8a7daed` chore(deps): bump httpcore5.version from 5.3.6 to 5.4.2
+* `2746ebbd4` chore(deps): bump org.springframework.security:spring-security-core
+* `8d93886c9` chore(deps): bump step-security/harden-runner from 2.18.0 to 2.19.0
+* `8f38fe218` chore(deps): bump org.apache.maven.plugins:maven-compiler-plugin
+* `316d30b6a` chore(deps): bump org.apache.maven.plugins:maven-source-plugin
+* `f4c812213` chore(deps): bump keycloak/keycloak from 26.6.0 to 26.6.1
+* `d2aee4458` chore(deps): bump docker/build-push-action from 7.0.0 to 7.1.0
+* `b14bd6d56` chore(deps): bump actions/cache from 5.0.4 to 5.0.5
+* `17745d429` chore(deps): bump github/codeql-action from 4.35.1 to 4.35.2
+* `bac88c4ff` chore(deps): bump keycloak.version from 26.5.6 to 26.6.1
+* `2cb98abb6` chore(deps): bump actions/upload-artifact from 7.0.0 to 7.0.1
+* `09bf98f75` chore(deps): bump step-security/harden-runner from 2.17.0 to 2.18.0
+* `4f53c8670` chore(deps): bump springdoc-openapi-stater-common.version
+* `0d7c9e141` test(rest): enhance ArchUnit tests with dependency governance and resource management rules
+* `060b574ef` refactor(jackson): reuse mixin registrations
+* `5b3ae5e91` chore(deps): upgrade to Spring Boot 4.x and Spring Security 7.x
+* `d3050e8bb` test(rest): add ArchUnit tests for SW360 REST architecture
+* `cec129ade` chore(deps): bump keycloak/keycloak from `45ae201` to `b0e5dbc`
+* `d5a1f5b2b` chore(deps): bump org.apache.logging.log4j:log4j-core
+* `4efe3a84f` chore(deps): bump step-security/harden-runner from 2.16.1 to 2.17.0
+* `86d138560` chore(deps): bump org.apache.maven.plugins:maven-dependency-plugin
+* `d2b279120` refactor(resource): refactor resource-server
+* `5ad1329b8` chore(fossology): simplify FossologyHandler
+* `acfb91a7b` test(fossology): add unit tests for FossologyHandler to validate preconditions
+* `4584a5fbe` perf(licenseinfo): fix O(n) cache lookup to use O(1) direct access
+* `9ed7f04c0` perf(packages): eliminate N+1 query problem in getPackagesByReleaseIds
+* `f9d5a2189` test(licenses): add test coverage for LicenseHandler methods
+* `7705870b0` chore(docs/swagger): add OpenAPI annotations for ComponentController
+* `ceec3d08f` chore(keycloak): common code to keycloak-common
+* `276506c8d` chore(keycloak): shared shaded common library
+* `e0595383b` chore(keycloak): prevent dependency split
+* `6659cf96a` test(sbom): add tests to prevent component license leakage
+* `956ee7e09` perf(license): optimize getLicenseTypeUsageCount to use database view...
+* `6d20f2d7d` refactor: replace printStackTrace with logger
+* `4793d5509` refactor(backend) : extract persistence logic in LicenseDatabaseHandler
+* `5c018017d` refactor(wsimport): improve duplicate releaseId logging in ThriftUploader
+* `8a31ff682` chore(deps): bump spring-boot from 3.5.3 to 3.5.12
+* `52fd56e17` test(warning): suppress repetitive log msgs
+* `536347327` chore(osgi): remove unused osgi code and flags
+* `f50b3c091` chore(pom): housekeeping moving to parent
+* `2bf538f34` chore(okhttp): update to 5.3.2
+* `a4af101fa` chore(deps): bump com.squareup.okhttp3:okhttp from 4.12.0 to 5.0.0
+* `f20c0a97a` chore(deps): bump https://github.com/gitleaks/gitleaks
+* `1ec5e2185` chore(deps): bump org.codehaus.plexus:plexus-utils from 4.0.2 to 4.0.3
+* `93b1f9484` chore(deps): bump step-security/harden-runner from 2.16.0 to 2.16.1
+* `4cb4678ce` chore(deps): bump github/codeql-action from 4.33.0 to 4.35.1
+* `6e41dbaf4` chore(deps): bump docker/login-action from 4.0.0 to 4.1.0
+* `6f3a13d92` chore(deps): update version comment
+* `5a84c16b4` chore(deps): bump keycloak/keycloak from `8d44614` to `45ae201`
+* `955875e50` chore(tf): make idp alias as variable
+* `0c1bacac0` chore(deps): bump org.keycloak:keycloak-model-jpa from 26.5.2 to 26.5.6
+
+## sw360-20.0.0
+We are proud to announce the release of SW360 version 20.0.0. This major release
+brings significant architectural changes, security enhancements, and performance
+improvements over the 19.2.x series. The most notable update in this version is
+the removal of the Liferay UI; the SW360 backend is now fully decoupled, and
+users must set up the new Next.js-based frontend from the
+[eclipse-sw360/sw360-frontend](https://github.com/eclipse-sw360/sw360-frontend)
+repository.
+
+Highlight of the changes in this version includes:
+* **Frontend Decoupling:** Complete removal of the legacy Liferay UI,
+  introducing a standalone backend with expanded endpoints to support the new
+  Next.js frontend.
+* **Security Improvements:** Addressed multiple vulnerabilities including XXE
+  and path traversal, added XSS protection headers, and reinforced endpoint
+  security.
+* **API & Documentation:** Introduced extensive OpenAPI documentation and
+  implemented robust pagination under the hood.
+* **User & Identity Management:** Enhanced Keycloak user synchronization with
+  CouchDB, and added batch processing.
+* **Performance & Stability:** Implemented database-side pagination, optimized
+  memory usage, and improved indexing and search speeds.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> Aashish Jha <aashishjha1107@gmail.com>
+> Abhay349 <pandeyabhay967@gmail.com>
+> Achal Jhawar <35405812+achaljhawar@users.noreply.github.com>
+> Aditya Vishe <adityavishe67@gmail.com>
+> afsahsyeda <afsah.syeda@siemens-healthineers.com>
+> airajena <airajena0@gmail.com>
+> Akshit Joshi <akshit.joshi@siemens-healthineers.com>
+> Alex <alextanzhao22@gmail.com>
+> Ali <aligadallah14@gmail.com>
+> Aman-Cool <aman017102007@gmail.com>
+> amritkv <er.akverma8@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> Dearsh Oberoi <oberoidearsh@gmail.com>
+> drockparashar <pranshu007parashar@gmail.com>
+> Elbialy0 <mahmoudelbialy109@gmail.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> harshdeveloper21 <harsh237hk@gmail.com>
+> harshitg927 <121371860+harshitg927@users.noreply.github.com>
+> Helio Chissini de Castro <dev@heliocastro.info>
+> himanshu07gupta <himanshu29gupta0703@gmail.com>
+> Himanshu A Garode <himanshu2006garode@gmail.com>
+> Hritik Raj <hritik23154049@akgec.ac.in>
+> Kareem74x <kareemmostafa74x@gmail.com>
+> Kaushlendra Pratap <kaushlendra-pratap.singh@siemens.com>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Mahmoud Abdulmawlaa <m.elbaadishy@gmail.com>
+> Matthew Pappas <matteopappas@gmail.com>
+> Md Ali <mdali620563@gmail.com>
+> Mohamed Hanafy <mohamed.hanfy.dev@outlook.com>
+> naitikk31 <DARJINAITIK7@GMAIL.COM>
+> Nikesh Kumar <kumar.nikesh@siemens.com>
+> pranayh24 <pranayheda24@gmail.com>
+> Prathmesh <dhoneprathmesh72@gmail.com>
+> Priya Sharma <priyasharma1001a@gmail.com>
+> Rajnish Kumar <22it3036@rgipt.ac.in>
+> RITANKAR SAHA <ritankar.saha786@gmail.com>
+> rohit <brohit11544@gmail.com>
+> Rudra Chopra <prabhuchopra@gmail.com>
+> saiteja-in <vurukondasaiteja13@gmail.com>
+> Sameed Ahmad <sameed.ahmad@siemens-healthineers.com>
+> Sandip Mandal <sandipsmmandal02@gmail.com>
+> Sathwik Hejamady Bhat <sathwikhbhat@gmail.com>
+> sathwik-y <sathwik.yellapragada@gmail.com>
+> Shivamrut <gshivamrut@gmail.com>
+> Suhas2109 <suhas.n@siemens-healthineers.com>
+> suvrat1629 <suvrat1629@gmail.com>
+> Taanvi Khevaria <149520227+taanvi2205@users.noreply.github.com>
+> tanwar-div <tanwarkheritalwana@gmail.com>
+> VanKhanhAnny <arianne.dangvankhanh@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `7d37bb9b8` feat(version): update /version endpoint
+
+### Corrections
+* `ba842fcaa` fix(UI): The Linked Packages is not appearing in the project
+  details page, even though packages are linked to the project.
+* `29af0f8fb` fix(Release): merge release issue fixed.
+
+### Infrastructure
+* `924ca4397` chore(lang): remove old README_LANG.md
+
+## sw360-20.0.0-rc-2
+This is the second release candidate for SW360 in the line of next major release
+version 20.0.0 of SW360. The candidate includes numerous features, corrections,
+and improvements over the previous release
+[20.0.0-rc-1](https://github.com/eclipse-sw360/sw360/releases/tag/sw360-20.0.0-rc-1)
+
+This release serves as a preview of the upcoming major version 20.0.0 for
+testing and should not be used in production environments.
+
+Highlight of the changes includes:
+* **Security Enhancements:** Addressed XXE vulnerabilities in parsers, fixed
+  header injection issues, added XSS protection headers, and reinforced endpoint security.
+* **API & Documentation:** Expanded OpenAPI documentation across multiple core controllers.
+* **Performance & Stability:** Optimize memory usage with static client reuse.
+* **Infrastructure:** Updated container infrastructure for v20 and improve CI checks.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> Abhay349 <pandeyabhay967@gmail.com>
+> ADITYA-CODE-SOURCE <adityavishe67@gmail.com>
+> afsahsyeda <afsah.syeda@siemens-healthineers.com>
+> Alex <alextanzhao22@gmail.com>
+> Ali <aligadallah14@gmail.com>
+> Aman-Cool <aman017102007@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> Dearsh Oberoi <oberoidearsh@gmail.com>
+> dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+> Elbialy0 <mahmoudelbialy109@gmail.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> harshdeveloper21 <harsh237hk@gmail.com>
+> himanshu07gupta <himanshu29gupta0703@gmail.com>
+> Kareem74x <kareemmostafa74x@gmail.com>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Mahmoud Abdulmawlaa <m.elbaadishy@gmail.com>
+> Matthew Pappas <matteopappas@gmail.com>
+> Nikesh Kumar <kumar.nikesh@siemens.com>
+> Prathmesh <dhoneprathmesh72@gmail.com>
+> Priya Sharma <priyasharma1001a@gmail.com>
+> rudra-superrr <prabhuchopra@gmail.com>
+> saiteja-in <vurukondasaiteja13@gmail.com>
+> Sandip Mandal <sandipsmmandal02@gmail.com>
+> Shivamrut <gshivamrut@gmail.com>
+> VanKhanhAnny <arianne.dangvankhanh@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `a3b728052` feat(attachments): add test for attachment service
+* `064862f46` feat(agents): add AGENTS.md ref existing doc
+* `857e32f78` feat(vmprocess): add shutdown hook to close thread
+* `3ad882f4a` feat(container): add steps for keycloak image
+* `5ff8538df` feat(container): update container for version 20
+* `fba2f20ff` feat(Project): Handle case sensitive for export spreadsheet
+* `2982f9d65` feat(checkstyle): add Checkstyle configuration
+* `187b7b068` feat(http-support): implement file upload method in NewRequestBodyBuilderImpl
+* `18c916a29` feat(AttachmentUsages): Save existing attachment usages of sub-project at parent project level
+* `e1180015e` feat(Email): Enhancement of e-mail notifications for updation of project
+* `31d4b31f1` feat(licenseInfo): Normalise license text and optimise performance
+
+### Corrections
+* `3597da377` fix(clearingteam): Add clearing team to project api responses
+* `8702d8c43` fix(docker): correct runtime startup configuration Refs: #3945 Signed-off-by: VanKhanhAnny <arianne.dangvankhanh@gmail.com>
+* `8ac24b639` fix(rest): close streams and temp files in attachment bundle download
+* `021dff813` fix(rest): prevent NPE in vulnerability tracking sorting and clean error message
+* `bd3a16194` fix(report): respect withSubProject semantics for licenseInfo
+* `7e8dd3413` fix: XXE vulnerability in SPDX parser
+* `09cecb788` fix(license): include timestamp in backup filename
+* `9a7acdb57` fix(nouveau): add ConflictException retry to putNouveauDesignDocument
+* `ada574770` fix(datahandler): add ConflictException retry to putDesignDocument
+* `342df4f9c` fix(attachmentUsages): fix null owner corruption and infinite recursion in sub-project inheritance
+* `f7786d1c2` fix(attachment): urlencode filename to get
+* `d3ed1ce48` fix(project): ClearingTeam is a string, not user
+* `1acec288d` fix(Docker): add missing runtime dependency
+* `ecbac4f45` fix(release): fix test of attach field in merge
+* `bdac2d5f7` fix(rest): X-XSS-Protection Header
+* `fa0e2d515` fix(clearingrequest): replace per-call THttpClient with shared ThriftClients instance
+* `709dfaeac` fix(rest) : Compilation error fix from different PRs
+* `2b2b0c75c` fix(components): correct clearing state priority in autosetReleaseClearingState
+* `61933e7d2` fix(rest): update clearing request after editing in request tab
+* `5c11a3834` fix(security): Add @PreAuthorize annotation to AttachmentController
+* `bafbd42ac` fix(security): Add @PreAuthorize to ScheduleAdminController
+* `f874c08c2` fix(project): add null checks for both project and actual in updateProject to prevent NPE
+* `b9a63e0fe` fix(vmcomponents): handle NPE and ClassCastException in getVulIdsPerComponentVmId (#3780)
+* `e05569f31` fix(rest): Add null check for getReleaseIdToUsage() ...
+* `ffa9aad1f` fix(rest): return 400 for missing required request parameters instead of 500
+* `96f1a5963` fix(SvmConnector): handle missing keystore
+* `251a50819` fix(backend): close FileInputStream in SvmConnector to prevent resource leak
+* `05b632d05` fix(importCDX):do not alter unknown domain VCS and revert old changes
+* `0c3a7c29d` fix(rest): Unauthorrrized access to backend configurations.
+* `1876d51e3` fix(index): check if vcs exists
+* `61fe5227e` fix(view): check release.eccInformation not null
+* `d8acc1273` Fix/jwt claim validation (#3753)
+* `b33e1be65` Fix CORS filter activation and allowed methods (#3735)
+* `c7534cf0e` fix(rest): Add logic to delete open clearing requests from request tab, when the project has deleted.
+* `34d133488` fix(security): replace newInstance() with newDefaultInstance()
+* `738366d2d` fix(security): fix XXE vulnerability in XML parsing
+* `79ce6f23b` fix: prevent NoSuchElementException when ...
+* `1ed5584d4` fix(licenseinfo): check Optional.isPresent() before get() in DocxGenerator
+* `3b0c53f2a` fix(CR): header injection vulnerability.
+* `de763bb7c` fix: Prevent NullPointerException in Sw360ProjectService
+* `8416467ef` fix(rest): users receive email notification to download project reports for project-only/with-linked-releases
+* `5b8bca91a` fix(RepositoryUrl): update default value VCS_HOST
+* `9720ece9e` fix(config): update VCS_HOSTS to use JSON array format for config consistency
+* `d8e8e7502` fix: Exception Swallowing in UserRepository
+
+### Infrastructure
+* `912b15d27` refactor(licenses): replace String concatenation with StringBuilder
+* `b990ed902` docs(api): add Swagger @ApiResponse status code documentation for additional controllers
+* `842d5ee76` chore(docs/swagger): add @ApiResponses annotations for ...
+* `ba7d5a24d` chore(docs/swagger): add OpenAPI annotations for ImportExportController, LicenseController and UserController
+* `3739ad2f4` chore(core): remove redundant String.format
+* `76caf9ae4` chore(docs/swagger): add OpenAPI annotations for ReleaseController
+* `414a2f62c` chore(docs/swagger): add OpenAPI annotations for ProjectController
+* `aeae97f81` chore(deps): bump org.springframework:spring-webmvc
+* `8979d0ec0` chore(deps): bump actions/cache from 5.0.3 to 5.0.4
+* `b149d3a08` chore(deps): bump github/codeql-action from 4.32.6 to 4.33.0
+* `ebe9dcc80` chore(deps): bump keycloak/keycloak from `a7b0cb7` to `8d44614`
+* `e2ab8ca4d` perf(cloudant): use static client with retries
+* `805205f3e` perf(gson): reuse Gson objects
+* `eec790b27` chore(deps): bump step-security/harden-runner from 2.15.1 to 2.16.0
+* `6904e658b` chore(deps): bump https://github.com/gitleaks/gitleaks
+* `93cb74714` perf(licenseinfo): remove redundant stream collection in obligation mapping
+* `3584fc7f2` chore(deps): bump https://github.com/pre-commit/pre-commit-hooks
+* `847926002` chore(deps): bump https://github.com/compilerla/conventional-pre-commit
+* `58a065cac` chore(deps): bump actions/dependency-review-action from 4.8.3 to 4.9.0
+* `f904ba4f2` chore(deps): bump https://github.com/pylint-dev/pylint
+* `5efa1d134` chore(deps): bump docker/setup-qemu-action from 3.7.0 to 4.0.0
+* `52c9d90b5` chore(deps): bump https://github.com/gitleaks/gitleaks
+* `70ffa370b` chore(deps): bump docker/metadata-action from 5.10.0 to 6.0.0
+* `a08389fc8` chore(workflow): update workflow for containers
+* `e4ec0c915` chore(config): remove unused config
+* `6a35ca228` chore(lint): fix some style linter errors
+* `26a083764` docs: update README for CouchDB password setup
+* `e13be358d` chore(deps): bump docker/login-action from 3.7.0 to 4.0.0
+* `9dd307df6` chore(deps): bump step-security/harden-runner from 2.15.0 to 2.15.1
+* `0a8c4bab5` chore(deps): bump docker/setup-buildx-action from 3.12.0 to 4.0.0
+* `8cd0f096b` chore(deps): bump docker/build-push-action from 6.19.2 to 7.0.0
+* `1fd521312` chore(deps): bump github/codeql-action from 4.32.4 to 4.32.6
+* `4df420199` chore(deps): bump com.fasterxml.jackson.core:jackson-core
+* `b35f52c48` chore(deps): bump actions/upload-artifact from 6.0.0 to 7.0.0
+* `043db8adb` chore(deps): bump step-security/harden-runner from 2.14.2 to 2.15.0
+* `4955cc43e` chore(deps): bump actions/dependency-review-action from 4.8.2 to 4.8.3
+* `205f8d670` chore(deps): bump github/codeql-action from 4.32.3 to 4.32.4
+* `d444ed5bf` ci: cancel stale PR workflow runs using concurrency
+
+## sw360-20.0.0-rc-1
+This is a first release candidate for SW360 in the line of next major release
+version 20.0.0 of SW360. The candidate includes numerous features, corrections,
+and improvements over the previous release
+[20.0.0-beta](https://github.com/eclipse-sw360/sw360/releases/tag/sw360-20.0.0-beta)
+
+This release serves as a preview of the upcoming major version 20.0.0 for
+testing and should not be used in production environments.
+
+Highlight of the changes includes:
+* Various vulnerabilities and security fixes.
+* More endpoints created for the support of new UI project.
+* Improvements on KeyCloak sync and user management.
+* Improved performance, better pagination, better security posture.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> Aashish Jha <aashishjha1107@gmail.com>
+> Aditya Vishe <adityavishe67@gmail.com>
+> afsahsyeda <afsah.syeda@siemens-healthineers.com>
+> airajena <airajena0@gmail.com>
+> Akshit Joshi <akshit.joshi@siemens-healthineers.com>
+> Ali <aligadallah14@gmail.com>
+> Aman_Cool <aman017102007@gmail.com>
+> amritkv <er.akverma8@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> drockparashar <pranshu007parashar@gmail.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> Helio Chissini de Castro <dev@heliocastro.info>
+> Hritik Raj <hritik23154049@akgec.ac.in>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Md Ali <mdali620563@gmail.com>
+> naitikk31 <DARJINAITIK7@GMAIL.COM>
+> Nikesh kumar <kumar.nikesh@siemens.com>
+> RITANKAR SAHA <ritankar.saha786@gmail.com>
+> Rohit11544 <brohit11544@gmail.com>
+> Rudra Chopra <prabhuchopra@gmail.com>
+> saiteja-in <vurukondasaiteja13@gmail.com>
+> Sameed <sameed.ahmad@siemens-healthineers.com>
+> Sandip Mandal <sandipsmmandal02@gmail.com>
+> Sathwik Hejamady Bhat <sathwikhbhat@gmail.com>
+> Shivamrut <gshivamrut@gmail.com>
+> Suhas2109 <suhas.n@siemens-healthineers.com>
+> Taanvi Khevaria <149520227+taanvi2205@users.noreply.github.com>
+> tanwar-div <tanwarkheritalwana@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `917b70103` feat(rest): add configurable API token length property
+* `638345288` feat(ai): add initial AI safeguards for backend
+* `026265668` feat(search): double quotes search functionality.
+* `2e7db457f` feat(rest): Optimize addLicenseToLinkedReleases() with parallel execution
+* `ff859fe0b` feat(resourceserver): Add endpoint to fetch linked packages for a release
+* `db5ee473d` feat(kc): update KC UserGroup if exists in CouchDB
+* `f935901b8` feat(attachmentUsage): Store Ignore Licenses for Generating License Info in Attachment Usage
+* `5916e035a` feat(attachmentUsage): Store Ignore Licenses for Generating License Info in Attachment Usage
+* `321bcb493` feat(attachmentUsage): Store Ignore Licenses for Generating License Info in Attachment Usage
+* `42e6dff0f` feat(version): Add /version endpoint to use by frontend and API only applications
+* `d18521ac8` feat(swagger): Add s runtime switch for swagger authentication
+* `4d12ca7b7` feat(Request): Show open MR to the creator
+* `3dd17445f` feat(REST): Add includeSubproject parameter to licenseInfo
+* `f4a0adbf8` feat(KeyCloak): Use UserRepository
+* `f8cefd7e8` feat(rest) : Endpoint to fetch UsageInfo for release merge
+* `8094c5a9e` feat(CR): Add pagination and filtering to clearing requests endpoint
+* `9b43ebfa7` feat(backend): enhance error logging in ComponentDatabaseHandler.getComponent
+* `c74ee8d80` feat(OSADL): use Spring flex for reactive import
+* `7dad3fdba` feat(obligations): get texts as separate nodes
+* `ce1c38c47` feat(Vulnerability): Added svm link for external id
+* `f13ea427f` feat(CycloneDX): Added null check for export SBOM
+* `54c453f83` feat(rest): enhance licenses API with missing fields and quick filter
+* `029f741ad` feat(projects): endpoint to read projects
+* `d48cef8c4` feat(vulnerabilities): search on title or CVE
+* `3bc125355` feat(rest): add ISR attachment support to licenseFileList endpoint
+* `34df8a27d` feat(rest): add attachmentId query param to licenseFileList endpoint
+* `aecaf2053` feat(xss): migrate deserialize logic to Jackson
+* `d356a4663` feat(search): add sorting index for lucene search
+* `b4834c223` feat(rest): api for importing users via a .csv file
+* `83dc08ba3` feat(ImportCDX): remove VCS URL redirection logic
+* `9d4afa6ab` feat(rest): Api endpoint to retrieve package usage count
+* `5eb295ef6` feat(rest): Get license clearing counts based on clearing status
+* `47060fe70` feat(docker): Add SW360_IMAGE var to enable custom images
+* `722d6d0c7` feat(report) : show release name under acknowledgement in readmeoss file.
+* `53a00d797` feat(project): add tags to embedded
+* `0ba195593` feat(Obligation) : Fields_missing_in_GET_PATCH_call_to_obligation_at_project_page
+* `f4f7c1ff9` feat(Obligation) : Fields_missing_in_GET_PATCH_call_to_obligation_at_project_page
+* `9ac3c44ff` feat(Rest): Added comment for package table in LinkedPakages
+* `cb4c2017e` feat(importCDX): make CDX importer compatible for non-package comps
+* `264e8a004` feat(ci): use couchdb as actions service
+* `9c0938aa4` feat(project): Add clearingRequestId to getAllProjects endpoint response
+* `c6a244828` feat(fossology): v2 endpoints refactor
+* `36a51de30` feat(release): paginate /releases endpoint
+* `a631711b0` feat(ClearingRequest): Count all non-OSS components in the CR comments
+
+### Corrections
+* `d1c7b7adb` fix(attachment): handle url-encoded filenames
+* `aa0e3e2dc` fix(component): file path traversal vulnerability.
+* `8f70ebd3c` fix(rest): add ADMIN authorization to sensitive API endpoints
+* `f3acb380d` fix(rest): Prevent NullPointerException in VulnerabilityController.getSortedList
+* `b408799ce` fix(rest): close streams in license upload/download
+* `f6510d7e3` fix(CDXImporter): Do not remove valid URL string after .git
+* `9c35d0504` fix(rest): correct OSADL license obligations error message
+* `b5ef67b8b` fix(security): Add missing @PreAuthorize annotation on OSADL import endpoint
+* `cd2dc45f4` fix(version): fix version comment
+* `5d45a48f5` fix(rest): Correct Swagger UI API request URL path
+* `be75a83e2` fix(Moderation): Prevent empty moderation requests when no release changes detected
+* `7079b715c` fix(rest): prevent silent data loss in obligation update
+* `06c98bb2a` fix(Project): LicenseClearing count to follow camelCasing
+* `e9874d9cf` fix(rest) : FilenameChanges for ComponentReport Download from Mail-URL
+* `dc6d1cb16` fix(rest): Map vcs field correctly in component update request
+* `06d7d6462` fix(controller): fix catch statement
+* `21740eda4` fix(rest): prevent null in HAL response for missing licenses
+* `e1a5efa8f` fix(attachment): Prioritize attachment filename from request body
+* `608a18578` fix: make project mainlineState field required (#3543)
+* `f93bfeeb3` fix(docs): fix broken link to Liferay setup
+* `20234d333` fix: add batch endpoint for license clearing counts to remove 502 errors
+* `0fd5d09d5` fix(KeyCloak): Organization Mapper missing in backend
+* `16a36f1cf` fix(Obligation): Fixed update obligation
+* `499def947` fix(vendors): fix search and pagination
+* `c055617fa` fix(swagger): Use the real backend, not hardcoded localhost
+* `db13b73a0` fix(clearingRequest): add missing fields
+* `acca246d8` fix(CR): Allow multiple state values in CR state param (#3570)
+* `b5484d18a` fix(rest): Add shortname field to license REST API response.
+* `a2e247a93` fix(LicenseInfo): null check for license text.
+* `bbaf2d9b9` fix(rest): Correct 'obliagtion' typo to 'obligation'
+* `a3e595109` fix(backend) : Merged release updation failure in restricted projects.
+* `8edaedc10` fix(obligation): fix the pagination /obligations
+* `47b184e77` fix(test): fix test cases for OSADL import
+* `a1ae300a4` fix(licenses): resolve OSADL import error
+* `e13121ee1` fix(obligations): new function getWithTextNodes
+* `8eebe39d9` fix(rest): allow external license references in release updates
+* `63cf6c684` fix: Disable arm64 docker builds for now
+* `fe64dad20` fix(rest) : Project Obligation should have default status "Open"
+* `8c0dc42d0` fix(licenses): create new search function
+* `17ec8de50` fix(projects): handle empty project searches
+* `168b6dd4c` fix(docs): fix doc for /network/{id}/ endpoints
+* `738123fca` fix(rest): sync CSV import with old code
+* `3fff93d20` fix(component): accept comment in requestBody
+* `482d3a056` fix(component): allow mr comment with delete
+* `19337ae09` fix(release): allow mr comment with delete
+* `5b52d84c3` fix(project): add validation for empty keys in project fields
+* `888f3e71d` fix(api): send both read and write properties
+* `8ce3bbcfe` fix(config): fix disable of API write token
+* `d4c268d3b` fix(attachments): prevent deletion of attachments shared by multiple releases
+* `30a17542e` fix(REST):null error in license info
+* `2b9385c71` fix(docker): Use the correct Thrift binary
+* `923df8c45` fix(Dockerfile): fix version of maven
+* `c7396754f` fix(docker): Remove apt cache
+* `38f7c551d` fix(docker): use new ubuntu-nobel for thrift
+* `95eaf2f15` fix(docker): fix version to mentioned tags
+* `6a43cf79b` fix(utils): check CR date >=
+* `dae41fabe` fix(script): Adding missing documentation for 062_update_packagids_to_map-py
+* `ffbd54567` fix(keycloak): use version property for maven
+* `b42052ae2` fix(Release): listing the source files names for the license in release.
+* `900da12e0` fix(jackson): split versions for annotation
+* `05ae5908d` fix(REST): 500 internal server error on deleting a pkg linked to a release
+* `82c192a76` fix(script): Modified script to include limit for fetching the query result
+* `688ca8591` fix(CDXImport): Trim VCS URLs before processing
+* `196fbbaeb` fix(vulnerability): default sort with lastUpdated
+* `7b905c972` fix(sbom-import): handle invalid VCS URLs in SBOM-import
+* `6f9d65572` fix(test): fix test for LicenseTest
+* `e24572f42` fix(project-controller): Prevent NPE when generating license info
+* `0e35e4a98` fix(spdx): fixed the spdx import error
+* `99a92ed5d` fix(vulnerability): use actual field name for sort
+* `fd6b6f4f4` fix(user): use actual field name for sort
+* `182542e88` fix(project): use actual field name for sort
+* `d6987d24b` fix(component): use actual field name for sort
+* `8c80caa5a` fix(fossology): fix exception handling
+* `502c90062` fix(rest) : Avoid multiple entries of same license in ReadMeOSS generated from SW360 for html download
+* `1ec23291f` fix(rest) : Check vendor usage before delete
+* `1054d7ef6` fix(sbom): add support for older CycloneDX XML/JSON format
+* `2c05801a6` fix(mockito): add mockito as javaagent
+* `28ce1de34` fix(spring-security): replace deprecated method
+* `fbe0c2710` fix(spring): deprecated MockBean with MockitoBean
+
+### Infrastructure
+* `ee0f71a0a` chore(deps): bump github/codeql-action from 4.32.2 to 4.32.3
+* `b384406d7` chore(deps): bump docker/build-push-action from 6.18.0 to 6.19.2
+* `d816a53ef` docs: correct install-thrift.sh path in README
+* `e003dba55` refactor(rest): migrate RequestMapping(method=...) to composed mapping annotations
+* `90238bfc1` docs: clarify build requirements for partial builds
+* `147c14a18` chore(deps): bump github/codeql-action from 4.32.0 to 4.32.2
+* `cb5c78484` chore(deps): bump step-security/harden-runner from 2.14.1 to 2.14.2
+* `c774d19c1` chore(deps): bump step-security/harden-runner from 2.14.0 to 2.14.1
+* `4120ded19` chore(deps): bump github/codeql-action from 4.31.11 to 4.32.0
+* `af43be260` chore(deps): bump docker/login-action from 3.6.0 to 3.7.0
+* `1f09c6db2` chore(deps): bump actions/cache from 5.0.2 to 5.0.3
+* `ba9cb335e` chore(deps): bump org.apache.commons:commons-text from 1.14.0 to 1.15.0
+* `588a377c2` chore(deps): bump org.assertj:assertj-core from 3.27.5 to 3.27.7
+* `a667b7367` chore(deps): bump actions/checkout from 6.0.1 to 6.0.2
+* `a5c8a17ee` chore(deps): bump actions/setup-java from 5.1.0 to 5.2.0
+* `025c5af93` chore(deps): bump github/codeql-action from 4.31.10 to 4.31.11
+* `f27f58f59` chore(deps): bump webiny/action-conventional-commits from 1.3.0 to 1.3.1
+* `208ea1bc2` chore(deps): bump keycloak.version from 26.4.1 to 26.5.2
+* `5d4c157f6` chore(keycloak): add the terraform scripts for KC
+* `8680fc330` refactor(kc): consolidate constants
+* `9ce9022cf` chore(kc): rearrange code
+* `72d56c93b` refactor(rest): Replace logging anti-patterns with proper Log4j2 logging
+* `05a8f84a8` docs: fix grammar in README
+* `f9d8f2b70` chore(deps): update jackson-annotations-2.21
+* `d9e8e3ef9` chore(deps): bump jackson.version from 2.20.1 to 2.21.0
+* `7aece9120` chore(deps): bump github/codeql-action from 4.31.9 to 4.31.10
+* `ff7a1f88a` chore(deps): bump actions/cache from 5.0.1 to 5.0.2
+* `2f33c6945` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `2f84d7b00` chore(swagger): Allow get /version endpoint unathenticated
+* `d7b285fd1` chore(deps): bump com.jayway.jsonpath:json-path from 2.9.0 to 2.10.0
+* `b5361804c` chore(license): Add final modifier to CONTENT_TYPE constant
+* `55b782344` chore(rest): Remove outdated TODO comment from Sw360AuthenticationProvider
+* `987b43549` docs(rest): Add OpenAPI examples for MAP value parameters
+* `65be75a82` chore(deps): bump org.mockito:mockito-core from 5.20.0 to 5.21.0
+* `30daf13b2` chore(deps): bump org.glassfish.jaxb:jaxb-runtime from 4.0.5 to 4.0.6
+* `c4603ae62` chore(importer): Remove obsolete commented-out code in ComponentCSVRecord
+* `1e247af77` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `88f2ca3b8` chore(deps): bump org.spdx:java-spdx-library from 2.0.1 to 2.0.2
+* `caf70e508` chore(deps): revert authorization server to 1.5.5
+* `cdcec8560` chore(deps): bump org.springframework.security:spring-security-oauth2-authorization-server
+* `635f5d208` chore(deps): bump actions/cache from 4.3.0 to 5.0.1
+* `27f9adeb0` chore(deps): bump docker/setup-buildx-action from 3.11.1 to 3.12.0
+* `745268653` chore(deps): bump github/codeql-action from 4.31.7 to 4.31.9
+* `cc2d4dff1` chore(deps): bump step-security/harden-runner from 2.13.3 to 2.14.0
+* `a2e68ff75` chore(deps): bump actions/upload-artifact from 5.0.0 to 6.0.0
+* `5264f7b21` chore(deps): bump org.ow2.asm.version from 9.9 to 9.9.1
+* `d0fbb28f8` chore(deps): bump commons-codec:commons-codec from 1.19.0 to 1.20.0
+* `52c85f0b4` chore(deps): bump org.apache.logging.log4j:log4j-core
+* `b1e780fe8` chore(deps): bump github/codeql-action from 4.31.4 to 4.31.7
+* `63d71be5c` chore(deps): bump actions/checkout from 6.0.0 to 6.0.1
+* `9ef3d065f` chore(deps): bump step-security/harden-runner from 2.13.2 to 2.13.3
+* `60161fcb4` chore(deps): bump actions/setup-java from 5.0.0 to 5.1.0
+* `7dcc43477` chore(deps): bump docker/metadata-action from 5.9.0 to 5.10.0
+* `076ea9f15` chore(deps): bump org.apache.maven.plugins:maven-jar-plugin
+* `f246d2a62` chore(deps): bump com.ibm.cloud:cloudant from 0.10.9 to 0.10.12
+* `d890b6ee2` chore(deps): bump actions/dependency-review-action from 4.8.1 to 4.8.2
+* `5f21f2f97` chore(deps): bump actions/checkout from 5.0.0 to 6.0.0
+* `7485efab6` chore(deps): bump github/codeql-action from 4.31.2 to 4.31.4
+* `2f946e1a8` chore(deps): bump org.apache.maven.plugins:maven-scm-plugin
+* `3dfa84275` chore(deps): bump poi.version from 5.4.1 to 5.5.0
+* `ede4ffe11` chore(deps): bump org.apache.commons:commons-lang3 from 3.19.0 to 3.20.0
+* `29f4c1c89` chore(search): refactor code
+* `080db8af9` test(xss): XSS test for project and config body
+* `ac67546e9` chore(deps): bump org.cyclonedx:cyclonedx-core-java
+* `ba5bc9aa5` chore(deps): bump docker/setup-qemu-action from 3.6.0 to 3.7.0
+* `f6153cfdd` chore(deps): bump docker/metadata-action from 5.8.0 to 5.9.0
+* `ec902a6bd` chore(deps): bump step-security/harden-runner from 2.13.1 to 2.13.2
+* `7c82d7b9a` chore(deps-dev): bump net.bytebuddy:byte-buddy from 1.17.7 to 1.17.8
+* `3c4c7bec9` chore(deps): bump jackson.version from 2.20.0 to 2.20.1
+* `03f664811` chore(deps): bump spring-security.version from 6.5.4 to 6.5.6
+* `3fd84198c` chore(deps): bump org.mockito:mockito-core from 5.19.0 to 5.20.0
+* `acbc84553` chore(deps): bump github/codeql-action from 4.31.0 to 4.31.2
+* `61179b2a3` chore(deps): bump org.apache.maven.plugins:maven-enforcer-plugin
+* `97f9c1b97` chore(deps): bump org.jetbrains:annotations from 26.0.2 to 26.0.2-1
+* `037502291` chore(deps): bump org.apache.maven.plugins:maven-war-plugin
+* `ba8fdda8e` chore(deps): bump springframework.version from 6.2.11 to 6.2.12
+* `2b1dcd81c` chore(deps): bump github/codeql-action from 4.30.8 to 4.31.0
+* `0fb98335c` chore(deps): bump actions/upload-artifact from 4.6.2 to 5.0.0
+* `8568e57dc` chore(deps): bump com.ibm.cloud:cloudant from 0.10.8 to 0.10.9
+* `f0a5c5723` chore(deps): bump keycloak.version from 26.4.0 to 26.4.1
+* `b5cc091d4` chore(deps): bump org.apache.maven.plugins:maven-compiler-plugin
+* `991085b43` chore(deps): bump org.spdx:java-spdx-library from 2.0.0 to 2.0.1
+* `9073eaa60` chore(deps): bump github/codeql-action from 3.30.6 to 4.30.8
+* `30a385223` chore(deps): bump actions/dependency-review-action from 4.8.0 to 4.8.1
+* `42455f180` chore(deps): bump org.apache.httpcomponents.client5:httpclient5
+* `55ff13fc2` chore(deps): bump log4j2.version from 2.25.1 to 2.25.2
+* `f6706b0cd` chore(deps): bump keycloak.version from 26.3.4 to 26.4.0
+* `2650b482f` chore(deps): bump org.ow2.asm.version from 9.8 to 9.9
+* `e035f05af` docs(readme): update versions — Java 11→21, Thrift 0.16→0.20
+* `3f78b60be` docs(project): update doc for saveAttachmentUsages
+* `03a0b09cc` chore(deps): bump org.apache.commons:commons-lang3 from 3.18.0 to 3.19.0
+* `d2d456cd1` chore(deps): bump maven and tomcat
+* `80d9346f6` docs: Link to Homepage in Readme.md
+* `89a4ac168` chore(deps): bump github/codeql-action from 3.30.5 to 3.30.6
+* `dce515d03` chore(deps): bump ossf/scorecard-action from 2.4.2 to 2.4.3
+* `eba833f97` chore(deps): bump docker/login-action from 3.5.0 to 3.6.0
+* `364c73be3` chore(deps): bump org.cyclonedx:cyclonedx-core-java
+* `691193f8f` chore(deps): bump org.apache.maven.plugins:maven-dependency-plugin
+* `c70f2193c` chore(deps): bump com.tngtech.jgiven:jgiven-maven-plugin
+* `2fa88ff50` chore(deps): bump httpcore5.version from 5.3.5 to 5.3.6
+* `49386ab84` chore(deps): bump tomcat from `0e81ad1` to `2b3894d`
+* `c04411ebf` chore(deps): bump actions/dependency-review-action from 4.7.3 to 4.8.0
+* `285270de9` chore(deps): bump actions/cache from 4.2.4 to 4.3.0
+* `e07ab2850` chore(deps): bump github/codeql-action from 3.30.3 to 3.30.5
+* `c5d8b1e03` chore(deps): bump maven from `674ec81` to `42f00a9`
+* `a78642404` chore(deps): bump org.codehaus.mojo:versions-maven-plugin
+* `04e417557` chore(deps): bump jakarta.xml.bind:jakarta.xml.bind-api
+* `58f56fa91` chore(deps): bump com.google.code.gson:gson from 2.13.1 to 2.13.2
+* `818b73af3` chore(deps): bump tomcat from `5d1ecfc` to `0e81ad1`
+* `7b32c18bb` chore(deps): bump maven from `4983394` to `674ec81`
+* `51262a00d` chore(deps): bump org.apache.maven.plugins:maven-javadoc-plugin
+* `18496943f` chore(deps): bump org.assertj:assertj-core from 3.27.4 to 3.27.5
+* `8a30960d8` chore(deps): bump com.google.guava:guava from 33.4.8-jre to 33.5.0-jre
+* `dd6cbe2b4` chore(deps): bump keycloak.version from 26.3.3 to 26.3.4
+* `9733c7ff3` chore(deps): bump org.springframework.security:spring-security-core
+* `2a74f543f` chore(deps): bump springframework.version from 6.2.10 to 6.2.11
+* `0ed53a485` chore(deps): bump github/codeql-action from 3.30.1 to 3.30.3
+* `787a5a511` chore(deps): bump step-security/harden-runner from 2.13.0 to 2.13.1
+* `c88c7070f` chore(deps): bump maven from `1feb8b0` to `4983394`
+* `eea605081` chore(deps): bump tomcat from `e72d685` to `5d1ecfc`
+* `009dfec08` chore(deps): bump org.apache.maven.plugins:maven-surefire-plugin
+* `b4c3467fe` chore(deps): bump org.apache.maven.plugins:maven-failsafe-plugin
+* `ff9501646` chore(deps): bump springdoc-openapi-stater-common.version
+* `d7b39ca68` chore(deps): bump jackson.version from 2.19.2 to 2.20
+* `4d5e1ba15` chore(deps): bump com.ibm.cloud:cloudant from 0.10.7 to 0.10.8
+* `ce453b788` chore(deps): bump com.ibm.cloud:cloudant from 0.10.6 to 0.10.7
+* `691eb7520` chore(deps): bump github/codeql-action from 3.29.11 to 3.30.1
+* `1f51e267f` chore(deps): bump tomcat from `6df06d4` to `e72d685`
+* `14756cbd2` chore(deps): bump maven from `fe1de86` to `1feb8b0`
+* `dfbaca8df` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `c3f221fb2` chore(deps): bump httpcore5.version from 5.3.4 to 5.3.5
+* `3f9b797d8` chore(deps): bump actions/dependency-review-action from 4.7.2 to 4.7.3
+* `3bfd8c33d` chore(deps): bump org.springframework.security:spring-security-oauth2-authorization-server
+* `fcfedbc45` chore(deps): bump springdoc-openapi-stater-common.version
+* `8b95ca19f` test(integration): Added DatabaseSanitation tests in DatabaseSanitationTest
+* `a5b70d0d8` test(integration): Added ClearingRequest tests in ClearingRequestTest
+* `38b7113c6` test(integration): Added ModerationRequest tests in ModerationRequestTest
+* `fa7ff49b5` chore(deps): bump keycloak.version from 26.3.2 to 26.3.3
+* `f9ba18add` chore(deps): bump github/codeql-action from 3.29.9 to 3.29.11
+* `24c6bb699` chore(deps): bump actions/dependency-review-action from 4.7.1 to 4.7.2
+* `991a5a3c4` chore(deps): bump actions/setup-java from 4.7.1 to 5.0.0
+* `9f220063a` chore(deps): bump spring-security.version from 6.5.2 to 6.5.3
+* `279630a34` chore(deps): bump org.mockito:mockito-core from 5.18.0 to 5.19.0
+* `ceed3661f` chore(deps): bump actions/checkout from 4.2.2 to 5.0.0
+* `8eb6d2562` chore(deps): bump github/codeql-action from 3.29.8 to 3.29.9
+* `41e2e495c` chore(deps): bump maven from `1829262` to `fe1de86`
+* `0f5ee9371` chore(deps): bump tomcat from `a879b8c` to `6df06d4`
+* `b2fab679a` chore(deps): bump org.apache.maven.plugins:maven-javadoc-plugin
+* `4fabbde18` chore(deps-dev): bump net.bytebuddy:byte-buddy from 1.17.6 to 1.17.7
+* `eed1c127b` chore(deps): bump springframework.version from 6.2.9 to 6.2.10
+* `587678bd2` test(integration): Added Department tests in DepartmentTest
+* `4aac59d1f` test(integration): Added ChangeLog tests in ChangeLogTest
+* `2454ace69` test(integration): Added ChangeLog tests in ChangeLogTest
+* `22d5dfc24` chore(deps): bump commons-cli:commons-cli from 1.9.0 to 1.10.0
+* `0221a7ebb` chore(deps): bump net.minidev:json-smart from 2.5.2 to 2.6.0
+* `b02a90740` chore(deps): bump org.apache.commons:commons-csv from 1.14.0 to 1.14.1
+* `d9508525d` chore(deps): bump com.ibm.cloud:cloudant from 0.10.4 to 0.10.6
+* `ea8853493` chore(deps): bump org.assertj:assertj-core from 3.27.3 to 3.27.4
+* `476314ba1` chore(deps): bump github/codeql-action from 3.29.7 to 3.29.8
+* `ec8ca3227` chore(deps): bump actions/cache from 4.2.3 to 4.2.4
+* `ae7736639` chore(deps): bump jakarta.mail:jakarta.mail-api from 2.0.1 to 2.0.2
+* `8bbf257df` chore(deps): bump docker/login-action from 3.4.0 to 3.5.0
+* `f6f332aff` chore(deps): bump tomcat from `52a7c26` to `a879b8c`
+* `027f72d47` chore(deps): bump maven from `fb525d5` to `1829262`
+* `f08fbe9a4` chore(deps): bump com.sun.mail:jakarta.mail from 2.0.1 to 2.0.2
+* `558851af1` perf(project): improve indexing situation
+* `21c220769` test(integration): Added Obligation tests in ObligationTest
+* `38b38b55e` chore(deps): bump docker/metadata-action from 5.7.0 to 5.8.0
+* `4fdcbb1b1` chore(deps): bump github/codeql-action from 3.29.4 to 3.29.5
+* `d09cd0297` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `c2a33124b` chore(deps): bump org.apache.commons:commons-compress
+* `f6c54f1ae` chore(deps): bump org.apache.commons:commons-text from 1.13.1 to 1.14.0
+* `e7863401c` test(integration): Added Package tests in PackageTest
+* `8805a7e06` test(integration): Added License integration tests in LicenseTest
+* `fc27fb586` test(integration): Added Schedule integration tests in ScheduleTest
+* `318982c98` test(integration): Added Vulnerability integration tests in VulnerabilityTest
+* `d96e40487` test(integration): Added Configuration integration tests in ConfigurationsTest
+* `d9534fd8b` test(integration): Added Vendor integration tests in VendorTest
+* `883f6c27b` test(integration): added additional importExport integration tests in ImportExportTest
+* `e0d14130c` test(integration): added importExport integration tests in ImportExportTest
+* `4d3cc9b2b` chore(deps): bump commons-io:commons-io from 2.19.0 to 2.20.0
+* `4fd4d376d` chore(deps): bump commons-codec:commons-codec from 1.18.0 to 1.19.0
+* `557db2018` chore(deps): bump spring-security.version from 6.5.1 to 6.5.2
+* `ce612cd3c` chore(deps): bump keycloak.version from 26.3.1 to 26.3.2
+* `fd154c8ba` chore(deps): bump github/codeql-action from 3.29.2 to 3.29.4
+* `8b0e1c9c9` test(integration): added Health integration tests in HealthTest
+* `0e9d91f0a` test(integration): added attachment integration tests in AttachementTest
+* `418990544` test(integration): added project integration tests in ProjectTest
+* `928d8ae6f` chore(utils): fix exception logging in readConfig
+* `1b75cd44f` chore(deps): bump step-security/harden-runner from 2.12.2 to 2.13.0
+* `fc8619f0d` chore(deps): bump maven from `615bd38` to `fb525d5`
+* `34a3e0d76` chore(deps): bump tomcat from `5cfc710` to `52a7c26`
+* `a897dcf8e` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `bf022a969` chore(deps): bump org.apache.maven.plugins:maven-enforcer-plugin
+* `17ec2348a` chore(deps): bump jackson.version from 2.19.1 to 2.19.2
+* `4bc606174` chore(deps): bump springframework.version from 6.2.8 to 6.2.9
+* `7bb894cce` test(integration): added release integration tests in ReleaseTest
+* `f8c8df2cb` chore(datahandler): migrate deprecated APIs
+* `ea7925a57` test(integration): added component integration tests in ComponentTest (#3263)
+* `ab0f05952` test(integration): added user integration tests in UserTest
+* `acc4e2a04` chore(test): upgrade JUnit test cases
+* `5125fb4e0` docs(licenseinfo): better excp for wrong generator
+* `e164ab4cf` chore(deps): bump org.apache.maven.plugins:maven-enforcer-plugin
+* `0be793f84` chore(deps): bump tomcat from `5ea8fbd` to `5cfc710`
+* `23e3f82c4` chore(deps): bump keycloak.version from 26.3.0 to 26.3.1
+* `8ba215768` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `b657b19b7` chore(deps): bump log4j2.version from 2.25.0 to 2.25.1
+* `9ac53148f` chore(deps): bump org.apache.commons:commons-lang3 from 3.17.0 to 3.18.0
+* `0ddfe73d6` test(restdocs): add unit test for downloadUsers endpoint in ImportExportSpecTest
+
+## sw360-20.0.0-beta
+This is a beta release for the next major version 20.0.0 of SW360. The release
+includes numerous features, corrections, and improvements over the previous
+release 19.2.0.
+
+This release serves as a preview of the upcoming major version 20.0.0 for
+testing and should not be used in production environments.
+
+Highlight of the changes includes:
+* Various vulnerabilities and security fixes.
+* More endpoints created for the support of new UI project.
+* Improvements on KeyCloak sync and user management.
+
+### Credits
+
+The following GitHub users have contributed to the source code since the last
+release (in alphabetical order):
+
+```
+> Achal Jhawar <35405812+achaljhawar@users.noreply.github.com>
+> bibhuti230185 <bibhuti230185@gmail.com>
+> Bibhuti Bhusan Dash <bibhuti230185@gmail.com>
+> deo002 <oberoidearsh@gmail.com>
+> dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+> Farooq Fateh Aftab <farooq-fateh.aftab@siemens.com>
+> Gaurav Mishra <mishra.gaurav@siemens.com>
+> harshitg927 <121371860+harshitg927@users.noreply.github.com>
+> Himanshu A Garode <himanshu2006garode@gmail.com>
+> Kaushlendra Pratap <kaushlendra-pratap.singh@siemens.com>
+> Keerthi B L <keerthi.bl@siemens.com>
+> Mohamed Hanafy <mohamed.hanfy.dev@outlook.com>
+> Nikesh kumar <kumar.nikesh@siemens.com>
+> nikesh <kumar.nikesh@siemens.com>
+> pranayh24 <pranayheda24@gmail.com>
+> Rajnish Kumar <22it3036@rgipt.ac.in>
+> Rudra Chopra <prabhuchopra@gmail.com>
+> Sameed Ahmad <141239852+sameed20@users.noreply.github.com>
+> sathwik-y <sathwik.yellapragada@gmail.com>
+> suvrat1629 <suvrat1629@gmail.com>
+```
+
+Please note that also many other persons usually contribute to the project with
+reviews, testing, documentations, conversations or presentations.
+
+### Features
+* `080b277bb` feat(importCDX): enhance importer VCS sanitization
+* `c87d2c6b2` feat(vuln): pagination on vulnerabilities endpoint
+* `d588c924d` feat(project): use DB side pagination
+* `46cc985bd` feat(component): use DB side pagination
+* `13a9c716a` feat(datahandler): prepare for paginated queries
+* `0ba6dd02e` feat(docs): add other response types in docs
+* `e4103eb3e` feat(keycloak): set externalId on sync
+* `85986c781` feat(Keycloak): Enhance user synchronization with batch processing and retry logic
+* `e01a4e9f6` feat(core): introduce quick search functionality for vulnerabilities
+* `59f5c49fd` feat(config): add old UI configs
+* `44e6f563f` feat(config): move more configs to DB
+* `64158b1bd` feat(rest): new Security user role.
+* `7be4e0675` feat(Release): Need createdBy field for list of releases under a component
+* `b25398586` feat(Release) : Automate_check_for_Source_Code_Download_URL_1650
+* `178743477` feat(rest): endpoint to get fossology connection configuration data.
+* `310434d5e` feat(obligation): add field comparators
+* `a75e59bbb` feat(rest) : QuickFilter for Obligation page
+* `bcf5141a7` feat(rest) : Completed code for advance-search for packages
+* `3b929a059` feat(Rest): Advance search for packages
+* `3ca1d5b6e` feat(rest): add SBOM file validation for SPDX and CycloneDX formats
+* `bbb4c6c01` feat(rest): endpoint to get src file list for the licences.
+* `24d9d7df8` feat(keycloak): allow thrift loc to be configured
+* `1480c0c75` feat(rest): add additional fields to clearing request endpoint.
+* `c4b541310` feat(rest): getting license info from release attachment's content id.
+* `d1a51acfa` feat(rest): download users endpoint in CSV format
+* `b9be6bace` feat(test): add test for invalid /mergeComponent
+* `93928eeab` feat(component): validate merge selection
+* `2086cf14d` feat(Rest): adding filter search in license clearing get endpoint.
+* `d7a6e4d28` feat(ECC): Add field containsCryptography in Release ECC-Backend
+* `35aa150eb` feat(rest): fossology attachment configs to API
+* `85e406126` feat(rest): added AttachmentCleanUpControllerTest
+* `eae223d9a` feat(rest): added search API integration tests
+* `f5493594f` feat(rest): added tests for ecc rest endpoints
+
+### Corrections
+* `d07f0d922` fix(rest): add documentation for license types usage in admin view.
+* `37c9a5951` fix(resource): no config read at init
+* `1e63f38dc` fix(test): disable ssl health endpoint not used
+* `999eccda1` fix(xss): test for null value for strip
+* `c75442858` fix(spring): upgrade to 3.5.3 from 3.3.3
+* `82e16b696` fix(rest): add license type usage check and restructure delete API response
+* `8fe11c797` fix(rest): add vendor existence validation in getReleases endpoint
+* `18ac76e0c` fix(rest): handle missing component ID with 404 response.
+* `176a70f56` fix(release): throw appropriate exceptions
+* `de970cafd` fix(rest): add endpoint to  merge two releases.
+* `34ff1494e` fix(controller): fix access for SECURITY_USER
+* `7722ae9b0` fix(component): skip should accept URLs
+* `3831b8a06` fix(Rest): Only admin users can delete license types in the admin license tab.
+* `a6dec7574` fix(svm): SVMSyncHandler dont return loop
+* `547611a75` fix(rest): fix permission check
+* `48893d23a` Fix(Rest): Add quick search for license type.
+* `f1ec624ad` fix(bug): Fixed pagination at projects table (#3069)
+* `6f6eb2021` Add proper self-link with project ID in licenseClearing endpoint (#3135)
+* `7a2680b80` fix(rest) : Missing request param for downloadlicenseinfo report
+* `5432c35cd` fix(components): read id for ComponentDTO
+* `aa2ca47ef` fix(component): ComponentDTO for /splitcomponent
+* `a249b7ef1` fix(component): read list of attachments for merge
+* `ab5c62292` fix(rest): improve error messages for invalid SBOM file imports
+* `4e26b0553` fix(cloudant): upgrade to 0.10.3 to fix gson issue
+* `f55dd3b5f` fix(components): allow field createdBy
+* `43c5d1de9` fix(deps): add com.sun.mail:jakarta.mail:2.0.1
+* `348337a8f` fix(spdx): fix deps for spdx-library v2
+* `c8a756b10` fix(sw360UserGroup): add missing CLEARING_EXPERT
+* `cdc2b5dcd` fix(Security) : KeyCloak integration #3087
+* `f0f6ac7d6` fix(backend): fix FossologyConfig
+* `2bfa0ae41` fix(fossology): fetch download timeout from ConfigContainer repository
+* `68236f17d` fix(docs): update scripts/utilities/README.md Documentation (#3066)
+* `586bdc3bb` fix(project): return updated releases
+* `bdf7648f8` fix(docs): fix OpenAPI docs /fossology/saveConfig
+
+### Infrastructure
+* `cce5b2cf9` chore(release): 20.0.0 beta release
+* `4461e9ee1` chore(deps): bump org.dom4j:dom4j from 2.1.4 to 2.2.0
+* `0f9a61592` chore(deps): bump step-security/harden-runner from 2.12.1 to 2.12.2
+* `d52f78f2c` chore(deps): bump github/codeql-action from 3.29.1 to 3.29.2
+* `2f76f4fc9` chore(deps): bump org.apache.maven.plugins:maven-gpg-plugin
+* `3ddcf3e74` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `d1a9ce73a` chore(deps): bump keycloak.version from 26.2.5 to 26.3.0
+* `852f097f8` chore(deps): bump tomcat from `d2f9bdc` to `5ea8fbd`
+* `49d03be83` chore(deps): bump maven from `d9f3089` to `615bd38`
+* `8bd566560` perf(vuln): use views instead of mango query
+* `7ca79f030` chore(rest): paginate users endpoint on DB
+* `4ee6294b9` docs(controller): responses for /licensetype/usage
+* `e72f8207a` chore(deps): bump maven from `3a4ab32` to `d9f3089`
+* `1724114c4` chore(deps): bump github/codeql-action from 3.29.0 to 3.29.1
+* `94d5ee4fd` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `dd8fe8dec` chore(deps): bump org.springframework.security:spring-security-oauth2-authorization-server
+* `b7fc0e8a5` chore(deps): bump log4j2.version from 2.24.3 to 2.25.0
+* `3d4f3d68b` chore(deps-dev): bump net.bytebuddy:byte-buddy from 1.17.5 to 1.17.6
+* `384f0c4d7` chore(deps): bump spring-security.version from 6.5.0 to 6.5.1
+* `df8addc43` chore(deps): bump docker/setup-buildx-action from 3.10.0 to 3.11.1
+* `ea9e7ab95` chore(deps): bump tomcat from `f55695f` to `d2f9bdc`
+* `64ef2aacf` chore(deps): bump org.wiremock:wiremock from 3.13.0 to 3.13.1
+* `dccbe71fd` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `930c7b33d` chore(deps): bump springdoc-openapi-stater-common.version
+* `ee35897ba` chore(deps): bump jackson.version from 2.19.0 to 2.19.1
+* `76464f7ba` chore(deps): bump github/codeql-action from 3.28.19 to 3.29.0
+* `388c0b024` chore(deps): bump step-security/harden-runner from 2.12.0 to 2.12.1
+* `d4814d4dd` chore(deps): bump org.springframework:spring-web from 6.2.7 to 6.2.8
+* `72787f9c2` chore(deps): bump org.codehaus.mojo:build-helper-maven-plugin
+* `849b1bbca` chore(deps): bump com.ibm.cloud:cloudant from 0.10.3 to 0.10.4
+* `0bd9c6bd3` chore(deps): bump github/codeql-action from 3.28.18 to 3.28.19
+* `98be9010b` chore(deps): bump maven from `933900d` to `3a4ab32`
+* `5bb6a9c5c` chore(deps): bump tomcat from `8058582` to `f55695f`
+* `09ababc26` chore(deps): bump ossf/scorecard-action from 2.4.1 to 2.4.2
+* `d6f94b768` chore(deps): bump docker/build-push-action from 6.17.0 to 6.18.0
+* `39d02c7ac` chore(deps): bump keycloak.version from 26.2.4 to 26.2.5
+* `2f537d19a` chore(deps): bump io.github.git-commit-id:git-commit-id-maven-plugin
+* `24f1e19f8` chore(deps): bump org.mockito:mockito-core from 5.17.0 to 5.18.0
+* `6c06523db` chore(deps): bump org.apache.httpcomponents.client5:httpclient5
+* `c2bfc63c2` chore(deps): bump spring-security.version from 6.4.5 to 6.5.0
+* `9b3c09f76` chore(mail): update MR email to include docname
+* `5dd802ff4` chore(mail): added more information to the mails
+* `57f5de1a2` chore(deps): bump actions/dependency-review-action from 4.7.0 to 4.7.1
+* `cfcc346f6` chore(deps): bump docker/build-push-action from 6.16.0 to 6.17.0
+* `c7bc2e410` chore(deps): bump github/codeql-action from 3.28.17 to 3.28.18
+* `4719c400a` chore(deps): bump tomcat from `7edbb52` to `8058582`
+* `e51667a87` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `61e34e9b6` chore(deps): bump org.json:json from 20250107 to 20250517
+* `67e95b77a` chore(deps): bump springframework.version from 6.2.6 to 6.2.7
+* `c9252e8b1` chore(deps): bump org.springframework.security:spring-security-oauth2-authorization-server
+* `ce650279f` chore(deps): bump maven from `2e3824a` to `933900d`
+* `facca5607` chore(deps): bump tomcat from `74925aa` to `7edbb52`
+* `b670b4958` chore(deps): bump actions/dependency-review-action from 4.6.0 to 4.7.0
+* `aaf3821a4` chore(deps): bump org.apache.commons:commons-text from 1.13.0 to 1.13.1
+* `20596228d` chore(deps): bump org.apache.commons:commons-csv from 1.13.0 to 1.14.0
+* `2ca22b9c0` chore(deps): bump org.apache.httpcomponents.client5:httpclient5
+* `7eccc398e` chore(deps): bump keycloak.version from 26.2.2 to 26.2.4
+* `5f54415ad` chore(deps): bump springdoc-openapi-stater-common.version
+* `5bb711b65` chore(deps): bump com.google.code.gson:gson from 2.12.1 to 2.13.1
+* `5fcadd5f0` chore(deps): bump github/codeql-action from 3.28.16 to 3.28.17
+* `2e88f3a74` chore(deps): bump commons-io:commons-io from 2.18.0 to 2.19.0
+* `bfe0f1a85` chore(deps): bump org.apache.maven.plugins:maven-failsafe-plugin
+* `84dcd3432` chore(deps): bump org.wiremock:wiremock from 3.12.1 to 3.13.0
+* `d19d4aa71` chore(deps): bump keycloak.version from 26.2.1 to 26.2.2
+* `114126423` chore(deps): update to spdx-tools:2.0.1
+* `6cc01fa3e` chore(deps): bump org.spdx:java-spdx-library from 1.1.1 to 2.0.0
+* `b67e732d6` chore(deps): bump maven from `887820a` to `2e3824a`
+* `6fc499912` chore(deps): bump tomcat from `0c14861` to `74925aa`
+* `81c6940e4` chore(deps): bump spring-security.version from 6.4.4 to 6.4.5
+* `c0c32f235` chore(deps): bump org.apache.commons:commons-collections4
+* `eec18988a` chore(deps): bump jackson.version from 2.18.3 to 2.19.0
+* `42ee8c79f` chore(deps): bump keycloak.version from 26.2.0 to 26.2.1
+* `0423e184c` chore(deps): bump step-security/harden-runner from 2.11.1 to 2.12.0
+* `7d505b27e` chore(deps): bump github/codeql-action from 3.28.15 to 3.28.16
+* `9dc05434b` chore(deps): bump docker/build-push-action from 6.15.0 to 6.16.0
+* `b70e6e036` chore(authorizationserver): remove unused vars
+* `5431f4203` chore(deps): bump springframework.version from 6.2.5 to 6.2.6
+* `eb02b9a35` chore(deps): bump org.mockito:mockito-core from 5.16.1 to 5.17.0
+* `c2684b619` chore(deps): bump com.google.guava:guava from 33.4.0-jre to 33.4.8-jre
+* `2964da147` chore(deps-dev): bump net.bytebuddy:byte-buddy from 1.15.11 to 1.17.5
+* `76cdbacdf` chore(deps): bump tomcat from `1374a56` to `0c14861`
+* `a69bf2f49` chore(deps): bump maven from `f1e4a85` to `887820a`
+* `bc42ed8cb` chore(deps): bump joda-time:joda-time from 2.13.0 to 2.14.0
+* `7e84f9f35` chore(deps): bump org.wiremock:wiremock from 3.12.0 to 3.12.1
+* `bc395fbe1` chore(deps-dev): bump nl.jqno.equalsverifier:equalsverifier
+* `f85d5db5f` chore(deps): bump keycloak.version from 26.1.4 to 26.2.0
+* `f25a3c9b9` chore(deps): bump commons-codec:commons-codec from 1.17.1 to 1.18.0
+* `c1cd81235` chore(deps): bump actions/setup-java from 4.7.0 to 4.7.1
+* `85654d998` chore(deps): bump github/codeql-action from 3.28.13 to 3.28.15
 
 ## sw360-19.2.0
 This minor release includes numerous features, corrections, and improvements

@@ -65,8 +65,10 @@ public class ProjectHandler implements ProjectService.Iface {
     private final ProjectSearchHandler searchHandler;
 
     ProjectHandler() throws IOException {
-        handler = new ProjectDatabaseHandler(DatabaseSettings.getConfiguredClient(), DatabaseSettings.COUCH_DB_DATABASE, DatabaseSettings.COUCH_DB_ATTACHMENTS);
-        searchHandler = new ProjectSearchHandler(DatabaseSettings.getConfiguredClient(), DatabaseSettings.COUCH_DB_DATABASE);
+        handler = new ProjectDatabaseHandler(DatabaseSettings.getConfiguredClient(), DatabaseSettings.COUCH_DB_DATABASE,
+                DatabaseSettings.COUCH_DB_ATTACHMENTS);
+        searchHandler = new ProjectSearchHandler(DatabaseSettings.getConfiguredClient(),
+                DatabaseSettings.COUCH_DB_DATABASE);
     }
 
     ProjectHandler(Cloudant client, String dbName, String attchmntDbName) throws IOException {
@@ -89,8 +91,15 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<Project> refineSearch(String text, Map<String, Set<String>> subQueryRestrictions, User user) throws TException {
+    public List<Project> refineSearch(String text, Map<String, Set<String>> subQueryRestrictions, User user)
+            throws TException {
         return searchHandler.search(text, subQueryRestrictions, user);
+    }
+
+    @Override
+    public Map<PaginationData, List<Project>> refineSearchPageable(String text,
+            Map<String, Set<String>> subQueryRestrictions, User user, PaginationData paginationData) throws TException {
+        return searchHandler.search(text, subQueryRestrictions, user, paginationData);
     }
 
     @Override
@@ -109,7 +118,8 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public Map<PaginationData, List<Project>> getAccessibleProjectsSummaryWithPagination(User user, PaginationData pageData) throws TException {
+    public Map<PaginationData, List<Project>> getAccessibleProjectsSummaryWithPagination(User user,
+            PaginationData pageData) throws TException {
         assertUser(user);
         return handler.getAccessibleProjectsSummary(user, pageData);
     }
@@ -127,6 +137,32 @@ public class ProjectHandler implements ProjectService.Iface {
         assertUser(user);
 
         return handler.searchByName(name, user);
+    }
+
+    @Override
+    public Map<PaginationData, List<Project>> searchProjectByNamePrefixPaginated(User user, String name,
+            PaginationData pageData) throws TException {
+        assertNotEmpty(name);
+        assertUser(user);
+
+        return handler.searchProjectByNamePrefixPaginated(user, name, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Project>> searchProjectByExactNamePaginated(User user, String name,
+            PaginationData pageData) throws TException {
+        assertNotEmpty(name);
+        assertUser(user);
+
+        return handler.searchProjectByExactNamePaginated(user, name, pageData);
+    }
+
+    @Override
+    public Map<PaginationData, List<Project>> searchAccessibleProjectByExactValues(
+            Map<String, Set<String>> subQueryRestrictions, User user, PaginationData pageData) throws TException {
+        assertUser(user);
+
+        return handler.searchAccessibleProjectByExactValues(subQueryRestrictions, user, pageData);
     }
 
     @Override
@@ -199,7 +235,8 @@ public class ProjectHandler implements ProjectService.Iface {
     // CLEARING REQUEST EMAIL //
     ////////////////////////////
     @Override
-    public AddDocumentRequestSummary createClearingRequest(ClearingRequest clearingRequest, User user, String projectUrl) throws TException {
+    public AddDocumentRequestSummary createClearingRequest(ClearingRequest clearingRequest, User user,
+            String projectUrl) throws TException {
         assertNotNull(clearingRequest);
         assertNotEmpty(projectUrl);
         assertUser(user);
@@ -216,9 +253,17 @@ public class ProjectHandler implements ProjectService.Iface {
         assertId(id);
 
         Project project = handler.getProjectById(id, user);
-        handler.addSelectLogs(project, user); 
+        handler.addSelectLogs(project, user);
         assertNotNull(project);
 
+        return project;
+    }
+
+    @Override
+    public Project getProjectByIdIgnoringVisibility(String id) throws SW360Exception {
+        assertId(id);
+        Project project = handler.getProjectByIdIgnoringVisibility(id);
+        assertNotNull(project);
         return project;
     }
 
@@ -268,21 +313,25 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public RequestSummary importCycloneDxFromAttachmentContent(User user, String attachmentContentId, String projectId) throws SW360Exception {
+    public RequestSummary importCycloneDxFromAttachmentContent(User user, String attachmentContentId, String projectId)
+            throws SW360Exception {
         assertId(attachmentContentId);
         assertUser(user);
         return handler.importCycloneDxFromAttachmentContent(user, attachmentContentId, projectId);
     }
 
     @Override
-    public RequestSummary importCycloneDxFromAttachmentContentWithReplacePackageAndReleaseFlag(User user, String attachmentContentId, String projectId, boolean doNotReplacePackageAndRelease) throws SW360Exception {
+    public RequestSummary importCycloneDxFromAttachmentContentWithReplacePackageAndReleaseFlag(User user,
+            String attachmentContentId, String projectId, boolean doNotReplacePackageAndRelease) throws SW360Exception {
         assertId(attachmentContentId);
         assertUser(user);
-        return handler.importCycloneDxFromAttachmentContent(user, attachmentContentId, projectId, doNotReplacePackageAndRelease);
+        return handler.importCycloneDxFromAttachmentContent(user, attachmentContentId, projectId,
+                doNotReplacePackageAndRelease);
     }
 
     @Override
-    public RequestSummary exportCycloneDxSbom(String projectId, String bomType, boolean includeSubProjReleases, User user) throws SW360Exception {
+    public RequestSummary exportCycloneDxSbom(String projectId, String bomType, boolean includeSubProjReleases,
+            User user) throws SW360Exception {
         assertId(projectId);
         assertUser(user);
         return handler.exportCycloneDxSbom(projectId, bomType, includeSubProjReleases, user);
@@ -303,7 +352,7 @@ public class ProjectHandler implements ProjectService.Iface {
         assertNotNull(project);
         assertIdUnset(project.getId());
         assertUser(user);
-
+        validateNoEmptyKeys(project);
         return handler.addProject(project, user);
     }
 
@@ -316,8 +365,49 @@ public class ProjectHandler implements ProjectService.Iface {
         assertNotNull(project);
         assertId(project.getId());
         assertUser(user);
-
+        validateNoEmptyKeys(project);
         return handler.updateProject(project, user);
+    }
+
+    /**
+     * Validates that the given project's Additional Role, External Url, External
+     * Ids, and Additional Data
+     * do not contain empty keys. Empty values are allowed.
+     * Throws TException if any empty key is found.
+     */
+    private void validateNoEmptyKeys(Project project) throws TException {
+        // Additional Role (roles)
+        if (project.isSetRoles() && project.getRoles() != null) {
+            for (Map.Entry<String, java.util.Set<String>> entry : project.getRoles().entrySet()) {
+                if (entry.getKey() == null || entry.getKey().trim().isEmpty()) {
+                    throw new TException("Project roles contain empty key");
+                }
+            }
+        }
+        // External Urls
+        if (project.isSetExternalUrls() && project.getExternalUrls() != null) {
+            for (Map.Entry<String, String> entry : project.getExternalUrls().entrySet()) {
+                if (entry.getKey() == null || entry.getKey().trim().isEmpty()) {
+                    throw new TException("External Urls contain empty key");
+                }
+            }
+        }
+        // External Ids
+        if (project.isSetExternalIds() && project.getExternalIds() != null) {
+            for (Map.Entry<String, String> entry : project.getExternalIds().entrySet()) {
+                if (entry.getKey() == null || entry.getKey().trim().isEmpty()) {
+                    throw new TException("External Ids contain empty key");
+                }
+            }
+        }
+        // Additional Data
+        if (project.isSetAdditionalData() && project.getAdditionalData() != null) {
+            for (Map.Entry<String, String> entry : project.getAdditionalData().entrySet()) {
+                if (entry.getKey() == null || entry.getKey().trim().isEmpty()) {
+                    throw new TException("Additional Data contains empty key");
+                }
+            }
+        }
     }
 
     @Override
@@ -328,8 +418,9 @@ public class ProjectHandler implements ProjectService.Iface {
 
         return handler.updateProject(project, user, forceUpdate);
     }
-    
-    public RequestStatus updateProjectFromModerationRequest(Project projectAdditions, Project projectDeletions, User user) {
+
+    public RequestStatus updateProjectFromModerationRequest(Project projectAdditions, Project projectDeletions,
+            User user) {
         return handler.updateProjectFromAdditionsAndDeletions(projectAdditions, projectDeletions, user);
     }
 
@@ -344,7 +435,7 @@ public class ProjectHandler implements ProjectService.Iface {
 
         return handler.deleteProject(id, user);
     }
-    
+
     @Override
     public RequestStatus deleteProjectWithForceFlag(String id, User user, boolean forceDelete) throws TException {
         assertId(id);
@@ -352,7 +443,6 @@ public class ProjectHandler implements ProjectService.Iface {
 
         return handler.deleteProject(id, user, forceDelete);
     }
-
 
     //////////////////////
     // HELPER FUNCTIONS //
@@ -373,7 +463,8 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<ProjectLink> getLinkedProjects(Map<String, ProjectProjectRelationship> relations, boolean depth, User user) throws TException {
+    public List<ProjectLink> getLinkedProjects(Map<String, ProjectProjectRelationship> relations, boolean depth,
+            User user) throws TException {
         assertNotNull(relations);
         assertUser(user);
 
@@ -396,7 +487,7 @@ public class ProjectHandler implements ProjectService.Iface {
             throws TException {
         return handler.fillClearingStateSummaryIncludingSubprojects(projects, user);
     }
-    
+
     @Override
     public Project fillClearingStateSummaryIncludingSubprojectsForSingleProject(Project project, User user)
             throws TException {
@@ -404,7 +495,8 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<ReleaseClearingStatusData> getReleaseClearingStatuses(String projectId, User user) throws SW360Exception {
+    public List<ReleaseClearingStatusData> getReleaseClearingStatuses(String projectId, User user)
+            throws SW360Exception {
         return handler.getReleaseClearingStatuses(projectId, user);
     }
 
@@ -420,12 +512,14 @@ public class ProjectHandler implements ProjectService.Iface {
         return status;
     }
 
-    public List<ReleaseClearingStatusData> getReleaseClearingStatusesWithAccessibility(String projectId, User user) throws SW360Exception {
+    public List<ReleaseClearingStatusData> getReleaseClearingStatusesWithAccessibility(String projectId, User user)
+            throws SW360Exception {
         return handler.getReleaseClearingStatusesWithAccessibility(projectId, user);
     }
 
     @Override
-    public RequestStatus removeAttachmentFromProject(String projectId, User user, String attachmentContentId) throws TException {
+    public RequestStatus removeAttachmentFromProject(String projectId, User user, String attachmentContentId)
+            throws TException {
         Project projectByIdForEdit = getProjectByIdForEdit(projectId, user);
 
         Set<Attachment> attachments = projectByIdForEdit.getAttachments();
@@ -501,15 +595,17 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<Map<String, String>> getClearingStateInformationForListView(String projectId,User user) throws SW360Exception {
+    public List<Map<String, String>> getClearingStateInformationForListView(String projectId, User user)
+            throws SW360Exception {
         assertNotNull(projectId);
-        return handler.getClearingStateInformationForListView(projectId,user,false);
+        return handler.getClearingStateInformationForListView(projectId, user, false);
     }
-    
+
     @Override
-    public List<Map<String, String>> getAccessibleClearingStateInformationForListView(String projectId,User user) throws SW360Exception {
+    public List<Map<String, String>> getAccessibleClearingStateInformationForListView(String projectId, User user)
+            throws SW360Exception {
         assertNotNull(projectId);
-        return handler.getClearingStateInformationForListView(projectId,user,true);
+        return handler.getClearingStateInformationForListView(projectId, user, true);
     }
 
     @Override
@@ -530,28 +626,30 @@ public class ProjectHandler implements ProjectService.Iface {
     @Override
     public ByteBuffer downloadExcel(User user, boolean extendedByReleases, String token)
             throws TException {
-        return handler.downloadExcel(user, extendedByReleases,token);
+        return handler.downloadExcel(user, extendedByReleases, token);
     }
 
-	@Override
-	public ByteBuffer getReportDataStream(User user, boolean extendedByReleases, String projectId)
-			throws TException {
-		return handler.getReportDataStream(user, extendedByReleases, projectId);
-	}
-
-	@Override
-	public String getReportInEmail(User user, boolean extendedByReleases, String projectId)
-			throws TException {
-		return handler.getReportInEmail(user, extendedByReleases, projectId);
-	}
+    @Override
+    public ByteBuffer getReportDataStream(User user, boolean extendedByReleases, String projectId)
+            throws TException {
+        return handler.getReportDataStream(user, extendedByReleases, projectId);
+    }
 
     @Override
-    public List<ReleaseLink> getReleaseLinksOfProjectNetWorkByTrace(String projectId, List<String> trace, User user) throws TException {
+    public String getReportInEmail(User user, boolean extendedByReleases, String projectId)
+            throws TException {
+        return handler.getReportInEmail(user, extendedByReleases, projectId);
+    }
+
+    @Override
+    public List<ReleaseLink> getReleaseLinksOfProjectNetWorkByTrace(String projectId, List<String> trace, User user)
+            throws TException {
         return handler.getReleaseLinksOfProjectNetWorkByTrace(trace, projectId, user);
     }
 
     @Override
-    public List<Map<String, String>> getAccessibleDependencyNetworkForListView(String projectId, User user) throws SW360Exception {
+    public List<Map<String, String>> getAccessibleDependencyNetworkForListView(String projectId, User user)
+            throws SW360Exception {
         assertNotNull(projectId);
         return handler.getClearingStateForDependencyNetworkListView(projectId, user, true);
     }
@@ -562,7 +660,8 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<ProjectLink> getLinkedProjectsWithoutReleases(Map<String, ProjectProjectRelationship> relations, boolean depth, User user) throws TException {
+    public List<ProjectLink> getLinkedProjectsWithoutReleases(Map<String, ProjectProjectRelationship> relations,
+            boolean depth, User user) throws TException {
         assertNotNull(relations);
         assertUser(user);
 
@@ -570,24 +669,28 @@ public class ProjectHandler implements ProjectService.Iface {
     }
 
     @Override
-    public List<ProjectLink> getLinkedProjectsOfProjectWithoutReleases(Project project, boolean deep, User user) throws TException {
+    public List<ProjectLink> getLinkedProjectsOfProjectWithoutReleases(Project project, boolean deep, User user)
+            throws TException {
         assertNotNull(project);
         return handler.getLinkedProjectsWithoutReleases(project, deep, user);
     }
 
     @Override
-    public List<ProjectLink> getLinkedProjectsOfProjectWithAllReleases(Project project, boolean deep, User user) throws TException {
+    public List<ProjectLink> getLinkedProjectsOfProjectWithAllReleases(Project project, boolean deep, User user)
+            throws TException {
         assertNotNull(project);
         return handler.getLinkedProjectsWithAllReleases(project, deep, user);
     }
 
     @Override
-    public List<ReleaseLink> getReleaseLinksOfProjectNetWorkByIndexPath(String projectId, List<String> indexPath, User user) throws SW360Exception {
+    public List<ReleaseLink> getReleaseLinksOfProjectNetWorkByIndexPath(String projectId, List<String> indexPath,
+            User user) throws SW360Exception {
         return handler.getReleaseLinksOfProjectNetWorkByIndexPath(indexPath, projectId, user);
     }
 
     @Override
-    public List<ReleaseNode> getLinkedReleasesInDependencyNetworkOfProject(String projectId, User sw360User) throws SW360Exception {
+    public List<ReleaseNode> getLinkedReleasesInDependencyNetworkOfProject(String projectId, User sw360User)
+            throws SW360Exception {
         return handler.getLinkedReleasesInDependencyNetworkOfProject(projectId, sw360User);
     }
 }

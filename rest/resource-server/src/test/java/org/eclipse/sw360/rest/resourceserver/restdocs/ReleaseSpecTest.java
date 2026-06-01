@@ -9,7 +9,6 @@
  */
 package org.eclipse.sw360.rest.resourceserver.restdocs;
 
-import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.SPDX_DOCUMENT_ENABLED;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -35,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,7 +43,6 @@ import java.util.UUID;
 import com.google.common.collect.Sets;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
-import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.components.COTSDetails;
@@ -81,6 +80,7 @@ import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.ExternalReferen
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageInformation;
 import org.eclipse.sw360.datahandler.thrift.spdx.spdxpackageinfo.PackageVerificationCode;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelationDTO;
@@ -89,7 +89,6 @@ import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityState;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.AttachmentInfo;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
-import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
 import org.eclipse.sw360.rest.resourceserver.packages.SW360PackageService;
 import org.eclipse.sw360.rest.resourceserver.licenseinfo.Sw360LicenseInfoService;
@@ -102,15 +101,14 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Answers;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.util.LinkedMultiValueMap;
@@ -128,25 +126,25 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private SW360PackageService packageServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360ReleaseService releaseServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360VulnerabilityService vulnerabilityServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360AttachmentService attachmentServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360VendorService sw360VendorService;
 
-    @MockBean
+    @MockitoBean
     private Sw360LicenseService licenseServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360LicenseInfoService licenseInfoMockService;
 
     private Release release, release3, releaseTest, release5, releaseSpdx;
@@ -441,7 +439,24 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         projectList.add(project);
 
         given(this.releaseServiceMock.getReleasesForUser(any())).willReturn(releaseList);
-        given(this.releaseServiceMock.refineSearch(any(),any())).willReturn(releaseList);
+        given(this.releaseServiceMock.refineSearch(any(),any(),any())).willReturn(
+                Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(releaseList.size()).setDisplayStart(0).setTotalRowCount(releaseList.size()),
+                        releaseList
+                )
+        );
+        given(this.releaseServiceMock.searchReleaseByNamePaginated(any(), any())).willReturn(
+                Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(releaseList.size()).setDisplayStart(0).setTotalRowCount(releaseList.size()),
+                        releaseList
+                )
+        );
+        given(this.releaseServiceMock.getAccessibleNewReleasesWithSrc(any(), any())).willReturn(
+                Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(releaseList.size()).setDisplayStart(0).setTotalRowCount(releaseList.size()),
+                        releaseList
+                )
+        );
         given(this.releaseServiceMock.getRecentReleases(any())).willReturn(releaseList);
         given(this.releaseServiceMock.getReleaseSubscriptions(any())).willReturn(releaseList);
         given(this.releaseServiceMock.getReleaseForUserById(eq(release.getId()), any())).willReturn(release);
@@ -469,7 +484,7 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
         given(this.releaseServiceMock.convertToEmbeddedLinkedRelease(any(), any(), any())).willReturn(releaseLink4);
 
         given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
-                new User("admin@sw360.org", "sw360").setId("123456789"));
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
         given(this.userServiceMock.getUserByEmail("admin@sw360.org")).willReturn(
                 new User("admin@sw360.org", "sw360").setId("123456789"));
         given(this.userServiceMock.getUserByEmail("jane@sw360.org")).willReturn(
@@ -721,7 +736,9 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         links(
-                                linkWithRel("curies").description("The curies for documentation")
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:releases.[]componentType").description("The componentType of the release, possible values are " + Arrays.asList(ComponentType.values())),
@@ -756,7 +773,12 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.sw360:releases.[]_embedded.sw360:releaseIdToRelationship").description("An linked release Id with relation").optional(),
                                 subsectionWithPath("_embedded.sw360:releases.[]_embedded.sw360:clearingInformation").description("An Clearing Information of the release").optional(),
                                 subsectionWithPath("_embedded.sw360:releases.[]_links").description("Self <<resources-index-links,Links>> to Release resource"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
                         )));
     }
 
@@ -805,7 +827,9 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         links(
-                                linkWithRel("curies").description("Curies are used for online documentation")
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
@@ -813,7 +837,12 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.sw360:releases.[]cpeid").description("The cpeId of the release, optional"),
                                 subsectionWithPath("_embedded.sw360:releases.[]releaseDate").description("The releaseDate of the release, optional"),
                                 subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
                         )));
     }
 
@@ -836,18 +865,58 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
     }
 
     @Test
+    public void should_document_get_release_batch_summary() throws Exception {
+        LinkedHashSet<String> requestedIds = new LinkedHashSet<>(Arrays.asList(release3.getId(), release.getId(), "missing-release"));
+        given(this.releaseServiceMock.getAccessibleReleasesByIds(eq(requestedIds), any()))
+                .willReturn(Arrays.asList(release, release3));
+
+        mockMvc.perform(post("/api/releases/batch-summary")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "ids": ["987456", "3765276512", "987456", "missing-release"]
+                        }
+                        """)
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        requestFields(
+                                fieldWithPath("ids").description("Array of release IDs. Duplicate IDs are deduplicated while preserving first-seen order.")
+                        ),
+                        responseFields(
+                                fieldWithPath("items").description("Ordered release summaries for all accessible requested releases."),
+                                fieldWithPath("items[].id").description("The release ID."),
+                                fieldWithPath("items[].name").description("The release name."),
+                                fieldWithPath("items[].version").description("The release version."),
+                                fieldWithPath("items[].clearingState").description("The release clearing state, possible values are " + Arrays.asList(ClearingState.values())).optional(),
+                                fieldWithPath("missingIds").description("Requested release IDs that were missing or inaccessible."),
+                                fieldWithPath("missingIds[]").description("A requested release ID that was not returned.").optional()
+                        )));
+    }
+
+    @Test
     public void should_document_get_releases_by_name() throws Exception {
         mockMvc.perform(get("/api/releases?name=" + release.getName())
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        links(linkWithRel("curies").description("Curies are used for online documentation")),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
                                 subsectionWithPath("_embedded.sw360:releases.[]version").description("The version of the release"),
                                 subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")))
-                        );
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )));
     }
 
     @Test
@@ -1223,6 +1292,9 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation")
+                        ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
                                 subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
@@ -1232,20 +1304,30 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                         )));
     }
 
-        @Test
-        public void should_document_get_releases_by_isNewClearingWithSourceAvailable_filter() throws Exception {
-            mockMvc.perform(get("/api/releases?isNewClearingWithSourceAvailable=" + true)
-                            .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
-                    .andExpect(status().isOk())
-                    .andDo(this.documentationHandler.document(
-                            links(linkWithRel("curies").description("Curies are used for online documentation")),
-                            responseFields(
-                                    subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
-                                    subsectionWithPath("_embedded.sw360:releases.[]version").description("The version of the release"),
-                                    subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
-                                    subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")))
-                    );
-        }
+    @Test
+    public void should_document_get_releases_by_isNewClearingWithSourceAvailable_filter() throws Exception {
+        mockMvc.perform(get("/api/releases?isNewClearingWithSourceAvailable=" + true)
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
+                        responseFields(
+                                subsectionWithPath("_embedded.sw360:releases.[]name").description("The name of the release, optional"),
+                                subsectionWithPath("_embedded.sw360:releases.[]version").description("The version of the release"),
+                                subsectionWithPath("_embedded.sw360:releases").description("An array of <<resources-releases, Releases resources>>"),
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        ))
+                );
+    }
 
     @Test
     public void should_document_trigger_fossology_process() throws Exception {
@@ -1331,12 +1413,22 @@ public class ReleaseSpecTest extends TestRestDocsSpecBase {
                         .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword)).accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
-                        links(linkWithRel("curies").description("Curies are used for online documentation")),
+                        links(
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
+                        ),
                         responseFields(
                                 subsectionWithPath("_links")
                                         .description("<<resources-index-links,Links>> to other resources"),
                                 subsectionWithPath("_embedded.sw360:releases").description(
-                                        "The collection of <<resources-releases,Releases resources>>. In most cases the result should contain either one element or an empty response. If the same binary file is uploaded and attached to multiple sw360 resources, the collection will contain all the releases that have attachments with matching sha1 hash."))))
+                                        "The collection of <<resources-releases,Releases resources>>. In most cases the result should contain either one element or an empty response. If the same binary file is uploaded and attached to multiple sw360 resources, the collection will contain all the releases that have attachments with matching sha1 hash."),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of projects per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing projects"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
+                        )))
                 .andReturn();
     }
 

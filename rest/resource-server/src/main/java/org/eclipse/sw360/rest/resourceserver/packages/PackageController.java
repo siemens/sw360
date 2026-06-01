@@ -28,6 +28,7 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.apache.commons.lang3.EnumUtils;
 import org.apache.thrift.TException;
@@ -52,6 +53,7 @@ import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.jetbrains.annotations.NotNull;
@@ -77,7 +79,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
@@ -86,6 +88,9 @@ public class PackageController implements RepresentationModelProcessor<Repositor
 
     @NonNull
     private final SW360PackageService packageService;
+
+    @NonNull
+    private final Sw360ProjectService projectService;
 
     @NonNull
     private Sw360ReleaseService releaseService;
@@ -105,7 +110,10 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             tags = {"Packages"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = PACKAGES_URL, method = RequestMethod.POST)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Package created successfully.")
+    })
+    @PostMapping(value = PACKAGES_URL)
     public ResponseEntity<EntityModel<Package>> createPackage(
             @Parameter(description = "The package to be created.",
                     schema = @Schema(implementation = Package.class))
@@ -171,7 +179,12 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             tags = {"Packages"}
     )
     @PreAuthorize("hasAuthority('WRITE')")
-    @RequestMapping(value = PACKAGES_URL + "/{id}", method = RequestMethod.DELETE)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Package deleted successfully."),
+            @ApiResponse(responseCode = "409", description = "Package is in use and cannot be deleted.",
+                content = @Content(mediaType = "application/json"))
+    })
+    @DeleteMapping(value = PACKAGES_URL + "/{id}")
     public ResponseEntity<?> deletePackage(
             @Parameter(description = "The id of the package to be deleted.")
             @PathVariable("id") String id
@@ -196,12 +209,16 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             description = "Get a package by id.",
             tags = {"Packages"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Package successfully retrieved.")
+    })
     @GetMapping(value = PACKAGES_URL + "/{id}")
     public ResponseEntity<EntityModel<Package>> getPackage(
             @Parameter(description = "The id of the package to be retrieved.")
             @PathVariable("id") String id
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         Package sw360Package = packageService.getPackageForUserById(id);
         HalResource<Package> halPackage = createHalPackage(sw360Package, sw360User);
         return new ResponseEntity<>(halPackage, HttpStatus.OK);
@@ -252,6 +269,7 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             HttpServletRequest request
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(sw360User);
         List<Package> sw360Packages = new ArrayList<>();
         Map<String, Set<String>> restrictions = getFilterMap(name, version, purl, packageManager, licenses, createdBy, createdOn);
         if (luceneSearch) {
@@ -418,5 +436,42 @@ public class PackageController implements RepresentationModelProcessor<Repositor
             filterMap.put(Package._Fields.CREATED_ON.getFieldName(), CommonUtils.splitToSet(createdOn));
         }
         return filterMap;
+    }
+
+    @Operation(
+            summary = "Check if a package is being used and get the count.",
+            description = "Returns whether the package is being used and the total count of usages.",
+            tags = {"Packages"},
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200", description = "Package usage information",
+                            content = {
+                                    @Content(mediaType = "application/json",
+                                            schema = @Schema(
+                                                    example = """
+                                                            {
+                                                              isUsed: true,
+                                                              count: 5
+                                                            }
+                                                            """
+                                            )
+                                    )
+                            }
+                    )
+            }
+    )
+
+    @GetMapping(value = PACKAGES_URL + "/{id}/usage")
+    public ResponseEntity<Map<String, Object>> getPackageUsageInfo(
+            @Parameter(description = "The id of the package to check usage for")
+            @PathVariable("id") String id
+    ) throws TException {
+
+        Map<String, Object> response = new HashMap<>();
+        int usageCount = projectService.getProjectCountByPackageId(id);
+        response.put("isUsed", usageCount > 0);
+        response.put("count", usageCount);
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }

@@ -2,7 +2,7 @@
  * Copyright Siemens AG, 2017-2018. Part of the SW360 Portal Project.
  * Copyright Bosch Software Innovations GmbH, 2018.
  *
-  * This program and the accompanying materials are made
+ * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
  * which is available at https://www.eclipse.org/legal/epl-2.0/
  *
@@ -13,13 +13,21 @@ package org.eclipse.sw360.rest.resourceserver.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.Source;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
+import org.eclipse.sw360.datahandler.thrift.MainlineState;
+import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
+import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.resourceserver.report.SW360ReportService;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.attachment.Sw360AttachmentService;
 import org.eclipse.sw360.rest.resourceserver.component.Sw360ComponentService;
@@ -27,15 +35,19 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.mock.mockito.SpyBean;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.rest.webmvc.ResourceNotFoundException;
-import org.springframework.http.*;
-
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.util.LinkedMultiValueMap;
@@ -44,6 +56,7 @@ import org.springframework.util.MultiValueMap;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -56,30 +69,31 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 
 @RunWith(SpringRunner.class)
 public class ComponentTest extends TestIntegrationBase {
+    private static final Logger log = LogManager.getLogger(ComponentTest.class);
 
     @LocalServerPort
     private int port;
 
-    @SpyBean
+    @MockitoSpyBean
     private Sw360ComponentService componentServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360AttachmentService attachmentServiceMock;
+
+    @MockitoBean
+    private SW360ReportService sw360ReportServiceMock;
 
     private Component component;
     private final String componentId = "123456789";
@@ -96,15 +110,30 @@ public class ComponentTest extends TestIntegrationBase {
         component.setDescription("Component description");
         component.setId(componentId);
         component.setCreatedBy("admin@sw360.org");
+        component.setComponentType(org.eclipse.sw360.datahandler.thrift.components.ComponentType.OSS);
         componentList.add(component);
 
-        Mockito.doReturn(componentList).when(componentServiceMock)
-                .getComponentsForUser(any());
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(componentList.size()),
+                componentList
+        );
+
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .getRecentComponentsSummaryWithPagination(any(), any());
+
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .searchComponentByExactValues(any(), any(), any());
 
         User user = TestHelper.getTestUser();
 
         given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(user);
         given(this.userServiceMock.getUserByEmail("admin@sw360.org")).willReturn(user);
+
+        Mockito.doReturn(RequestStatus.SUCCESS).when(componentServiceMock)
+                .splitComponents(any(), any(), any());
+
+        Mockito.doReturn(ByteBuffer.allocate(10000)).when(sw360ReportServiceMock)
+                .getComponentBuffer(any(), anyBoolean());
     }
 
     @Test
@@ -182,15 +211,18 @@ public class ComponentTest extends TestIntegrationBase {
                 new HttpEntity<>(body, headers),
                 String.class);
 
-        System.out.println("Response is" + response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
     }
 
     @Test
     public void should_get_all_components_empty_list() throws IOException, TException {
-        Mockito.doReturn(new ArrayList<>()).when(this.componentServiceMock)
-                .getComponentsForUser(any());
+        Mockito.doReturn(Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(0),
+                        new ArrayList<>()
+                ))
+                .when(componentServiceMock)
+                .getRecentComponentsSummaryWithPagination(any(), any());
         HttpHeaders headers = getHeaders(port);
         ResponseEntity<String> response =
                 new TestRestTemplate().exchange("http://localhost:" + port + "/api/components",
@@ -204,8 +236,12 @@ public class ComponentTest extends TestIntegrationBase {
 
     @Test
     public void should_get_all_components_wrong_page() throws IOException, TException {
-        Mockito.doThrow(ResourceNotFoundException.class).when(this.componentServiceMock)
-                .getComponentsForUser(any());
+        Mockito.doReturn(Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(0),
+                        new ArrayList<>()
+                ))
+                .when(componentServiceMock)
+                .getRecentComponentsSummaryWithPagination(any(), any());
         HttpHeaders headers = getHeaders(port);
         ResponseEntity<String> response =
                 new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?page=5&page_entries=10",
@@ -263,7 +299,7 @@ public class ComponentTest extends TestIntegrationBase {
 
     @Test
     public void should_update_component_invalid() throws IOException, TException {
-        Mockito.doThrow(TException.class).when(this.componentServiceMock)
+        Mockito.doThrow(new ResourceNotFoundException("Component not found")).when(this.componentServiceMock)
                 .getComponentForUserById(any(), any());
         String updatedComponentName = "updatedComponentName";
         HttpHeaders headers = getHeaders(port);
@@ -275,7 +311,7 @@ public class ComponentTest extends TestIntegrationBase {
                         HttpMethod.PATCH,
                         new HttpEntity<>(body, headers),
                         String.class);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
@@ -335,13 +371,13 @@ public class ComponentTest extends TestIntegrationBase {
         Set<String> attachmentFileNames = StreamSupport.stream(jsonAttachments.spliterator(), false)
                 .map(node -> node.get("filename").textValue())
                 .collect(Collectors.toSet());
-        assertThat(attachmentFileNames, hasSize(1));
-        assertThat(attachmentFileNames, hasItem(attachments.get(0).getFilename()));
+        assertEquals(1, attachmentFileNames.size());
+        assertTrue(attachmentFileNames.contains(attachments.get(0).getFilename()));
 
         Component updatedComponent = refUpdatedComponent.get();
-        assertThat(updatedComponent, is(notNullValue()));
-        assertThat(updatedComponent.getAttachments(), hasSize(1));
-        assertThat(updatedComponent.getAttachments(), hasItem(attachments.get(0)));
+        assertNotNull(updatedComponent);
+        assertEquals(1, updatedComponent.getAttachments().size());
+        assertTrue(updatedComponent.getAttachments().contains(attachments.get(0)));
     }
 
     @Test
@@ -380,8 +416,482 @@ public class ComponentTest extends TestIntegrationBase {
                         new HttpEntity<>(mergeSelection, getHeaders(port)),
                         String.class,
                         "targetId", "sourceId"
-                        );
+                );
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    public void should_create_component() throws Exception {
+        Map<String, String> newComponent = new HashMap<>();
+        newComponent.put("name", "Component name");
+        newComponent.put("description", "Component description");
+        newComponent.put("componentType", "OSS");
+        newComponent.put("homepage", "https://spring.io");
+
+        Mockito.doReturn(component).when(componentServiceMock)
+                .createComponent(any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components",
+                        HttpMethod.POST,
+                        new HttpEntity<>(newComponent, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        assertEquals(component.getName(), responseNode.get("name").textValue());
+        assertEquals(component.getId(), responseNode.get("id").textValue());
+        assertEquals(component.getCreatedBy(), responseNode.get("_embedded").get("createdBy").get("email").textValue());
+    }
+
+    @Test
+    public void should_get_component_by_id() throws Exception {
+        component.setHomepage("https://angular.io");
+
+        Mockito.doReturn(component).when(componentServiceMock)
+                .getComponentForUserById(eq(componentId), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/" + componentId,
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        assertEquals(component.getName(), responseNode.get("name").textValue());
+        assertEquals(componentId, responseNode.get("id").textValue());
+        assertEquals(component.getDescription(),
+                responseNode.get("description").textValue());
+        assertEquals(component.getHomepage(), responseNode.get("homepage").textValue());
+    }
+
+    @Test
+    public void should_get_components_by_type() throws Exception {
+        String componentType = "OSS";
+        List<Component> filteredComponents = new ArrayList<>();
+        filteredComponents.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(filteredComponents.size()),
+                filteredComponents
+        );
+
+        // Mock the correct method that gets called for type filtering (searchComponentByExactValues)
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .searchComponentByExactValues(any(), any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?type=" + componentType + "&page=0&page_entries=5&sort=name,desc",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+        assertEquals(component.getComponentType().toString(), components.get(0).get("componentType").textValue());
+    }
+
+    @Test
+    public void should_get_components_by_name() throws Exception {
+        List<Component> filteredComponents = new ArrayList<>();
+        filteredComponents.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(filteredComponents.size()),
+                filteredComponents
+        );
+
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .searchComponentByExactValues(any(), any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?name=" + component.getName() + "&page=0&page_entries=5&sort=name,desc",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+        assertEquals(component.getComponentType().toString(), components.get(0).get("componentType").textValue());
+    }
+
+    @Test
+    public void should_get_components_by_lucene_search() throws Exception {
+        List<Component> searchResults = new ArrayList<>();
+        searchResults.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(searchResults.size()),
+                searchResults
+        );
+
+        // Mock the refineSearch method that gets called for lucene search
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .refineSearch(any(), any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?name=" + component.getName() + "&luceneSearch=true&page=0&page_entries=5&sort=name,desc",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+    }
+
+    @Test
+    public void should_get_components_by_type_and_created_on() throws Exception {
+        String componentType = "OSS";
+        String createdOn = "2016-12-15";
+        String categories = "javascript,sql";
+
+        List<Component> filteredComponents = new ArrayList<>();
+        component.setCreatedOn(createdOn);
+        component.setCategories(Set.of("javascript", "sql"));
+        filteredComponents.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(filteredComponents.size()),
+                filteredComponents
+        );
+
+        // Mock the searchComponentByExactValues method for multiple filter criteria
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .searchComponentByExactValues(any(), any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?componentType=" + componentType + "&createdOn=" + createdOn + "&categories=" + categories + "&luceneSearch=false&page=0&page_entries=5&sort=name,desc",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+    }
+
+    @Test
+    public void should_get_components_by_external_ids() throws Exception {
+        Set<Component> componentsWithExternalIds = new HashSet<>();
+        Component component1 = new Component();
+        component1.setId("component-1");
+        component1.setName("Component 1");
+        component1.setComponentType(org.eclipse.sw360.datahandler.thrift.components.ComponentType.OSS);
+        Map<String, String> externalIds1 = new HashMap<>();
+        externalIds1.put("component-id-key", "1831A3");
+        component1.setExternalIds(externalIds1);
+        componentsWithExternalIds.add(component1);
+
+        Component component2 = new Component();
+        component2.setId("component-2");
+        component2.setName("Component 2");
+        component2.setComponentType(org.eclipse.sw360.datahandler.thrift.components.ComponentType.OSS);
+        Map<String, String> externalIds2 = new HashMap<>();
+        externalIds2.put("component-id-key", "c77321");
+        component2.setExternalIds(externalIds2);
+        componentsWithExternalIds.add(component2);
+
+        Mockito.doReturn(componentsWithExternalIds).when(componentServiceMock)
+                .searchByExternalIds(any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/searchByExternalIds?component-id-key=1831A3&component-id-key=c77321",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(2, components.size());
+    }
+
+    @Test
+    public void should_get_components_with_all_details() throws Exception {
+        List<Component> detailedComponents = new ArrayList<>();
+        component.setCreatedOn("2016-12-15");
+        component.setComponentOwner("John Doe");
+        component.setOwnerAccountingUnit("4822");
+        component.setOwnerGroup("AA BB 123 GHV2-DE");
+        component.setOwnerCountry("DE");
+        detailedComponents.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(10).setDisplayStart(0).setTotalRowCount(detailedComponents.size()),
+                detailedComponents
+        );
+
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .getRecentComponentsSummaryWithPagination(any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components?allDetails=true&page=0&page_entries=5&sort=name,desc",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+        // Assert fields that are only returned with allDetails=true (not in convertToEmbeddedComponent)
+        assertEquals(component.getOwnerAccountingUnit(), components.get(0).get("ownerAccountingUnit").textValue());
+        assertEquals(component.getOwnerGroup(), components.get(0).get("ownerGroup").textValue());
+        assertEquals(component.getOwnerCountry(), components.get(0).get("ownerCountry").textValue());
+    }
+
+    @Test
+    public void should_get_components_no_paging_params() throws Exception {
+        List<Component> componentList = new ArrayList<>();
+        componentList.add(component);
+
+        Map<PaginationData, List<Component>> paginationMap = Collections.singletonMap(
+                new PaginationData().setRowsPerPage(20).setDisplayStart(0).setTotalRowCount(componentList.size()),
+                componentList
+        );
+
+        Mockito.doReturn(paginationMap).when(componentServiceMock)
+                .getRecentComponentsSummaryWithPagination(any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+
+        // Verify pagination info is present
+        JsonNode page = responseNode.get("page");
+        assertNotNull(page);
+        assertTrue(page.has("size"));
+        assertTrue(page.has("totalElements"));
+        assertTrue(page.has("totalPages"));
+        assertTrue(page.has("number"));
+    }
+
+    @Test
+    public void should_get_my_components() throws Exception {
+        List<Component> myComponents = new ArrayList<>();
+        myComponents.add(component);
+
+        Mockito.doReturn(myComponents).when(componentServiceMock)
+                .getMyComponentsForUser(any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/mycomponents",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+    }
+
+    @Test
+    public void should_get_my_subscriptions_components() throws Exception {
+        List<Component> subscribedComponents = new ArrayList<>();
+        component.setSubscribers(Set.of("admin@sw360.org"));
+        subscribedComponents.add(component);
+
+        Mockito.doReturn(subscribedComponents).when(componentServiceMock)
+                .getComponentSubscriptions(any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/mySubscriptions",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+    }
+
+    @Test
+    public void should_get_recent_components() throws Exception {
+        List<Component> recentComponents = new ArrayList<>();
+        recentComponents.add(component);
+
+        Mockito.doReturn(recentComponents).when(componentServiceMock)
+                .getRecentComponents(any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/recentComponents",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode components = responseNode.get("_embedded").get("sw360:components");
+        assertTrue(components.isArray());
+        assertEquals(1, components.size());
+        assertEquals(component.getName(), components.get(0).get("name").textValue());
+    }
+
+    @Test
+    public void should_get_releases_by_component() throws Exception {
+        List<ReleaseLink> releaseLinks = new ArrayList<>();
+        ReleaseLink releaseLink1 = new ReleaseLink();
+        releaseLink1.setId("release-1");
+        releaseLink1.setName("Angular");
+        releaseLink1.setVersion("2.3.0");
+        releaseLink1.setMainlineState(MainlineState.OPEN);
+        releaseLink1.setClearingState(ClearingState.APPROVED);
+        releaseLinks.add(releaseLink1);
+
+        ReleaseLink releaseLink2 = new ReleaseLink();
+        releaseLink2.setId("release-2");
+        releaseLink2.setName("Angular");
+        releaseLink2.setVersion("2.4.0");
+        releaseLink2.setMainlineState(MainlineState.MAINLINE);
+        releaseLink2.setClearingState(ClearingState.UNDER_CLEARING);
+        releaseLinks.add(releaseLink2);
+
+        Mockito.doReturn(Collections.singletonMap(
+                new PaginationData().setRowsPerPage(releaseLinks.size()).setDisplayStart(0).setTotalRowCount(releaseLinks.size()),
+                releaseLinks
+        )).when(componentServiceMock)
+                .getReleaseLinksByComponentIdWithPagination(eq("component-1"), any(), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/component-1/releases",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode releaseLinksNode = responseNode.get("_embedded").get("sw360:releaseLinks");
+        assertTrue(releaseLinksNode.isArray());
+        assertEquals(2, releaseLinksNode.size());
+        assertEquals("Angular", releaseLinksNode.get(0).get("name").textValue());
+        assertEquals("2.3.0", releaseLinksNode.get(0).get("version").textValue());
+        assertEquals("OPEN", releaseLinksNode.get(0).get("mainlineState").textValue());
+        assertEquals("APPROVED", releaseLinksNode.get(0).get("clearingState").textValue());
+    }
+
+    @Test
+    public void should_get_component_vulnerabilities() throws Exception {
+        List<VulnerabilityDTO> vulnerabilities = new ArrayList<>();
+        VulnerabilityDTO vulnerability1 = new VulnerabilityDTO();
+        vulnerability1.setExternalId("CVE-2023-1234");
+        vulnerability1.setTitle("Test Vulnerability");
+        vulnerability1.setDescription("Test vulnerability description");
+        vulnerabilities.add(vulnerability1);
+
+        VulnerabilityDTO vulnerability2 = new VulnerabilityDTO();
+        vulnerability2.setExternalId("CVE-2023-5678");
+        vulnerability2.setTitle("Another Test Vulnerability");
+        vulnerability2.setDescription("Another test vulnerability description");
+        vulnerabilities.add(vulnerability2);
+
+        Mockito.doReturn(vulnerabilities).when(componentServiceMock)
+                .getVulnerabilitiesByComponent(eq("component-1"), any());
+
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/component-1/vulnerabilities",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode responseNode = new ObjectMapper().readTree(response.getBody());
+        JsonNode vulnerabilitiesNode = responseNode.get("_embedded").get("sw360:vulnerabilityDTOes");
+        assertTrue(vulnerabilitiesNode.isArray());
+        assertEquals(2, vulnerabilitiesNode.size());
+        assertEquals("CVE-2023-1234", vulnerabilitiesNode.get(0).get("externalId").textValue());
+        assertEquals("Test Vulnerability", vulnerabilitiesNode.get(0).get("title").textValue());
+    }
+
+    @Test
+    public void should_split_components() throws Exception {
+        Component srcComponent = new Component();
+        srcComponent.setId("17653524");
+        srcComponent.setName("Angular");
+        srcComponent.setComponentOwner("John");
+        srcComponent.setDescription("Angular is a development platform for building mobile and desktop web applications.");
+
+        Component targetComponent = new Component();
+        targetComponent.setId("87654321");
+        targetComponent.setName("Angular");
+        targetComponent.setComponentOwner("John");
+        targetComponent.setDescription("Angular is a development platform for building mobile and desktop web applications.");
+
+        Map<String, Object> componentsMap = new HashMap<>();
+        componentsMap.put("srcComponent", srcComponent);
+        componentsMap.put("targetComponent", targetComponent);
+
+        HttpHeaders headers = getHeaders(port);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/components/splitComponents",
+                        HttpMethod.PATCH,
+                        new HttpEntity<>(componentsMap, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    public void should_get_component_report() throws Exception {
+        HttpHeaders headers = getHeaders(port);
+        ResponseEntity<String> response =
+                new TestRestTemplate().exchange("http://localhost:" + port + "/api/reports?withlinkedreleases=true&module=components&excludeReleaseVersion=false",
+                        HttpMethod.GET,
+                        new HttpEntity<>(null, headers),
+                        String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
     }
 }

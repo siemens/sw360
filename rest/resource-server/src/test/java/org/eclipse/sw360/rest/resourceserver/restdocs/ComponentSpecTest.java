@@ -15,6 +15,7 @@ import com.google.common.collect.ImmutableSet;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.ImportBomRequestPreparation;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.Visibility;
 import org.eclipse.sw360.datahandler.thrift.VerificationState;
@@ -25,6 +26,7 @@ import org.eclipse.sw360.datahandler.thrift.attachments.*;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelation;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.ReleaseVulnerabilityRelationDTO;
@@ -42,13 +44,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -83,19 +85,19 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360ComponentService componentServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360AttachmentService attachmentServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360VulnerabilityService vulnerabilityServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360VendorService vendorServiceMock;
 
-    @MockBean
+    @MockitoBean
     private SW360ReportService sw360ReportServiceMock;
 
     private Component angularComponent;
@@ -305,18 +307,32 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                         .setCreatedBy("admin@sw360.org")
                         .setCreatedOn(new SimpleDateFormat("yyyy-MM-dd").format(new Date())));
 
-        given(this.componentServiceMock.getComponentsForUser(any())).willReturn(componentList);
+        given(this.componentServiceMock.getRecentComponentsSummaryWithPagination(any(), any()))
+                .willReturn(Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(componentList.size()).setDisplayStart(0).setTotalRowCount(componentList.size()),
+                        componentList)
+                );
         given(this.sw360ReportServiceMock.getComponentBuffer(any(),anyBoolean())).willReturn(ByteBuffer.allocate(10000));
         given(this.componentServiceMock.getRecentComponents(any())).willReturn(componentList);
-        given(this.componentServiceMock.refineSearch(any(), any())).willReturn(componentList);
+        given(this.componentServiceMock.refineSearch(any(), any(), any()))
+                .willReturn(Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(componentList.size()).setDisplayStart(0).setTotalRowCount(componentList.size()),
+                        componentList)
+                );
         given(this.componentServiceMock.getComponentSubscriptions(any())).willReturn(componentList);
         given(this.componentServiceMock.getMyComponentsForUser(any())).willReturn(componentList);
         given(this.componentServiceMock.getComponentForUserById(eq("17653524"), any())).willReturn(angularComponent);
         given(this.componentServiceMock.getComponentForUserById(eq("98745"), any())).willReturn(testComponent);
         given(this.componentServiceMock.getProjectsByComponentId(eq("17653524"), any())).willReturn(projectList);
         given(this.componentServiceMock.getUsingComponentsForComponent(eq("17653524"), any())).willReturn(usedByComponent);
-        given(this.componentServiceMock.searchComponentByName(eq(angularComponent.getName()))).willReturn(componentListByName);
+        given(this.componentServiceMock.searchComponentByExactValues(any(), any(), any())).willReturn(
+                Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(componentListByName.size()).setDisplayStart(0).setTotalRowCount(componentListByName.size()),
+                        componentListByName.stream().toList()
+                )
+        );
         given(this.componentServiceMock.deleteComponent(eq(angularComponent.getId()), any())).willReturn(RequestStatus.SUCCESS);
+        given(this.componentServiceMock.updateComponent(any(), any())).willReturn(RequestStatus.SUCCESS);
         given(this.componentServiceMock.searchByExternalIds(eq(externalIds), any())).willReturn((new HashSet<>(componentList)));
         given(this.componentServiceMock.convertToEmbeddedWithExternalIds(eq(angularComponent))).willReturn(
                 new Component("Angular")
@@ -339,7 +355,7 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         given(this.componentServiceMock.countProjectsByComponentId(eq("17653524"), any())).willReturn(2);
 
         given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
-                new User("admin@sw360.org", "sw360").setId("123456789"));
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
         given(this.userServiceMock.getUserByEmail("admin@sw360.org")).willReturn(
                 new User("admin@sw360.org", "sw360").setId("123456789"));
         given(this.userServiceMock.getUserByEmail("john@sw360.org")).willReturn(
@@ -467,6 +483,10 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
         releaseLinks.add(releaseLink2);
 
         given(this.componentServiceMock.convertReleaseToReleaseLink(any(),any())).willReturn(releaseLinks);
+        given(this.componentServiceMock.getReleaseLinksByComponentIdWithPagination(any(), any(), any()))
+                .willReturn(Collections.singletonMap(
+                        new PaginationData().setRowsPerPage(releaseLinks.size()).setDisplayStart(0).setTotalRowCount(releaseLinks.size()),
+                        releaseLinks));
 
         List<String> releaseIds = releaseList.stream().map(Release::getId).collect(Collectors.toList());
         given(this.vulnerabilityServiceMock.getVulnerabilityDTOByExternalId(any(), any())).willReturn(vulDtosUpdated);
@@ -717,13 +737,20 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         links(
-                                linkWithRel("curies").description("Curies are used for online documentation")
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to first page"),
+                                linkWithRel("last").description("Link to last page")
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:components.[]name").description("The name of the component"),
                                 subsectionWithPath("_embedded.sw360:components.[]componentType").description("The component type, possible values are: " + Arrays.asList(ComponentType.values())),
                                 subsectionWithPath("_embedded.sw360:components").description("An array of <<resources-components, Components resources>>"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                fieldWithPath("page").description("Additional paging information"),
+                                fieldWithPath("page.size").description("Number of components per page"),
+                                fieldWithPath("page.totalElements").description("Total number of all existing components"),
+                                fieldWithPath("page.totalPages").description("Total number of pages"),
+                                fieldWithPath("page.number").description("Number of the current page")
                         )));
     }
 
@@ -1329,7 +1356,9 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                 .andExpect(status().isOk())
                 .andDo(this.documentationHandler.document(
                         links(
-                                linkWithRel("curies").description("Curies are used for online documentation")
+                                linkWithRel("curies").description("Curies are used for online documentation"),
+                                linkWithRel("first").description("Link to the first page"),
+                                linkWithRel("last").description("Link to the last page")
                         ),
                         responseFields(
                                 subsectionWithPath("_embedded.sw360:releaseLinks.[]id").description("The Id of the releaseLinks"),
@@ -1340,7 +1369,12 @@ public class ComponentSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_embedded.sw360:releaseLinks.[]clearingReport.clearingReportStatus").description("The clearingReportStatus of the clearingReport "+Arrays.asList(ClearingReportStatus.values())),
                                 subsectionWithPath("_embedded.sw360:releaseLinks.[]clearingState").description("The clearingState of the releaseLinks "+ Arrays.asList(ClearingState.values())),
                                 subsectionWithPath("_embedded.sw360:releaseLinks").description("An array of <<resources-releases, releases resources>>"),
-                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
+                                subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources"),
+                                subsectionWithPath("page").description("Pagination information"),
+                                subsectionWithPath("page.size").description("Number of results per page"),
+                                subsectionWithPath("page.totalElements").description("Total number of results"),
+                                subsectionWithPath("page.totalPages").description("Total number of pages"),
+                                subsectionWithPath("page.number").description("Current page number (0-indexed)")
                         )));
     }
 

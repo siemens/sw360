@@ -48,18 +48,20 @@ import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.packages.PackageManager;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.packages.SW360PackageService;
+import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 public class PackageSpecTest extends TestRestDocsSpecBase {
@@ -70,11 +72,14 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private SW360PackageService packageServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360ReleaseService releaseServiceMock;
+
+    @MockitoBean
+    private Sw360ProjectService projectServiceMock;
 
     private Package package1;
     private Package package2;
@@ -170,7 +175,7 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
 
 
         given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
-                new User("admin@sw360.org", "sw360").setId("123456789"));
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
         given(this.userServiceMock.getUserByEmail("admin@sw360.org")).willReturn(
                 new User("admin@sw360.org", "sw360").setId("123456789"));
         given(this.userServiceMock.getUserByEmailOrExternalId("user@sw360.org")).willReturn(
@@ -465,4 +470,36 @@ public class PackageSpecTest extends TestRestDocsSpecBase {
                 .accept(MediaTypes.HAL_JSON))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    public void should_document_get_package_usage() throws Exception {
+        String packageId = package1.getId();
+        int projectCount = 5;
+
+        given(projectServiceMock.getProjectCountByPackageId(packageId)).willReturn(projectCount);
+
+        mockMvc.perform(get("/api/packages/" + packageId + "/usage")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isOk())
+                .andDo(this.documentationHandler.document(
+                        responseFields(
+                                fieldWithPath("count").description("Number of projects using this package"),
+                                fieldWithPath("isUsed").description("Flag indicating if the package is used in any project")
+                        )));
+    }
+
+    @Test
+    public void should_document_get_package_usage_not_found() throws Exception {
+        String packageId = "non-existent-id";
+
+        given(projectServiceMock.getProjectCountByPackageId(packageId))
+                .willThrow(new ResourceNotFoundException("Could not find package with id: " + packageId));
+
+        mockMvc.perform(get("/api/packages/" + packageId + "/usage")
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isNotFound());
+    }
+
 }

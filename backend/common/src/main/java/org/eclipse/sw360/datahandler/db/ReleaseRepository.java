@@ -9,12 +9,18 @@
  */
 package org.eclipse.sw360.datahandler.db;
 
+import com.ibm.cloud.cloudant.v1.model.PostFindOptions;
 import org.eclipse.sw360.components.summary.ReleaseSummary;
 import org.eclipse.sw360.components.summary.SummaryType;
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.couchdb.SummaryAwareRepository;
+import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
+import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
+import org.eclipse.sw360.datahandler.thrift.components.ClearingState;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseSortColumn;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.PaginationData;
 
@@ -26,9 +32,15 @@ import com.ibm.cloud.cloudant.v1.model.ViewResult;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.and;
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.elemMatch;
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.eq;
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.eqIgnoreCase;
+import static org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant.in;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Lists;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * CRUD access for the Release class
@@ -66,7 +78,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
             "      emit(doc.componentId, doc._id);" +
             "  }" +
             "}";
-    
+
     private static final String RELEASE_IDS_BY_VENDOR_ID = "function(doc) {" +
             " if (doc.type == 'release'){" +
             "      emit(doc.vendorId, doc._id);" +
@@ -98,7 +110,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
             "    }" +
             "  }" +
             "}";
-    
+
     private static final String BY_LOWERCASE_RELEASE_CPE_VIEW =
             "function(doc) {" +
                     "  if (doc.type == 'release' && doc.cpeid != null) {" +
@@ -131,28 +143,28 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
                     "}";
     private static final String BY_STATUS_VIEW =
             "function(doc) {" +
-                    "  if (doc.type == 'release') {" +
+                    "  if (doc.type == 'release' && doc.eccInformation !== undefined && doc.eccInformation != null) {" +
                     "    emit(doc.eccInformation.eccStatus, doc._id);" +
                     "  } " +
                     "}";
 
     private static final String BY_ASSESSOR_CONTACT_PERSON_VIEW =
             "function(doc) {" +
-                    "  if (doc.type == 'release') {" +
+                    "  if (doc.type == 'release' && doc.eccInformation !== undefined && doc.eccInformation != null) {" +
                     "    emit(doc.eccInformation.assessorContactPerson, doc._id);" +
                     "  } " +
                     "}";
 
     private static final String BY_ASSESSOR_DEPARTMENT_VIEW =
             "function(doc) {" +
-                    "  if (doc.type == 'release') {" +
+                    "  if (doc.type == 'release' && doc.eccInformation !== undefined && doc.eccInformation != null) {" +
                     "    emit(doc.eccInformation.assessorDepartment, doc._id);" +
                     "  } " +
                     "}";
 
     private static final String BY_ASSESSMENT_DATE_VIEW =
             "function(doc) {" +
-                    "  if (doc.type == 'release') {" +
+                    "  if (doc.type == 'release' && doc.eccInformation !== undefined && doc.eccInformation != null) {" +
                     "    emit(doc.eccInformation.assessmentDate, doc._id);" +
                     "  } " +
                     "}";
@@ -163,6 +175,13 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
                     "    emit(doc.creatorDepartment, doc._id);" +
                     "  } " +
                     "}";
+
+    private static final String RELEASE_BY_ALL_IDX = "ReleaseByAllIdx";
+    private static final String RELEASE_BY_ATTACHMENT_TYPE_IDX = "ReleaseByAttachmentTypeIdx";
+    private static final String RELEASE_BY_COMPONENT_NAME_IDX = "ReleaseByComponentNameIdx";
+    private static final String RELEASE_BY_COMPONENT_VERSION_IDX = "ReleaseByComponentVersionIdx";
+    private static final String RELEASE_BY_COMPONENT_CLEARING_STATE_IDX = "ReleaseByComponentClearingStateIdx";
+    private static final String RELEASE_BY_COMPONENT_MAINLINE_STATE_IDX = "ReleaseByComponentMainlineStateIdx";
 
     public ReleaseRepository(DatabaseConnectorCloudant db, VendorRepository vendorRepository) {
         super(Release.class, db, new ReleaseSummary(vendorRepository));
@@ -187,10 +206,93 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         views.put("byECCAssessmentDate", createMapReduce(BY_ASSESSMENT_DATE_VIEW, null));
         views.put("byCreatorGroup", createMapReduce(BY_CREATOR_DEPARTMENT_VIEW, null));
         initStandardDesignDocument(views, db);
+
+        createIndex(RELEASE_BY_ALL_IDX, "releaseByAll", new String[] {
+                Release._Fields.NAME.getFieldName(),
+                Release._Fields.CREATED_ON.getFieldName(),
+                Release._Fields.VERSION.getFieldName()
+        }, db);
+
+        createIndex(RELEASE_BY_ATTACHMENT_TYPE_IDX, "releaseByAttachmentType", new String[] {
+                Release._Fields.TYPE.getFieldName(),
+                Release._Fields.CLEARING_STATE.getFieldName(),
+                Release._Fields.ATTACHMENTS.getFieldName() + "." + Attachment._Fields.ATTACHMENT_TYPE.getFieldName()
+        }, db);
+
+        // Per-sort-column indexes for getReleasesFromComponentIdWithPagination.
+        // Each index starts with componentId followed by the sort field so that
+        // CouchDB/Cloudant can satisfy both the selector and the sort clause.
+        createIndex(RELEASE_BY_COMPONENT_NAME_IDX, "releaseByComponentName", new String[] {
+                Release._Fields.COMPONENT_ID.getFieldName(),
+                Release._Fields.NAME.getFieldName()
+        }, db);
+        createIndex(RELEASE_BY_COMPONENT_VERSION_IDX, "releaseByComponentVersion", new String[] {
+                Release._Fields.COMPONENT_ID.getFieldName(),
+                Release._Fields.VERSION.getFieldName()
+        }, db);
+        createIndex(RELEASE_BY_COMPONENT_CLEARING_STATE_IDX, "releaseByComponentClearingState", new String[] {
+                Release._Fields.COMPONENT_ID.getFieldName(),
+                Release._Fields.CLEARING_STATE.getFieldName()
+        }, db);
+        createIndex(RELEASE_BY_COMPONENT_MAINLINE_STATE_IDX, "releaseByComponentMainlineState", new String[] {
+                Release._Fields.COMPONENT_ID.getFieldName(),
+                Release._Fields.MAINLINE_STATE.getFieldName()
+        }, db);
     }
 
     public List<Release> searchByNamePrefix(String name) {
         return makeSummary(SummaryType.SHORT, queryForIdsByPrefix("byname", name));
+    }
+
+    public Map<PaginationData, List<Release>> searchReleaseByNamePaginated(String name, PaginationData pageData) {
+        final Map<String, Object> typeSelector = eq("type", "release");
+        final Map<String, Object> finalSelector;
+        if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
+            final Map<String, Object> restrictionsSelector = eqIgnoreCase(Release._Fields.NAME.getFieldName(), name);
+            finalSelector = and(List.of(typeSelector, restrictionsSelector));
+        } else {
+            finalSelector = and(List.of(typeSelector));
+        }
+
+        final Map<String, String> sortSelector = getSortSelector(pageData);
+
+        PostFindOptions.Builder qb = getConnector().getQueryBuilder()
+                .selector(finalSelector)
+                .useIndex(Collections.singletonList(RELEASE_BY_ALL_IDX));
+
+        List<Release> releases = getConnector().getQueryResultPaginated(
+                qb, Release.class, pageData, sortSelector
+        );
+
+        return Collections.singletonMap(
+                pageData, makeSummaryFromFullDocs(SummaryType.SHORT, releases)
+        );
+    }
+
+    public Map<PaginationData, List<Release>> getAccessibleNewReleasesWithSrc(PaginationData pageData) {
+        final Map<String, Object> typeSelector = eq("type", "release");
+        final Map<String, Object> clearingStateNew = eq(Release._Fields.CLEARING_STATE.getFieldName(),
+                ClearingState.NEW_CLEARING.name());
+        final Map<String, Object> sourceAttachments = in(Attachment._Fields.ATTACHMENT_TYPE.getFieldName(),
+                List.of(AttachmentType.SOURCE.name(), AttachmentType.SOURCE_SELF.name()));
+        final Map<String, Object> attachmentFilter = elemMatch(Release._Fields.ATTACHMENTS.getFieldName(),
+                sourceAttachments);
+
+        final Map<String, Object> finalSelector = and(List.of(typeSelector, clearingStateNew, attachmentFilter));
+
+        final Map<String, String> sortSelector = getSortSelector(pageData);
+
+        PostFindOptions.Builder qb = getConnector().getQueryBuilder()
+                .selector(finalSelector)
+                .useIndex(Collections.singletonList(RELEASE_BY_ATTACHMENT_TYPE_IDX));
+
+        List<Release> releases = getConnector().getQueryResultPaginated(
+                qb, Release.class, pageData, sortSelector
+        );
+
+        return Collections.singletonMap(
+                pageData, makeSummaryFromFullDocs(SummaryType.SHORT, releases)
+        );
     }
 
     public List<Release> searchByNameAndVersion(String name, String version, boolean caseInsenstive){
@@ -238,9 +340,69 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         return new ArrayList<Release>(getFullDocsById(releaseIds));
     }
 
+    /**
+     * Returns paginated releases for a given component, sorted by the column
+     * in {@code pageData}:
+     *   0 = name (default), 1 = version, 2 = clearingState, 3 = mainlineState.
+     */
+    public Map<PaginationData, List<Release>> getReleasesFromComponentIdWithPagination(
+            String id, User user, PaginationData pageData) {
+
+        final Map<String, Object> selector = eq(Release._Fields.COMPONENT_ID.getFieldName(), id);
+        final Map<String, String> sortSelector = getComponentReleaseSortSelector(pageData);
+        final String indexName = getComponentReleaseIndexName(pageData);
+
+        PostFindOptions.Builder qb = getConnector().getQueryBuilder()
+                .selector(selector)
+                .useIndex(Collections.singletonList(indexName));
+
+        List<Release> releases = getConnector().getQueryResultPaginated(
+                qb, Release.class, pageData, sortSelector);
+
+        return Collections.singletonMap(pageData, releases);
+    }
+
+    /**
+     * Returns the CouchDB index name that covers {@code componentId} + the sort
+     * field requested in {@code pageData}, so CouchDB can satisfy both the
+     * equality selector and the ORDER BY clause without a "no_usable_index" error.
+     */
+    private static @NotNull String getComponentReleaseIndexName(PaginationData pageData) {
+        return switch (ReleaseSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case ReleaseSortColumn.BY_VERSION       -> RELEASE_BY_COMPONENT_VERSION_IDX;
+            case ReleaseSortColumn.BY_CLEARING_STATE -> RELEASE_BY_COMPONENT_CLEARING_STATE_IDX;
+            case ReleaseSortColumn.BY_MAINLINE_STATE -> RELEASE_BY_COMPONENT_MAINLINE_STATE_IDX;
+            case null, default                       -> RELEASE_BY_COMPONENT_NAME_IDX;
+        };
+    }
+
+    private static @NotNull String getViewFromPagination(PaginationData pageData) {
+        return switch (ReleaseSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case ReleaseSortColumn.BY_NAME -> "byname";
+            case ReleaseSortColumn.BY_VERSION -> "releaseByVersion";
+            case null -> "all";
+            default -> "byCreatedOn";
+        };
+    }
+
+    private static @NotNull Map<String, String> getComponentReleaseSortSelector(PaginationData pageData) {
+        boolean ascending = pageData.isAscending();
+        return switch (ReleaseSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case ReleaseSortColumn.BY_VERSION ->
+                    Collections.singletonMap(Release._Fields.VERSION.getFieldName(), ascending ? "asc" : "desc");
+            case ReleaseSortColumn.BY_CLEARING_STATE ->
+                    Collections.singletonMap(Release._Fields.CLEARING_STATE.getFieldName(), ascending ? "asc" : "desc");
+            case ReleaseSortColumn.BY_MAINLINE_STATE ->
+                    Collections.singletonMap(Release._Fields.MAINLINE_STATE.getFieldName(), ascending ? "asc" : "desc");
+            case null, default ->
+                    Collections.singletonMap(Release._Fields.NAME.getFieldName(), ascending ? "asc" : "desc");
+        };
+    }
+
+
     public List<Release> getReleasesFromComponentId(String id, User user) {
         Set<String> releaseIds = queryForIdsAsValue("releasesByComponentId", id);
-        return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, 
+        return makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY,
                 new ArrayList<Release>(getFullDocsById(releaseIds)), user);
     }
 
@@ -300,7 +462,7 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
     public List<Release> getReferencingReleases(String releaseId) {
         return queryView("usedInReleaseRelation", releaseId);
     }
-    
+
     public Map<PaginationData, List<Release>> getAccessibleReleasesWithPagination(User user, PaginationData pageData) {
         final int rowsPerPage = pageData.getRowsPerPage();
         Map<PaginationData, List<Release>> result = Maps.newHashMap();
@@ -359,5 +521,21 @@ public class ReleaseRepository extends SummaryAwareRepository<Release> {
         releases = makeSummaryWithPermissionsFromFullDocs(SummaryType.SUMMARY, releases, user);
         result.put(pageData, releases);
         return result;
+    }
+
+    private static @NotNull Map<String, String> getSortSelector(PaginationData pageData) {
+        boolean ascending = pageData.isAscending();
+        return switch (ReleaseSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case ReleaseSortColumn.BY_NAME ->
+                    Collections.singletonMap(Release._Fields.NAME.getFieldName(), ascending ? "asc" : "desc");
+            case ReleaseSortColumn.BY_VERSION ->
+                    Collections.singletonMap(Release._Fields.VERSION.getFieldName(), ascending ? "asc" : "desc");
+            case ReleaseSortColumn.BY_CLEARING_STATE ->
+                    Collections.singletonMap(Release._Fields.CLEARING_STATE.getFieldName(), ascending ? "asc" : "desc");
+            case ReleaseSortColumn.BY_MAINLINE_STATE ->
+                    Collections.singletonMap(Release._Fields.MAINLINE_STATE.getFieldName(), ascending ? "asc" : "desc");
+            case null, default ->
+                    Collections.singletonMap(Release._Fields.CREATED_ON.getFieldName(), ascending ? "asc" : "desc"); // Default sort by creation date
+        };
     }
 }

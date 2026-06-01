@@ -12,8 +12,12 @@ package org.eclipse.sw360.rest.resourceserver.restdocs;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.licenses.License;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseType;
+import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.license.Sw360LicenseService;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import org.eclipse.sw360.datahandler.thrift.licenses.Obligation;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.licenses.ObligationType;
@@ -26,11 +30,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.io.IOException;
@@ -61,10 +64,10 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360LicenseService licenseServiceMock;
 
-    @MockBean
+    @MockitoBean
     private SW360ReportService sw360ReportServiceMock;
 
     private License license, license2, license3;
@@ -103,7 +106,7 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         license3.setId("Apache-3.0");
         license3.setShortname("Apache 3.0");
         license3.setFullname("Apache License 3.0");
-        
+
         requestSummary.setRequestStatus(RequestStatus.SUCCESS);
         LicenseType licensetype = new LicenseType();
         licensetype.setId("1234");
@@ -118,7 +121,7 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         given(this.licenseServiceMock.updateWhitelist(any(),any(),any())).willReturn(RequestStatus.SUCCESS);
         Mockito.doNothing().when(licenseServiceMock).deleteLicenseById(any(), any());
         Mockito.doNothing().when(licenseServiceMock).deleteAllLicenseInfo(any());
-        Mockito.doNothing().when(licenseServiceMock).importSpdxInformation(any());
+        given(this.licenseServiceMock.importSpdxInformation(any())).willReturn(requestSummary);
         Mockito.doNothing().when(licenseServiceMock).getDownloadLicenseArchive(any(), any(), any());
         Mockito.doNothing().when(licenseServiceMock).uploadLicense(any(), any(), anyBoolean(), anyBoolean());
         given(this.licenseServiceMock.deleteLicenseType(any(), any())).willReturn(RequestStatus.SUCCESS);
@@ -153,6 +156,8 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
         licenseType1.setId("9e86774d0769e77bdf5902f936cb55c3");
         List<LicenseType> licenseTypes = new ArrayList<>(Arrays.asList(licenseType,licenseType1));
         given(this.licenseServiceMock.getLicenseTypes()).willReturn(licenseTypes);
+        given(this.userServiceMock.getUserByEmailOrExternalId("admin@sw360.org")).willReturn(
+                new User("admin@sw360.org", "sw360").setId("123456789").setUserGroup(UserGroup.ADMIN));
     }
 
     @Test
@@ -420,14 +425,14 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
     @Test
     public void should_document_upload_license() throws Exception {
         MockMultipartFile file = new MockMultipartFile("licenseFile","file=@/bom.spdx.rdf".getBytes());
-        MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.multipart("/api/licenses/upload")
+        var builder = MockMvcRequestBuilders.multipart("/api/licenses/upload")
                 .file(file)
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .queryParam("licenseFile", "Must need to attach file.");
         this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
     }
 
-    @Test   		
+    @Test
     public void should_document_import_osadl_info() throws Exception {
         mockMvc.perform(post("/api/licenses/import/OSADL")
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
@@ -463,5 +468,24 @@ public class LicenseSpecTest extends TestRestDocsSpecBase {
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
                 .accept(MediaTypes.HAL_JSON))
         .andExpect(status().isOk());
+    }
+
+    @Test
+    public void should_return_400_when_license_update_fails() throws Exception {
+        // Overrides the @Before stub (SUCCESS) for this test only — Mockito applies the last stub wins rule.
+        String expectedMessage = "License update failed with status: " + RequestStatus.FAILURE;
+        given(this.licenseServiceMock.updateLicense(any(), any()))
+                .willThrow(new BadRequestClientException(expectedMessage));
+
+        Map<String, String> licenseRequestBody = new HashMap<>();
+        licenseRequestBody.put("fullName", "Apache License 4.0");
+
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/licenses/" + license.getId())
+                        .contentType(MediaTypes.HAL_JSON)
+                        .content(this.objectMapper.writeValueAsString(licenseRequestBody))
+                        .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                        .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(expectedMessage));
     }
 }

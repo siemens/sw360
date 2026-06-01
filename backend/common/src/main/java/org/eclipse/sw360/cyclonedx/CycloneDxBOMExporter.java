@@ -83,7 +83,7 @@ public class CycloneDxBOMExporter {
             Project project = projectDatabaseHandler.getProjectById(projectId, user);
             Bom bom = new Bom();
             Set<String> linkedReleaseIds = Sets.newHashSet(CommonUtils.getNullToEmptyKeyset(project.getReleaseIdToUsage()));
-            Set<String> linkedPackageIds = Sets.newHashSet(CommonUtils.nullToEmptySet(project.getPackageIds()));
+            Set<String> linkedPackageIds = Sets.newHashSet(CommonUtils.getNullToEmptyKeyset(project.getPackageIds()));
 
             if (!SW360Utils.isUserAtleastDesiredRoleInPrimaryOrSecondaryGroup(user, SW360Utils.readConfig(SBOM_IMPORT_EXPORT_ACCESS_USER_ROLE, UserGroup.USER))) {
                 log.warn("User does not have permission to export the SBOM: " + user.getEmail());
@@ -147,14 +147,14 @@ public class CycloneDxBOMExporter {
             }
             return summary;
         } catch (SW360Exception e) {
-            log.error(String.format("An error occured while fetching project: %s from db, for SBOM export!", projectId), e);
-            summary.setMessage("An error occured while fetching project from db, for SBOM export: " + e.getMessage());
+            log.error(String.format("An error occurred while fetching project: %s from db, for SBOM export!", projectId), e);
+            summary.setMessage("An error occurred while fetching project from db, for SBOM export: " + e.getMessage());
         } catch (GeneratorException e) {
-            log.error(String.format("An error occured while exporting xml SBOM for project with id: %s", projectId), e);
-            summary.setMessage("An error occured while exporting xml SBOM for project: " + e.getMessage());
+            log.error(String.format("An error occurred while exporting xml SBOM for project with id: %s", projectId), e);
+            summary.setMessage("An error occurred while exporting xml SBOM for project: " + e.getMessage());
         } catch (Exception e) {
-            log.error("An error occured while exporting SBOm for project: " + projectId, e);
-            summary.setMessage("An error occured while exporting SBOM for project: " + e.getMessage());
+            log.error("An error occurred while exporting SBOm for project: " + projectId, e);
+            summary.setMessage("An error occurred while exporting SBOM for project: " + e.getMessage());
         }
         summary.setRequestStatus(RequestStatus.FAILURE);
         return summary;
@@ -259,9 +259,6 @@ public class CycloneDxBOMExporter {
             if (CommonUtils.isNotEmpty(release.getOtherLicenseIds())) {
                 licenses.addAll(release.getOtherLicenseIds());
             }
-            if (CommonUtils.isNotEmpty(sw360Comp.getMainLicenseIds())) {
-                licenses.addAll(sw360Comp.getMainLicenseIds());
-            }
             if (CommonUtils.isNotEmpty(licenses)) {
                 comp.setLicenseChoice(getLicenseFromSw360Document(licenses));
             }
@@ -289,7 +286,6 @@ public class CycloneDxBOMExporter {
             if (null != pckg.getPackageType()) {
                 comp.setType(getCdxComponentType(pckg.getPackageType()));
             }
-            comp.setLicenseChoice(getLicenseFromSw360Document(pckg.getLicenseIds()));
             comp.setDescription(pckg.getDescription());
             List<ExternalReference> extRefs = Lists.newArrayList();
             if (CommonUtils.isNotNullEmptyOrWhitespace(pckg.getHomepageUrl())) {
@@ -315,10 +311,14 @@ public class CycloneDxBOMExporter {
     private LicenseChoice getLicenseFromSw360Document(Set<String> sw360Licenses) {
         LicenseChoice licenseChoice = new LicenseChoice();
         List<License> licenses = Lists.newArrayList();
-        for (String lic : sw360Licenses) {
-            License license = new License();
-            license.setId(lic);
-            licenses.add(license);
+        if (CommonUtils.isNotEmpty(sw360Licenses)) {
+            for (String lic : sw360Licenses) {
+                if (CommonUtils.isNotNullEmptyOrWhitespace(lic)) {
+                    License license = new License();
+                    license.setId(lic);
+                    licenses.add(license);
+                }
+            }
         }
         licenseChoice.setLicenses(licenses);
         return licenseChoice;

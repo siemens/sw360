@@ -24,23 +24,27 @@ import io.swagger.v3.oas.annotations.StringToClassMapItem;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
 import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+import org.springframework.data.rest.webmvc.ResourceNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus.Series;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.GetMapping;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -48,9 +52,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @BasePathAwareController
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
+@PreAuthorize("hasAuthority('ADMIN')")
 public class FossologyAdminController implements RepresentationModelProcessor<RepositoryLinksResource> {
     public static final String FOSSOLOGY_URL = "/fossology";
 
@@ -61,6 +66,7 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
     Sw360FossologyAdminServices sw360FossologyAdminServices;
 
     @Override
+    @PreAuthorize("hasAuthority('READ')")
     public RepositoryLinksResource process(RepositoryLinksResource resource) {
         resource.add(linkTo(FossologyAdminController.class).slash("api" + FOSSOLOGY_URL).withRel("fossology"));
         return resource;
@@ -71,6 +77,11 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
             description = "Save the FOSSology service configuration.",
             tags = {"Admin"}
     )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "FOSSology configuration saved." ),
+            @ApiResponse(responseCode = "400", description = "Invalid FOSSology configuration."),
+            @ApiResponse(responseCode = "500", description = "FOSSology configuration save failed.")
+    })
     @PostMapping(value = FOSSOLOGY_URL + "/saveConfig", consumes  = {MediaType.APPLICATION_JSON_VALUE})
     public ResponseEntity<?> saveConfigration(
             @Parameter(description = "Request body containing the configuration parameters. The parameters are:\n" +
@@ -90,10 +101,10 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
                             },
                             example = """
                                     {
-                                      "url": "https://fossology.com/repo/api/v1/",
+                                      "url": "https://fossology.com/repo/api/v2/",
                                       "folderId": "2",
                                       "token": "dead.beef",
-                                      "downloadTimeout": "2",
+                                      "downloadTimeout": "5",
                                       "downloadTimeoutUnit": "MINUTES"
                                     }""",
                             requiredProperties = {"url", "folderId", "token"}
@@ -101,15 +112,23 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
             )
             @RequestBody Map<String, String> request
     ) throws SW360Exception {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        String url = request.get("url");
+        String folderId = request.get("folderId");
+        String token = request.get("token");
+        String downloadTimeout = request.get("downloadTimeout");
+        String downloadTimeoutUnit = request.get("downloadTimeoutUnit");
         try {
-            User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-            String url = request.get("url");
-            String folderId = request.get("folderId");
-            String token = request.get("token");
-            String downloadTimeout = request.get("downloadTimeout");
-            String downloadTimeoutUnit = request.get("downloadTimeoutUnit");
             sw360FossologyAdminServices.saveConfig(sw360User, url, folderId, token,
                     downloadTimeout, downloadTimeoutUnit);
+        } catch (SW360Exception e) {
+            throw new BadRequestClientException(e.getWhy(), e);
+        } catch (BadRequestClientException e) {
+            throw e;
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             throw new SW360Exception(e.getMessage());
         }
@@ -121,16 +140,14 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
             description = "Make a test call and check the FOSSology server connection.",
             tags = {"Admin"}
     )
-    @RequestMapping(value = FOSSOLOGY_URL + "/reServerConnection", method = RequestMethod.GET)
-    public ResponseEntity<?> checkServerConnection() throws SW360Exception {
-        try {
-            User sw360User = restControllerHelper.getSw360UserFromAuthentication();
-            sw360FossologyAdminServices.serverConnection(sw360User);
-        } catch (Exception e) {
-            throw new SW360Exception(e.getMessage());
-        }
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "FOSSology server connection successful.")
+    })
+    @GetMapping(value = FOSSOLOGY_URL + "/reServerConnection")
+    public ResponseEntity<?> checkServerConnection() {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        sw360FossologyAdminServices.serverConnection(sw360User);
         return ResponseEntity.ok(Series.SUCCESSFUL);
-
     }
 
     @Operation(
@@ -158,7 +175,7 @@ public class FossologyAdminController implements RepresentationModelProcessor<Re
             )
     }
     )
-    @RequestMapping(value = FOSSOLOGY_URL + "/configData", method = RequestMethod.GET)
+    @GetMapping(value = FOSSOLOGY_URL + "/configData")
     public ResponseEntity<?> getConnectionConfigurationData()throws TException {
         Map<String, Object> configData = new HashMap<>();
         try {

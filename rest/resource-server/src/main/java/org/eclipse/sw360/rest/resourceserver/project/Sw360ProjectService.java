@@ -61,6 +61,7 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectLink;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectService;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
+import org.eclipse.sw360.datahandler.thrift.projects.ProjectSortColumn;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
@@ -73,7 +74,11 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.hateoas.Link;
 import org.springframework.security.access.AccessDeniedException;
@@ -91,9 +96,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -114,6 +121,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import static com.google.common.base.Strings.nullToEmpty;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.getSortedMap;
 import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhitespace;
@@ -123,7 +132,7 @@ import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTExcepti
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @Service
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class Sw360ProjectService implements AwareOfRestServices<Project> {
 
     private static final Logger log = LogManager.getLogger(Sw360ProjectService.class);
@@ -153,18 +162,20 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
     public static final ImmutableSet<ObligationStatusInfo._Fields> SET_OF_LICENSE_OBLIGATION_FIELDS = ImmutableSet
             .of(ObligationStatusInfo._Fields.COMMENT, ObligationStatusInfo._Fields.STATUS);
 
-    public Set<Project> getProjectsForUser(User sw360User, Pageable pageable) throws TException {
+    public Map<PaginationData, List<Project>> getProjectsForUser(User sw360User, Pageable pageable) throws TException {
         ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
-        PaginationData pageData = new PaginationData().setDisplayStart((int) pageable.getOffset())
-                .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(0);
-        Map<PaginationData, List<Project>> pageDtToProjects = sw360ProjectClient
+        PaginationData pageData = pageableToPaginationData(pageable, null, null);
+        Map<PaginationData, List<Project>> resp = sw360ProjectClient
                 .getAccessibleProjectsSummaryWithPagination(sw360User, pageData);
-        return new HashSet<>(pageDtToProjects.entrySet().iterator().next().getValue());
+        return resp;
     }
 
-    public List<Project> getProjectsSummaryForUserWithoutPagination(User sw360User) throws TException {
+    public Map<PaginationData, List<Project>> searchAccessibleProjectByExactValues(
+            Map<String, Set<String>> filterMap, User sw360User, Pageable pageable
+    ) throws TException {
         ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
-        return sw360ProjectClient.getAccessibleProjectsSummary(sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable, null, null);
+        return sw360ProjectClient.searchAccessibleProjectByExactValues(filterMap, sw360User, pageData);
     }
 
     public Project getProjectForUserById(String projectId, User sw360User) throws TException {
@@ -186,46 +197,80 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
     }
 
-    public boolean validate(List<String> changedUsages, User sw360User, Sw360ReleaseService releaseService, Set<String> totalReleaseIds) throws TException {
-		for (String data : changedUsages) {
-			String releaseId;
-			String usageData;
-			String attachmentContentId;
-			String[] parts = data.split("-");
-			if (parts.length > 1) {
-				String[] components = parts[1].split("_");
-	            releaseId = components[0];
-	            usageData = components[1];
-	            attachmentContentId = components[2];
-			}
-			else {
-				String[] components = data.split("_");
-	            releaseId = components[0];
-	            usageData = components[1];
-	            attachmentContentId = components[2];
-			}
-			boolean relPresent = totalReleaseIds.contains(releaseId);
-			if (!relPresent) {
-				return false;
-			}
-            Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
-            Set<Attachment> attachments = release.getAttachments();
-            if (usageData.equals("sourcePackage")) {
-                for (Attachment attach : attachments) {
-                    if (attach.getAttachmentContentId().equals(attachmentContentId) && (attach.getAttachmentType() != AttachmentType.SOURCE && attach.getAttachmentType() != AttachmentType.SOURCE_SELF)) {
-                        return false;
+    /**
+     * Validates changed usages and removes invalid entries instead of failing.
+     * Returns a list of warning messages for entries that were removed.
+     *
+     * @param changedUsages List of usage strings to validate (modified in place — invalid entries removed)
+     * @param sw360User Current user
+     * @param releaseService Release service for fetching release data
+     * @param totalReleaseIds Set of valid release IDs for the project
+     * @return List of warning messages for skipped entries
+     */
+    public List<String> validate(List<String> changedUsages, User sw360User, Sw360ReleaseService releaseService, Set<String> totalReleaseIds) throws TException {
+        List<String> warnings = new ArrayList<>();
+        Iterator<String> iterator = changedUsages.iterator();
+
+        while (iterator.hasNext()) {
+            String data = iterator.next();
+            String releaseId;
+            String usageData;
+            String attachmentContentId;
+            String[] parts = data.split("-");
+            if (parts.length > 1) {
+                String[] components = parts[1].split("_");
+                releaseId = components[0];
+                usageData = components[1];
+                attachmentContentId = components[2];
+            } else {
+                String[] components = data.split("_");
+                releaseId = components[0];
+                usageData = components[1];
+                attachmentContentId = components[2];
+            }
+
+            boolean relPresent = totalReleaseIds.contains(releaseId);
+            if (!relPresent) {
+                warnings.add(String.format("Release '%s' does not belong to project or its sub-projects, skipping usage: %s", releaseId, data));
+                iterator.remove();
+                continue;
+            }
+
+            try {
+                Release release = releaseService.getReleaseForUserById(releaseId, sw360User);
+                Set<Attachment> attachments = release.getAttachments();
+                boolean invalidAttachment = false;
+
+                if (usageData.equals("sourcePackage")) {
+                    for (Attachment attach : attachments) {
+                        if (attach.getAttachmentContentId().equals(attachmentContentId) && (attach.getAttachmentType() != AttachmentType.SOURCE && attach.getAttachmentType() != AttachmentType.SOURCE_SELF)) {
+                            invalidAttachment = true;
+                            break;
+                        }
                     }
                 }
-            }
-            if (usageData.equals("licenseInfo")) {
-                for (Attachment attach : attachments) {
-                    if (attach.getAttachmentContentId().equals(attachmentContentId) && (attach.getAttachmentType() != AttachmentType.COMPONENT_LICENSE_INFO_COMBINED && attach.getAttachmentType() != AttachmentType.COMPONENT_LICENSE_INFO_XML)) {
-                        return false;
+                if (usageData.equals("licenseInfo")) {
+                    for (Attachment attach : attachments) {
+                        if (attach.getAttachmentContentId().equals(attachmentContentId) && (attach.getAttachmentType() != AttachmentType.COMPONENT_LICENSE_INFO_COMBINED && attach.getAttachmentType() != AttachmentType.COMPONENT_LICENSE_INFO_XML)) {
+                            invalidAttachment = true;
+                            break;
+                        }
                     }
                 }
+
+                if (invalidAttachment) {
+                    warnings.add(String.format("Not a valid attachment type for release '%s', skipping usage: %s", releaseId, data));
+                    iterator.remove();
+                }
+            } catch (Exception e) {
+                warnings.add(String.format("Could not validate release '%s': %s, skipping usage: %s", releaseId, e.getMessage(), data));
+                iterator.remove();
             }
-        } return true;
+        }
+        return warnings;
     }
+
+
 
     public List<String> savedUsages(List<AttachmentUsage> allUsagesByProject) {
         List<String> selectedData = new ArrayList<>();
@@ -253,7 +298,7 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
                 selectedData.add(stringResult);
             }
         }
-        System.out.println("Resulting string: " + selectedData);
+        log.trace("Resulting string: {}", selectedData);
         return selectedData;
     }
 
@@ -613,17 +658,66 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         try {
             ThriftClients thriftClients = new ThriftClients();
             ProjectService.Iface client = thriftClients.makeProjectClient();
+
+            // Ensure the obligation has a valid model configuration
+            if (obligation == null) {
+                log.error("Obligation list is null");
+                return RequestStatus.FAILURE;
+            }
+
+            // Get current obligation status map
+            Map<String, ObligationStatusInfo> currentObligationStatusMap = obligation.getLinkedObligationStatus();
+            if (currentObligationStatusMap == null) {
+                currentObligationStatusMap = new HashMap<>();
+                obligation.setLinkedObligationStatus(currentObligationStatusMap);
+            }
+
+            // Validate that updated map is not null
+            if (updatedObligationStatusMap == null || updatedObligationStatusMap.isEmpty()) {
+                log.error("Updated obligation status map is null or empty");
+                return RequestStatus.FAILURE;
+            }
+
+            // Update only status and comment fields if they are set in the updated map
+            for (Map.Entry<String, ObligationStatusInfo> entry : updatedObligationStatusMap.entrySet()) {
+                String key = entry.getKey();
+                ObligationStatusInfo updatedOsi = entry.getValue();
+
+                if (updatedOsi == null) {
+                    log.warn("Skipping null ObligationStatusInfo for key: {}", key);
+                    continue;
+                }
+
+                ObligationStatusInfo currentOsi = currentObligationStatusMap.get(key);
+
+                if (currentOsi != null) {
+                    // Only update status if it's explicitly set
+                    if (updatedOsi.isSetStatus()) {
+                        currentOsi.setStatus(updatedOsi.getStatus());
+                        // When status is updated, also update modification metadata
+                        currentOsi.setModifiedBy(sw360User.getEmail());
+                        currentOsi.setModifiedOn(SW360Utils.getCreatedOn());
+                    }
+
+                    // Only update comment if it's explicitly set
+                    if (updatedOsi.isSetComment()) {
+                        currentOsi.setComment(updatedOsi.getComment());
+                    }
+                } else {
+                    // Add new obligation status info if it doesn't exist
+                    currentObligationStatusMap.put(key, updatedOsi);
+                }
+            }
             obligation.unsetLinkedObligationStatus();
-            obligation.setLinkedObligationStatus(updatedObligationStatusMap);
+            obligation.setLinkedObligationStatus(currentObligationStatusMap);
             return client.updateLinkedObligations(obligation, sw360User);
         } catch (TException exception) {
-            log.error("Failed to update obligation for project: ");
+            log.error("Failed to update obligation for project: ", exception);
         }
         return RequestStatus.FAILURE;
     }
-
     public RequestStatus addLinkedObligations(Project project, User user,
-            Map<String, ObligationStatusInfo> licenseObligation) {
+                                              Map<String, ObligationStatusInfo> licenseObligation) {
         ThriftClients thriftClients = new ThriftClients();
         ProjectService.Iface client = thriftClients.makeProjectClient();
         final boolean isObligationPresent = CommonUtils.isNotNullEmptyOrWhitespace(project.getLinkedObligationId());
@@ -641,7 +735,7 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
 
         Map<String, ObligationStatusInfo> obligationStatusInfo = isObligationPresent
                 && obligation.getLinkedObligationStatusSize() > 0 ? obligation.getLinkedObligationStatus()
-                        : Maps.newHashMap();
+                : Maps.newHashMap();
 
         for (Map.Entry<String, ObligationStatusInfo> entry : licenseObligation.entrySet()) {
             ObligationStatusInfo newOsi = entry.getValue();
@@ -681,19 +775,30 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         ThriftClients thriftClients = new ThriftClients();
         ComponentService.Iface componentClient = thriftClients.makeComponentClient();
 
-        if (oblLevel.equalsIgnoreCase("Project")) {
+        if ("Project".equalsIgnoreCase(oblLevel)) {
             updatedObligationStatusMap = SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(
                     obligationStatusMap, obligations, ObligationLevel.PROJECT_OBLIGATION, true);
             return updatedObligationStatusMap;
-        } else if (oblLevel.equalsIgnoreCase("Organization")) {
+        } else if ("Organization".equalsIgnoreCase(oblLevel)) {
             updatedObligationStatusMap = SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(
                     obligationStatusMap, obligations, ObligationLevel.ORGANISATION_OBLIGATION, true);
             return updatedObligationStatusMap;
-        } else if (oblLevel.equalsIgnoreCase("Component")) {
+        } else if ("Component".equalsIgnoreCase(oblLevel)) {
             updatedObligationStatusMap = SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(
                     obligationStatusMap, obligations, ObligationLevel.COMPONENT_OBLIGATION, true);
             return updatedObligationStatusMap;
         } return updatedObligationStatusMap;
+    }
+
+    public Map<String, ObligationStatusInfo> setObligationsFromAdminSection(User user, Map<String, ObligationStatusInfo> obligationStatusMap,
+                                                                            Project project) throws TException {
+        List<Obligation> obligations = SW360Utils.getObligations();
+        Map<String, ObligationStatusInfo> updatedObligationStatusMap = Maps.newHashMap();
+        ThriftClients thriftClients = new ThriftClients();
+        ComponentService.Iface componentClient = thriftClients.makeComponentClient();
+        updatedObligationStatusMap = SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(
+                obligationStatusMap, obligations, true);
+        return updatedObligationStatusMap;
     }
 
     public Map<String, ObligationStatusInfo> setLicenseInfoWithObligations(
@@ -746,7 +851,7 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
             obligationStatusMap = licenseObligation.getObligationStatusMap();
             for (Map.Entry<String, ObligationStatusInfo> entry : obligationStatusMap.entrySet()) {
                 ObligationStatusInfo details = entry.getValue();
-                if (details.getReleaseIdToAcceptedCLI() == null) {
+                if (details.getReleaseIdToAcceptedCLI() == null && details.getReleases()!=null) {
                     Set<Release> releaseData = details.getReleases();
                     for (Release rel : releaseData) {
                         String releaseId = rel.getId();
@@ -841,6 +946,9 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
         if (requestStatus == RequestStatus.INVALID_INPUT) {
             throw new BadRequestClientException("Dependent document Id/ids not valid.");
+        } else if (requestStatus == RequestStatus.DUPLICATE) {
+            throw new HttpClientErrorException(HttpStatus.CONFLICT,
+                    "A project with the same name and version already exists.");
         } else if (requestStatus != RequestStatus.SENT_TO_MODERATOR && requestStatus != RequestStatus.SUCCESS) {
             throw new RuntimeException("sw360 project with name '" + project.getName() + " cannot be updated.");
         }
@@ -873,9 +981,19 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         return sw360ProjectClient.fillClearingStateSummaryIncludingSubprojectsForSingleProject(sw360Project, sw360User);
     }
 
-    public List<Project> searchProjectByName(String name, User sw360User) throws TException {
+    public List<Project> getClearingInfoForProjects(List<String> projectIds, User sw360User) throws TException {
+        ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
+        List<Project> projects = sw360ProjectClient.getProjectsById(projectIds, sw360User);
+        return sw360ProjectClient.fillClearingStateSummaryIncludingSubprojects(projects, sw360User);
+    }
+
+    public Map<PaginationData, List<Project>> searchProjectByExactNamePaginated(
+            User sw360User, String name, Pageable pageable
+    ) throws TException {
         final ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
-        return sw360ProjectClient.searchByName(name, sw360User);
+        name = name.replaceAll("\"", "");
+        return sw360ProjectClient.searchProjectByExactNamePaginated(sw360User, name,
+                pageableToPaginationData(pageable, null, null));
     }
 
     public List<Project> searchProjectByGroup(String group, User sw360User) throws TException {
@@ -982,6 +1100,30 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
                         .collect(Collectors.toList())));
     }
 
+    public Function<ProjectLink, ProjectLink> filterAndSortAllAttachments(Collection<AttachmentType> attachmentTypes) {
+        Predicate<Attachment> filter = att -> attachmentTypes.contains(att.getAttachmentType());
+        return createProjectLinkMapper(rl -> {
+            List<Attachment> attachments = nullToEmptyList(rl.getAttachments()).stream().filter(filter)
+                    .collect(Collectors.toList());
+
+            if (attachments.size() > 1) {
+                Optional<Attachment> acceptedAttachment = attachments.stream()
+                        .filter(att -> att.getCheckStatus() == CheckStatus.ACCEPTED).findFirst();
+
+                if (acceptedAttachment.isPresent()) {
+                    attachments = List.of(acceptedAttachment.get());
+                } else {
+                    attachments = attachments.stream().filter(
+                                    att -> SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES.contains(att.getAttachmentType()))
+                            .limit(1).collect(Collectors.toList());
+                }
+            }
+
+            rl.setAttachments(attachments);
+            return rl;
+        });
+    }
+
     public Map<String, Integer> storeAttachmentUsageCount(List<ProjectLink> mappedProjectLinks, UsageData filter) throws TException {
         try {
             ThriftClients thriftClients = new ThriftClients();
@@ -1024,30 +1166,6 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         return attachments;
     }
 
-    public Function<ProjectLink, ProjectLink> filterAndSortAllAttachments(Collection<AttachmentType> attachmentTypes) {
-        Predicate<Attachment> filter = att -> attachmentTypes.contains(att.getAttachmentType());
-        return createProjectLinkMapper(rl -> {
-            List<Attachment> attachments = nullToEmptyList(rl.getAttachments()).stream().filter(filter)
-                    .collect(Collectors.toList());
-
-            if (attachments.size() > 1) {
-                Optional<Attachment> acceptedAttachment = attachments.stream()
-                        .filter(att -> att.getCheckStatus() == CheckStatus.ACCEPTED).findFirst();
-
-                if (acceptedAttachment.isPresent()) {
-                    attachments = List.of(acceptedAttachment.get());
-                } else {
-                    attachments = attachments.stream().filter(
-                            att -> SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES.contains(att.getAttachmentType()))
-                            .limit(1).collect(Collectors.toList());
-                }
-            }
-
-            rl.setAttachments(attachments);
-            return rl;
-        });
-    }
-
     public Function<ProjectLink, ProjectLink> createProjectLinkMapper(
             Function<ReleaseLink, ReleaseLink> releaseLinkMapper) {
         return (projectLink) -> {
@@ -1059,9 +1177,18 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
     }
 
     public List<ProjectLink> createLinkedProjects(Project project, Function<ProjectLink, ProjectLink> projectLinkMapper,
-            boolean deep, User user) {
-        final Collection<ProjectLink> linkedProjects = SW360Utils
-                .flattenProjectLinkTree(SW360Utils.getLinkedProjects(project, deep, new ThriftClients(), log, user));
+            boolean deep, boolean includeSubprojects, User user) {
+        ProjectLink parentProjectLink;
+        final Collection<ProjectLink> linkedProjects;
+        if(includeSubprojects) {
+            linkedProjects = SW360Utils.flattenProjectLinkTree(SW360Utils.
+                    getLinkedProjects(project, deep, new ThriftClients(), log, user));
+        }
+        else {
+            parentProjectLink = new ProjectLink(project.getId(), project.getName());
+            parentProjectLink.setLinkedReleases(SW360Utils.getLinkedReleasesWithAccessibility(project, new ThriftClients(), log, user));
+            linkedProjects = Collections.singletonList(parentProjectLink);
+        }
         return linkedProjects.stream().map(projectLinkMapper).collect(Collectors.toList());
     }
 
@@ -1138,7 +1265,7 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
                 return actualProjectReleaseRelationship;
             }
         }
-        throw new ResourceNotFoundException("Requested Re<<<<<< HEAD\n" + "=======lease Not Found");
+        throw new ResourceNotFoundException("Requested Release Not Found");
     }
 
     @PreDestroy
@@ -1153,9 +1280,93 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
     }
 
-    public List<Project> refineSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
+    public Map<PaginationData, List<Project>> refineSearch(Map<String, Set<String>> filterMap, User sw360User, Pageable pageable) throws TException {
         ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
-        return sw360ProjectClient.refineSearch(null, filterMap, sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable,
+                // Can be sorted on name and createdOn, but using different default value for score sorting
+                ProjectSortColumn.BY_TYPE, true);
+        return sw360ProjectClient.refineSearchPageable(null, filterMap, sw360User, pageData);
+    }
+
+    /**
+     * Returns all projects matching the given filters for export.
+     *
+     * @param filterMap    field-name → accepted values
+     * @param sw360User    the authenticated user
+     * @param luceneSearch {@code true} for Lucene wildcard search, {@code false} for exact match
+     * @return flat list of all matching projects
+     */
+    public List<Project> getFilteredProjectsForExport(
+            Map<String, Set<String>> filterMap, User sw360User, boolean luceneSearch
+    ) throws TException {
+        ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
+
+        if (filterMap.isEmpty()) {
+            return sw360ProjectClient.getAccessibleProjectsSummary(sw360User);
+        }
+
+        if (luceneSearch) {
+            if (filterMap.containsKey(Project._Fields.NAME.getFieldName())) {
+                Set<String> wildcardNames = filterMap.get(Project._Fields.NAME.getFieldName()).stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+                filterMap.put(Project._Fields.NAME.getFieldName(), wildcardNames);
+            }
+            return sw360ProjectClient.refineSearch(null, filterMap, sw360User);
+        }
+
+        return fetchAllPages((page) -> searchAccessibleProjectByExactValues(filterMap, sw360User,
+                PageRequest.of(page, DatabaseSettings.LUCENE_SEARCH_LIMIT)));
+    }
+
+    /**
+     * Fetches all pages from {@code pageSupplier} and returns a flat list of matching projects.
+     * The total page count is derived from the first page's {@link PaginationData}.
+     */
+    private List<Project> fetchAllPages(ThriftPageSupplier pageSupplier) throws TException {
+        // --- fetch the first page to learn the total row count ---
+        Map<PaginationData, List<Project>> firstResult = pageSupplier.get(0);
+        if (firstResult == null || firstResult.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Project> firstBatch = firstResult.values().iterator().next();
+        if (firstBatch == null || firstBatch.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        long totalRowCount = firstResult.keySet().iterator().next().getTotalRowCount();
+        int pageSize = firstBatch.size();
+
+        List<Project> all = new ArrayList<>((int) Math.min(totalRowCount, Integer.MAX_VALUE));
+        all.addAll(firstBatch);
+
+        if (all.size() >= totalRowCount || pageSize == 0) {
+            return all;
+        }
+
+        // --- compute the remaining number of pages and fetch each one ---
+        int totalPages = (int) Math.ceil((double) totalRowCount / pageSize);
+        for (int page = 1; page < totalPages; page++) {
+            Map<PaginationData, List<Project>> result = pageSupplier.get(page);
+            if (result == null || result.isEmpty()) {
+                break;
+            }
+            List<Project> batch = result.values().iterator().next();
+            if (batch == null || batch.isEmpty()) {
+                break; // guard: stop early if an unexpected empty page is returned
+            }
+            all.addAll(batch);
+            if (all.size() >= totalRowCount) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    /** Functional interface for the paginated-fetch lambda used in {@link #fetchAllPages}. */
+    @FunctionalInterface
+    private interface ThriftPageSupplier {
+        Map<PaginationData, List<Project>> get(int page) throws TException;
     }
 
     public void copyLinkedObligationsForClonedProject(Project createDuplicateProject, Project sw360Project, User user)
@@ -1286,6 +1497,9 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
      * @throws TException
      */
     public int countProjectsByReleaseIds(Set<String> releaseIds) {
+        if (CommonUtils.isNullOrEmptyCollection(releaseIds)) {
+            return 0;
+        }
         try {
             ProjectService.Iface sw360ProjectClient = getThriftProjectClient();
             return sw360ProjectClient.getCountByReleaseIds(releaseIds);
@@ -1452,6 +1666,9 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
         if (requestStatus == RequestStatus.INVALID_INPUT) {
             throw new BadRequestClientException("Dependent document Id/ids not valid.");
+        } else if (requestStatus == RequestStatus.DUPLICATE) {
+            throw new HttpClientErrorException(HttpStatus.CONFLICT,
+                    "A project with the same name and version already exists.");
         } else if (requestStatus != RequestStatus.SENT_TO_MODERATOR && requestStatus != RequestStatus.SUCCESS) {
             throw new RuntimeException("sw360 project with name '" + project.getName() + " cannot be updated.");
         }
@@ -1491,7 +1708,7 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
             Set<ProjectRelationship> listOfSelectedProjectRelationships, Set<Attachment> selectedAttachments, User user,
             Project project) {
         List<ProjectLink> filteredMappedProjectLinks = createLinkedProjects(project,
-                link -> filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES).apply(link), true, user);
+                link -> filterAndSortAttachments(SW360Constants.LICENSE_INFO_ATTACHMENT_TYPES).apply(link), true, true, user);
         Set<String> filteredProjectIds = filteredProjectIds(filteredMappedProjectLinks);
         Set<String> selectedAttachmentIdsWithPath = new HashSet<>();
 
@@ -1648,49 +1865,23 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
 
         Set<String> releaseIds = CommonUtils.getNullToEmptyKeyset(project.getReleaseIdToUsage());
-        Map<ReleaseCLIInfo, List<Release>> updateStatus = new HashMap<>();
-        updateStatus.put(ReleaseCLIInfo.UPDATED, new ArrayList<>());
-        updateStatus.put(ReleaseCLIInfo.NOT_UPDATED, new ArrayList<>());
-        updateStatus.put(ReleaseCLIInfo.MULTIPLE_ATTACHMENTS, new ArrayList<>());
+        Map<ReleaseCLIInfo, List<Release>> updateStatus = new ConcurrentHashMap<>();
+        updateStatus.put(ReleaseCLIInfo.UPDATED, Collections.synchronizedList(new ArrayList<>()));
+        updateStatus.put(ReleaseCLIInfo.NOT_UPDATED, Collections.synchronizedList(new ArrayList<>()));
+        updateStatus.put(ReleaseCLIInfo.MULTIPLE_ATTACHMENTS, Collections.synchronizedList(new ArrayList<>()));
 
-        for (String releaseId : releaseIds) {
-            Release release = null;
-            try {
-                release = componentClient.getReleaseById(releaseId, sw360User);
-            } catch (TException e) {
-                updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
-                log.error("Error fetching release: {}", releaseId, e);
-                continue;
-            }
-            if (release == null) {
-                updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
-                log.error("Release with ID {} not found.", releaseId);
-                continue;
-            }
+        List<Callable<Void>> processingTasks = releaseIds.stream()
+                .map(releaseId -> (Callable<Void>) () -> {
+                    processReleaseForLicenseUpdate(releaseId, sw360User, componentClient,
+                            licenseInfoClient, updateStatus);
+                    return null;
+                })
+                .collect(Collectors.toList());
 
-            List<Attachment> approvedCliAttachments = SW360Utils.getApprovedClxAttachmentForRelease(release);
-            if (approvedCliAttachments.isEmpty()) {
-                approvedCliAttachments = SW360Utils.getClxAttachmentForRelease(release);
-            }
-
-            if (approvedCliAttachments.size() > 1) {
-                updateStatus.get(ReleaseCLIInfo.MULTIPLE_ATTACHMENTS).add(release);
-                log.info("Release {} has more than one attachment. Skipping update.", release.getId());
-                continue;
-            }
-
-            if (approvedCliAttachments.isEmpty()) {
-                updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
-                log.info("No CLX attachment found for release: {}. Skipping update.", release.getId());
-                continue;
-            }
-
-            if (processSingleAttachment(approvedCliAttachments.getFirst(), release, licenseInfoClient, sw360User)) {
-                updateStatus.get(ReleaseCLIInfo.UPDATED).add(release);
-            } else {
-                updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
-                log.info("No changes done for release: {}", release.getId());
-            }
+        try {
+            releaseExecutor.invokeAll(processingTasks);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Error processing releases: " + e.getMessage());
         }
 
         for (Release release : updateStatus.get(ReleaseCLIInfo.UPDATED)) {
@@ -1699,6 +1890,61 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         }
 
         return updateStatus;
+    }
+
+    /**
+     * Process a single release for license update.
+     *
+     * @param releaseId         Release ID to process
+     * @param sw360User         User
+     * @param componentClient   Component service client
+     * @param licenseInfoClient License info service client
+     * @param updateStatus      Map to collect results
+     */
+    private void processReleaseForLicenseUpdate(
+            String releaseId, User sw360User, ComponentService.Iface componentClient,
+            LicenseInfoService.Iface licenseInfoClient, Map<ReleaseCLIInfo, List<Release>> updateStatus) {
+        Release release;
+        try {
+            release = componentClient.getReleaseById(releaseId, sw360User);
+        } catch (TException e) {
+            log.error("Error fetching release: {}", releaseId, e);
+            Release failedRelease = new Release();
+            failedRelease.setId(releaseId);
+            updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(failedRelease);
+            return;
+        }
+        if (release == null) {
+            log.error("Release with ID {} not found.", releaseId);
+            Release notFoundRelease = new Release();
+            notFoundRelease.setId(releaseId);
+            updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(notFoundRelease);
+            return;
+        }
+
+        List<Attachment> approvedCliAttachments = SW360Utils.getApprovedClxAttachmentForRelease(release);
+        if (approvedCliAttachments.isEmpty()) {
+            approvedCliAttachments = SW360Utils.getClxAttachmentForRelease(release);
+        }
+
+        if (approvedCliAttachments.size() > 1) {
+            updateStatus.get(ReleaseCLIInfo.MULTIPLE_ATTACHMENTS).add(release);
+            log.info("Release {} has more than one attachment. Skipping update.", release.getId());
+            return;
+        }
+
+        if (approvedCliAttachments.isEmpty()) {
+            updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
+            log.info("No CLX attachment found for release: {}. Skipping update.", release.getId());
+            return;
+        }
+
+        if (processSingleAttachment(approvedCliAttachments.getFirst(), release, licenseInfoClient, sw360User)) {
+            updateStatus.get(ReleaseCLIInfo.UPDATED).add(release);
+        } else {
+            updateStatus.get(ReleaseCLIInfo.NOT_UPDATED).add(release);
+            log.info("No changes done for release: {}", release.getId());
+        }
     }
 
     /**
@@ -1787,5 +2033,484 @@ public class Sw360ProjectService implements AwareOfRestServices<Project> {
         return true;
         }).collect(Collectors.toList());
         return releases;
+    }
+
+    /**
+     * Converts a Pageable object to a PaginationData object.
+     *
+     * @param pageable the Pageable object to convert
+     * @return a PaginationData object representing the pagination information
+     */
+    private static PaginationData pageableToPaginationData(
+            @NotNull Pageable pageable, ProjectSortColumn defaultSort, Boolean defaultAscending
+    ) {
+        ProjectSortColumn column = ProjectSortColumn.BY_NAME;
+        boolean ascending = true;
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            String property = order.getProperty();
+            column = switch (property) {
+                case "createdOn" -> ProjectSortColumn.BY_CREATEDON;
+                case "name" -> ProjectSortColumn.BY_NAME;
+                case "vendor" -> ProjectSortColumn.BY_VENDOR;
+                case "license" -> ProjectSortColumn.BY_MAINLICENSE;
+                case "type" -> ProjectSortColumn.BY_TYPE;
+                case "description" -> ProjectSortColumn.BY_DESCRIPTION;
+                case "projectResponsible" -> ProjectSortColumn.BY_RESPONSIBLE;
+                case "state" -> ProjectSortColumn.BY_STATE;
+                default -> column; // Default to BY_NAME if no match
+            };
+            ascending = order.isAscending();
+        } else {
+            if (defaultSort != null) {
+                column = defaultSort;
+                if (defaultAscending != null) {
+                    ascending = defaultAscending;
+                }
+            }
+        }
+
+        return new PaginationData().setDisplayStart((int) pageable.getOffset())
+                .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(column.getValue()).setAscending(ascending);
+    }
+
+    public int getProjectCountByPackageId(String packageId) throws TException {
+        ThriftClients thriftClients = new ThriftClients();
+        ProjectService.Iface projectClient = thriftClients.makeProjectClient();
+        int count;
+        try {
+            count = projectClient.getProjectCountByPackageId(packageId);
+        } catch (SW360Exception sw360Exp) {
+            if (sw360Exp.getErrorCode() == 404) {
+                throw new ResourceNotFoundException("Requested Package Id Not Found");
+            }
+            else {
+                throw sw360Exp;
+            }
+        }
+        return count;
+    }
+
+    public Set<String> getGroups() throws TException {
+        ProjectService.Iface projectClient = getThriftProjectClient();
+        return projectClient.getGroups();
+    }
+
+    // =====================================================
+    // Ignored Licenses Handling Methods
+    // =====================================================
+
+    /**
+     * Handles the processing of ignored licenses for a project's attachment usages.
+     * This method validates the structure and relationships of ignored licenses data,
+     * then creates or updates the corresponding attachment usages.
+     *
+     * @param projectId The ID of the parent project
+     * @param ignoredLicensesData Map of ignored licenses data from the request
+     * @param project The project object
+     * @param user The current user
+     * @throws TException if there's an error during processing
+     */
+    public List<String> handleIgnoredLicenses(String projectId, Map<String, List<String>> ignoredLicensesData,
+                                      Project project, User user) throws TException {
+
+        // Validate ignoredLicenses structure and relationships
+        validateIgnoredLicensesStructure(ignoredLicensesData);
+        List<String> warnings = validateIgnoredLicensesRelationships(projectId, ignoredLicensesData, user);
+
+        Map<String, ProjectReleaseRelationship> releaseIdToUsage = project.getReleaseIdToUsage();
+        Set<String> validReleaseIds = CommonUtils.isNullOrEmptyMap(releaseIdToUsage)
+                ? Collections.emptySet()
+                : releaseIdToUsage.keySet();
+
+        // For projects with subprojects, we need to get all release IDs from the hierarchy
+        Set<String> allValidReleaseIds = new HashSet<>(validReleaseIds);
+        try {
+            Set<String> allReleaseIdsIncludingSubprojects = getReleaseIds(projectId, user, true);
+            allValidReleaseIds.addAll(allReleaseIdsIncludingSubprojects);
+        } catch (TException e) {
+            log.warn("Could not fetch release IDs from subprojects for project {}: {}", projectId, e.getMessage());
+        }
+
+        if (allValidReleaseIds.isEmpty()) {
+            log.warn("Project {} and its subprojects have no releases, skipping ignored licenses processing", projectId);
+            return warnings;
+        }
+
+        Source projectSource = Source.projectId(projectId);
+        List<AttachmentUsage> usagesToUpdate = new ArrayList<>(ignoredLicensesData.size());
+
+        // Validate all releases belong to project or its subprojects
+        Set<String> invalidReleases = ignoredLicensesData.keySet().stream()
+            .map(this::extractReleaseIdFromIgnoredLicenseKey)
+            .filter(releaseId -> !allValidReleaseIds.contains(releaseId))
+            .collect(Collectors.toSet());
+
+        // If any invalid releases found, warn and remove them from the map
+        if (!invalidReleases.isEmpty()) {
+            String warnMessage = String.format("The following releases do not belong to project %s or its subprojects and will be skipped: %s",
+                                               projectId, String.join(", ", invalidReleases));
+            log.warn(warnMessage);
+            warnings.add(warnMessage);
+            // Remove keys whose release ID is invalid
+            ignoredLicensesData.keySet().removeIf(key -> invalidReleases.contains(extractReleaseIdFromIgnoredLicenseKey(key)));
+        }
+
+        // process valid releases
+        for (Map.Entry<String, List<String>> entry : ignoredLicensesData.entrySet()) {
+            String key = entry.getKey();
+
+            // Parse key: projectPath-releaseId_attachmentContentId or releaseId_attachmentContentId (legacy format)
+            String releaseId;
+            String attachmentContentId;
+            String projectPath;
+
+            int dashIndex = key.lastIndexOf('-');
+            if (dashIndex > 0 && key.indexOf('_') > dashIndex) {
+                // New format with project path: projectPath-releaseId_attachmentContentId
+                projectPath = key.substring(0, dashIndex);
+                String releaseAttachmentPart = key.substring(dashIndex + 1);
+                int underscoreIndex = releaseAttachmentPart.indexOf('_');
+                releaseId = releaseAttachmentPart.substring(0, underscoreIndex);
+                attachmentContentId = releaseAttachmentPart.substring(underscoreIndex + 1);
+
+                // If project path doesn't start with the parent project ID, prepend it
+                // This handles cases like "subProj:subSubProj" -> "parentProj:subProj:subSubProj"
+                if (!projectPath.startsWith(projectId)) {
+                    projectPath = projectId + ":" + projectPath;
+                }
+            } else {
+                // Legacy format: releaseId_attachmentContentId
+                int underscoreIndex = key.indexOf('_');
+                releaseId = key.substring(0, underscoreIndex);
+                attachmentContentId = key.substring(underscoreIndex + 1);
+                projectPath = projectId;
+            }
+
+            // Extract excluded license IDs directly from the list
+            List<String> excludedLicenseIds = entry.getValue();
+
+            // Create LicenseInfoUsage with excluded licenses
+            Set<String> excludedLicenseIdSet = CommonUtils.isNullOrEmptyCollection(excludedLicenseIds)
+                ? Collections.emptySet()
+                : new HashSet<>(excludedLicenseIds);
+
+            LicenseInfoUsage licenseInfoUsage = new LicenseInfoUsage(excludedLicenseIdSet);
+            licenseInfoUsage.setProjectPath(projectPath);
+
+            // Create AttachmentUsage
+            AttachmentUsage usage = new AttachmentUsage(
+                Source.releaseId(releaseId),
+                attachmentContentId,
+                projectSource
+            );
+            usage.setUsageData(UsageData.licenseInfo(licenseInfoUsage));
+
+            usagesToUpdate.add(usage);
+        }
+        try {
+            // Get existing license info attachment usages for this project
+            List<AttachmentUsage> existingUsages = getUsedAttachments(projectSource, null);
+            List<AttachmentUsage> existingLicenseInfoUsages = existingUsages.stream()
+                    .filter(usage -> usage.isSetUsageData() &&
+                            usage.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO))
+                    .collect(Collectors.toList());
+
+            // Find existing usages that match our updates for deletion
+            List<AttachmentUsage> usagesToDelete = existingLicenseInfoUsages.stream()
+                    .filter(existing -> usagesToUpdate.stream()
+                            .anyMatch(update -> isIgnoredLicenseUsageEquivalent(existing, update)))
+                    .collect(Collectors.toList());
+
+            // Delete existing usages if any
+            if (!usagesToDelete.isEmpty()) {
+                log.debug("Deleting {} existing license info usages for project {}",
+                         usagesToDelete.size(), projectId);
+                deleteAttachmentUsages(usagesToDelete);
+            }
+
+            // Create new usages
+            log.debug("Creating {} new license info usages for project {}",
+                     usagesToUpdate.size(), projectId);
+            makeAttachmentUsages(usagesToUpdate);
+
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to process ignored licenses for project {}: {}", projectId, e.getMessage(), e);
+            throw new TException("Failed to process ignored licenses", e);
+        }
+        return warnings;
+    }
+
+    /**
+     * Validates the structure of ignoredLicenses data.
+     *
+     * @param ignoredLicensesData Map of ignored licenses data
+     * @throws BadRequestClientException if validation fails
+     */
+    private void validateIgnoredLicensesStructure(Map<String, List<String>> ignoredLicensesData) {
+        if (CommonUtils.isNullOrEmptyMap(ignoredLicensesData)) {
+            throw new BadRequestClientException("ignoredLicenses field is required and cannot be empty");
+        }
+
+        for (Map.Entry<String, List<String>> entry : ignoredLicensesData.entrySet()) {
+            String key = entry.getKey();
+            List<String> excludedLicenseIds = entry.getValue();
+
+            // Validate key format: should be projectPath-releaseId_attachmentContentId or releaseId_attachmentContentId
+            if (CommonUtils.isNullEmptyOrWhitespace(key) || !key.contains("_")) {
+                throw new BadRequestClientException("Invalid key format in ignoredLicenses. Expected format: 'projectPath-releaseId_attachmentContentId' or 'releaseId_attachmentContentId'");
+            }
+
+            // Check if it has the new format with project path
+            int dashIndex = key.lastIndexOf('-');
+            int underscoreIndex = key.indexOf('_');
+
+            if (dashIndex > 0 && underscoreIndex > dashIndex) {
+                // New format: projectPath-releaseId_attachmentContentId
+                String projectPath = key.substring(0, dashIndex);
+                String releaseAttachmentPart = key.substring(dashIndex + 1);
+                int releaseUnderscoreIndex = releaseAttachmentPart.indexOf('_');
+
+                if (CommonUtils.isNullEmptyOrWhitespace(projectPath) ||
+                    releaseUnderscoreIndex <= 0 ||
+                    releaseUnderscoreIndex == releaseAttachmentPart.length() - 1) {
+                    throw new BadRequestClientException("Invalid key format in ignoredLicenses. Expected format: 'projectPath-releaseId_attachmentContentId'");
+                }
+            } else {
+                // Legacy format: releaseId_attachmentContentId
+                if (underscoreIndex == 0 || underscoreIndex == key.length() - 1) {
+                    throw new BadRequestClientException("Invalid key format in ignoredLicenses. Expected format: 'releaseId_attachmentContentId'");
+                }
+            }
+
+            // Validate excluded license IDs list
+            if (excludedLicenseIds == null) {
+                throw new BadRequestClientException("Excluded license IDs cannot be null for key: " + key);
+            }
+        }
+    }
+
+    /**
+     * Validates project hierarchy and release ownership relationships in ignoredLicenses.
+     * Performs the following validations:
+     * 1. If project path is provided, validates parent project ID matches path parameter
+     * 2. Validates sub-project belongs to parent project (for hierarchical paths)
+     * 3. Validates release belongs to the specified project (parent or sub-project)
+     *
+     * @param pathProjectId Project ID from the URL path parameter
+     * @param ignoredLicensesData Map of ignoredLicenses from request body
+     * @param user Current user for authorization
+     * @throws BadRequestClientException if validation fails
+     * @throws TException if there's an error accessing project/release data
+     */
+    private List<String> validateIgnoredLicensesRelationships(String pathProjectId,
+                                                       Map<String, List<String>> ignoredLicensesData,
+                                                       User user) throws TException {
+        List<String> warnings = new ArrayList<>();
+        Set<String> keysToRemove = new HashSet<>();
+
+        for (Map.Entry<String, List<String>> entry : ignoredLicensesData.entrySet()) {
+            String key = entry.getKey();
+
+            // Parse the key to extract components
+            ParsedIgnoredLicenseKey parsed = parseIgnoredLicenseKey(key);
+
+            // Skip validation for legacy format (no project path)
+            if (parsed.projectPath == null) {
+                log.debug("Legacy format detected for key '{}', skipping project hierarchy validation", key);
+                continue;
+            }
+
+            // Split project path into hierarchy levels
+            String[] projectHierarchy = parsed.projectPath.split(":");
+            String rootProjectId = projectHierarchy[0];
+
+            // Validation 1: Root project in request must match path parameter
+            if (!rootProjectId.equals(pathProjectId)) {
+                String warning = String.format(
+                    "Skipping ignoredLicenses key '%s': Root project ID '%s' does not match path parameter project ID '%s'",
+                    key, rootProjectId, pathProjectId);
+                log.warn(warning);
+                warnings.add(warning);
+                keysToRemove.add(key);
+                continue;
+            }
+
+            // Validation 2: Validate project hierarchy (if multi-level)
+            if (projectHierarchy.length > 1) {
+                String hierarchyWarning = validateProjectHierarchyChain(projectHierarchy, key, user);
+                if (hierarchyWarning != null) {
+                    warnings.add(hierarchyWarning);
+                    keysToRemove.add(key);
+                    continue;
+                }
+            }
+
+            // Validation 3: Validate release belongs to the correct project
+            String targetProjectId = projectHierarchy[projectHierarchy.length - 1];
+            String ownershipWarning = validateReleaseOwnership(parsed.releaseId, targetProjectId, key, user);
+            if (ownershipWarning != null) {
+                warnings.add(ownershipWarning);
+                keysToRemove.add(key);
+            }
+        }
+
+        // Remove invalid entries so they are not processed
+        keysToRemove.forEach(ignoredLicensesData::remove);
+
+        if (!warnings.isEmpty()) {
+            log.warn("Skipped {} invalid ignoredLicenses entries for project {}: {}",
+                     keysToRemove.size(), pathProjectId, String.join("; ", warnings));
+        }
+
+        return warnings;
+    }
+
+    /**
+     * Validates that each sub-project in the hierarchy belongs to its parent project.
+     * Returns a warning message if validation fails, or null if valid.
+     *
+     * @param projectHierarchy Array of project IDs forming the hierarchy chain
+     * @param originalKey Original key from ignoredLicenses for error messages
+     * @param user Current user
+     * @return warning message if validation fails, null if valid
+     */
+    private String validateProjectHierarchyChain(String[] projectHierarchy, String originalKey, User user) {
+        try {
+            for (int i = 0; i < projectHierarchy.length - 1; i++) {
+                String parentProjectId = projectHierarchy[i];
+                String childProjectId = projectHierarchy[i + 1];
+
+                Project parentProject = getProjectForUserById(parentProjectId, user);
+                Map<String, ProjectProjectRelationship> linkedProjects = parentProject.getLinkedProjects();
+                if (CommonUtils.isNullOrEmptyMap(linkedProjects) || !linkedProjects.containsKey(childProjectId)) {
+                    return String.format(
+                        "Invalid project hierarchy in key '%s': Sub-project '%s' does not belong to parent project '%s'",
+                        originalKey, childProjectId, parentProjectId);
+                }
+            }
+        } catch (TException e) {
+            return String.format("Could not validate hierarchy for key '%s': %s", originalKey, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Validates that a release belongs to the specified project or any of its sub-projects.
+     * Returns a warning message if validation fails, or null if valid.
+     *
+     * @param releaseId Release ID to validate
+     * @param projectId Project ID that should contain the release
+     * @param originalKey Original key from ignoredLicenses for error messages
+     * @param user Current user
+     * @return warning message if validation fails, null if valid
+     */
+    private String validateReleaseOwnership(String releaseId, String projectId, String originalKey, User user) {
+        try {
+            getProjectForUserById(projectId, user);
+            Set<String> allReleaseIds = getReleaseIds(projectId, user, true);
+            if (!allReleaseIds.contains(releaseId)) {
+                return String.format(
+                    "Release '%s' does not belong to project '%s' or its sub-projects (key: '%s')",
+                    releaseId, projectId, originalKey);
+            }
+        } catch (TException e) {
+            return String.format("Could not validate release ownership for key '%s': %s", originalKey, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Parses an ignoredLicenses key into its components.
+     *
+     * @param key The key to parse
+     * @return ParsedIgnoredLicenseKey containing project path, release ID, and attachment content ID
+     */
+    private ParsedIgnoredLicenseKey parseIgnoredLicenseKey(String key) {
+        ParsedIgnoredLicenseKey result = new ParsedIgnoredLicenseKey();
+
+        int dashIndex = key.lastIndexOf('-');
+        int underscoreIndex = key.indexOf('_');
+
+        if (dashIndex > 0 && underscoreIndex > dashIndex) {
+            // New format: projectPath-releaseId_attachmentContentId
+            result.projectPath = key.substring(0, dashIndex);
+            String releaseAttachmentPart = key.substring(dashIndex + 1);
+            int releaseUnderscoreIndex = releaseAttachmentPart.indexOf('_');
+            result.releaseId = releaseAttachmentPart.substring(0, releaseUnderscoreIndex);
+            result.attachmentContentId = releaseAttachmentPart.substring(releaseUnderscoreIndex + 1);
+        } else {
+            // Legacy format: releaseId_attachmentContentId (no project path)
+            result.projectPath = null;
+            result.releaseId = key.substring(0, underscoreIndex);
+            result.attachmentContentId = key.substring(underscoreIndex + 1);
+        }
+
+        return result;
+    }
+
+    /**
+     * Extracts the release ID from an ignoredLicenses key.
+     * Supports both formats:
+     * - New format: projectPath-releaseId_attachmentContentId
+     * - Legacy format: releaseId_attachmentContentId
+     */
+    private String extractReleaseIdFromIgnoredLicenseKey(String key) {
+        int dashIndex = key.lastIndexOf('-');
+        int underscoreIndex = key.indexOf('_');
+
+        if (dashIndex > 0 && underscoreIndex > dashIndex) {
+            // New format: projectPath-releaseId_attachmentContentId
+            String releaseAttachmentPart = key.substring(dashIndex + 1);
+            int releaseUnderscoreIndex = releaseAttachmentPart.indexOf('_');
+            return releaseAttachmentPart.substring(0, releaseUnderscoreIndex);
+        } else {
+            // Legacy format: releaseId_attachmentContentId
+            return key.substring(0, underscoreIndex);
+        }
+    }
+
+    /**
+     * Checks if two attachment usages are equivalent for ignored licenses processing.
+     * I.e, they have the same attachmentContentId, owner, usedBy, and same project path.
+     */
+    private boolean isIgnoredLicenseUsageEquivalent(AttachmentUsage existing, AttachmentUsage update) {
+        boolean baseMatch = existing.getOwner().equals(update.getOwner()) &&
+               existing.getAttachmentContentId().equals(update.getAttachmentContentId()) &&
+               existing.getUsedBy().equals(update.getUsedBy());
+
+        if (!baseMatch) {
+            return false;
+        }
+
+        // For license info usages, also compare project path to properly handle hierarchical projects
+        if (existing.isSetUsageData() && update.isSetUsageData() &&
+            existing.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO) &&
+            update.getUsageData().getSetField().equals(UsageData._Fields.LICENSE_INFO)) {
+
+            LicenseInfoUsage existingLicenseInfo = existing.getUsageData().getLicenseInfo();
+            LicenseInfoUsage updateLicenseInfo = update.getUsageData().getLicenseInfo();
+
+            String existingPath = existingLicenseInfo.isSetProjectPath() ? existingLicenseInfo.getProjectPath() : "";
+            String updatePath = updateLicenseInfo.isSetProjectPath() ? updateLicenseInfo.getProjectPath() : "";
+
+            return existingPath.equals(updatePath);
+        }
+
+        return baseMatch;
+    }
+
+    /**
+     * Helper class to hold parsed components of an ignoredLicenses key.
+     */
+    private static class ParsedIgnoredLicenseKey {
+        String projectPath;  // null for legacy format
+        String releaseId;
+        String attachmentContentId;
     }
 }

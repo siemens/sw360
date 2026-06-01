@@ -41,6 +41,7 @@ import javax.xml.xpath.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -113,6 +114,8 @@ public abstract class AbstractCLIParser extends LicenseInfoParser {
 
     protected <T> boolean hasThisXMLRootElement(AttachmentContent content, String rootElementNamespace, String rootElementName, User user, T context) throws TException {
         XMLInputFactory xmlif = XMLInputFactory.newFactory();
+        xmlif.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        xmlif.setProperty(XMLInputFactory.SUPPORT_DTD, false);
         XMLStreamReader xmlStreamReader = null;
         InputStream attachmentStream = null;
         try {
@@ -138,7 +141,15 @@ public abstract class AbstractCLIParser extends LicenseInfoParser {
     }
 
     protected Document getDocument(InputStream attachmentStream) throws ParserConfigurationException, SAXException, IOException {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newDefaultInstance();
+
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+
         DocumentBuilder builder = factory.newDocumentBuilder();
         return builder.parse(attachmentStream);
     }
@@ -161,7 +172,14 @@ public abstract class AbstractCLIParser extends LicenseInfoParser {
         Set<String> files = new HashSet<String>();
         String sourceFiles = findNamedSubelement(node, SOURCE_FILES_ELEMENT_NAME).map(AbstractCLIParser::normalizeEscapedXhtml).orElse(null);
         if (CommonUtils.isNotNullEmptyOrWhitespace(sourceFiles)) {
-            files.addAll(Arrays.asList(sourceFiles.split(" ")));
+            // Parse comma-separated files and join them with newlines, store as single entry
+            String joinedFiles = Arrays.stream(sourceFiles.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.joining("\n"));
+            if (!joinedFiles.isEmpty()) {
+                files.add(joinedFiles);
+            }
         }
         return new LicenseNameWithText()
                 .setLicenseText(findNamedSubelement(node, LICENSE_CONTENT_ELEMENT_NAME)

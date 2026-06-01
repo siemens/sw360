@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.licenseinfo.TestHelper.assertLicenseInfoParsingResult;
@@ -106,28 +107,36 @@ public class CLIParserTest {
 
     @Test
     public void testIsApplicableTo() throws Exception {
-        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(new ReaderInputStream(new StringReader(CLI_TESTFILE)));
+        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(CLI_TESTFILE)).get()
+        );
         assertTrue(parser.isApplicableTo(attachment, new User(), new Project()));
     }
 
     @Test
     public void testIsApplicableToFailsOnIncorrectRootElement() throws Exception {
         AttachmentContent content = new AttachmentContent().setId("A1").setFilename("a.xml").setContentType("application/xml");
-        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(new ReaderInputStream(new StringReader("<wrong-root/>")));
+        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader("<wrong-root/>")).get()
+        );
         assertFalse(parser.isApplicableTo(attachment, new User(), new Project()));
     }
 
     @Test
     public void testIsApplicableToFailsOnMalformedXML() throws Exception {
         AttachmentContent content = new AttachmentContent().setId("A1").setFilename("a.xml").setContentType("application/xml");
-        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(new ReaderInputStream(new StringReader("this is not an xml file")));
+        when(connector.getAttachmentStream(eq(content), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader("this is not an xml file")).get()
+        );
         assertFalse(parser.isApplicableTo(attachment, new User(), new Project()));
     }
 
     @Test
     public void testGetCLI() throws Exception {
         Attachment cliAttachment = new Attachment("A1", "a.xml");
-        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(new ReaderInputStream(new StringReader(CLI_TESTFILE)));
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(CLI_TESTFILE)).get()
+        );
         LicenseInfoParsingResult res = parser.getLicenseInfos(cliAttachment, new User(), new Project()).stream().findFirst().orElseThrow(()->new RuntimeException("Parser returned empty LisenceInfoParsingResult list"));
         assertLicenseInfoParsingResult(res);
         assertThat(res.getStatus(), is(LicenseInfoRequestStatus.SUCCESS));
@@ -144,7 +153,9 @@ public class CLIParserTest {
     @Test
     public void testGetCLIObligations() throws Exception {
         Attachment cliAttachment = new Attachment("A1", "a.xml");
-        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(new ReaderInputStream(new StringReader(CLI_TESTFILE)));
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(CLI_TESTFILE)).get()
+        );
         ObligationParsingResult oblRes = parser.getObligations(cliAttachment, new User(), new Project());
         assertThat(oblRes.getStatus(), is(ObligationInfoRequestStatus.SUCCESS));
         assertThat(oblRes.getObligationsAtProjectSize(), is(2));
@@ -157,13 +168,89 @@ public class CLIParserTest {
     @Test
     public void testGetCLIFailsOnMalformedXML() throws Exception {
         Attachment cliAttachment = new Attachment("A1", "a.xml");
-        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(new ReaderInputStream(new StringReader(CLI_TESTFILE.replaceAll("</Content>", "</Broken>"))));
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(CLI_TESTFILE.replaceAll("</Content>", "</Broken>"))).get()
+        );
         LicenseInfoParsingResult res = parser.getLicenseInfos(cliAttachment, new User(), new Project()).stream().findFirst().orElseThrow(()->new RuntimeException("Parser returned empty LisenceInfoParsingResult list"));
         assertLicenseInfoParsingResult(res, LicenseInfoRequestStatus.FAILURE);
         assertThat(res.getStatus(), is(LicenseInfoRequestStatus.FAILURE));
         assertThat(res.getLicenseInfo(), notNullValue());
         assertThat(res.getLicenseInfo().getFilenames(), contains("a.xml"));
-
     }
 
+    @Test
+    public void testIsApplicableToFailsOnNonXmlExtension() throws Exception {
+        // A file whose name does not end in .xml must be rejected without reading content.
+        AttachmentContent txtContent = new AttachmentContent().setId("B1").setFilename("report.txt").setContentType("text/plain");
+        Attachment txtAttachment = new Attachment("B1", "report.txt").setAttachmentType(AttachmentType.COMPONENT_LICENSE_INFO_XML);
+        CLIParser txtParser = new CLIParser(connector, a -> txtContent);
+        assertFalse(txtParser.isApplicableTo(txtAttachment, new User(), new Project()));
+    }
+
+    @Test
+    public void testGetCLIWithNoLicenseElements_returnsSuccessWithEmptyLicenseSet() throws Exception {
+        // A valid CLI XML that contains no <License> elements must parse successfully
+        // and return an empty licence set rather than throwing.
+        String noLicensesXml =
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<ComponentLicenseInformation component=\"empty-comp\" creator=\"test\" date=\"01/01/2024\">\n" +
+                "<Copyright>\n" +
+                "<Content><![CDATA[Copyright 2024 Example Corp.]]></Content>\n" +
+                "<Files><![CDATA[src/main.c]]></Files>\n" +
+                "</Copyright>\n" +
+                "</ComponentLicenseInformation>";
+        Attachment cliAttachment = new Attachment("A1", "a.xml");
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(noLicensesXml)).setCharset(StandardCharsets.UTF_8).get()
+        );
+        LicenseInfoParsingResult res = parser.getLicenseInfos(cliAttachment, new User(), new Project())
+                .stream().findFirst().orElseThrow(() -> new RuntimeException("empty result list"));
+        assertThat(res.getStatus(), is(LicenseInfoRequestStatus.SUCCESS));
+        assertThat(res.getLicenseInfo().getLicenseNamesWithTexts(), is(empty()));
+        assertThat(res.getLicenseInfo().getCopyrights(), containsInAnyOrder("Copyright 2024 Example Corp."));
+    }
+
+    @Test
+    public void testGetCLIWithSpecialCharactersInCDATA_preservesTextVerbatim() throws Exception {
+        // CDATA sections must pass through <, >, and & literally without XML-escaping them.
+        String specialCharsXml =
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<ComponentLicenseInformation component=\"special\" creator=\"test\" date=\"01/01/2024\">\n" +
+                "<License type=\"global\" name=\"Custom\" spdxidentifier=\"n/a\">\n" +
+                "<Content><![CDATA[Use <this> library & tools freely.]]></Content>\n" +
+                "<Files><![CDATA[lib/]]></Files>\n" +
+                "</License>\n" +
+                "</ComponentLicenseInformation>";
+        Attachment cliAttachment = new Attachment("A1", "a.xml");
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(specialCharsXml)).setCharset(StandardCharsets.UTF_8).get()
+        );
+        LicenseInfoParsingResult res = parser.getLicenseInfos(cliAttachment, new User(), new Project())
+                .stream().findFirst().orElseThrow(() -> new RuntimeException("empty result list"));
+        assertThat(res.getStatus(), is(LicenseInfoRequestStatus.SUCCESS));
+        assertThat(res.getLicenseInfo().getLicenseNamesWithTexts().size(), is(1));
+        String licenseText = res.getLicenseInfo().getLicenseNamesWithTexts().iterator().next().getLicenseText();
+        assertThat(licenseText, containsString("<this>"));
+        assertThat(licenseText, containsString("&"));
+    }
+
+    @Test
+    public void testGetObligationsWithNoObligationElements_returnsSuccessWithEmptyList() throws Exception {
+        // A valid CLI XML with no <Obligation> elements must return SUCCESS and an empty list.
+        String noObligationsXml =
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<ComponentLicenseInformation component=\"no-oblig\" creator=\"test\" date=\"01/01/2024\">\n" +
+                "<License type=\"global\" name=\"MIT\" spdxidentifier=\"MIT\">\n" +
+                "<Content><![CDATA[MIT License text.]]></Content>\n" +
+                "<Files><![CDATA[src/]]></Files>\n" +
+                "</License>\n" +
+                "</ComponentLicenseInformation>";
+        Attachment cliAttachment = new Attachment("A1", "a.xml");
+        when(connector.getAttachmentStream(any(), any(), any())).thenReturn(
+                ReaderInputStream.builder().setReader(new StringReader(noObligationsXml)).setCharset(StandardCharsets.UTF_8).get()
+        );
+        ObligationParsingResult oblRes = parser.getObligations(cliAttachment, new User(), new Project());
+        assertThat(oblRes.getStatus(), is(ObligationInfoRequestStatus.SUCCESS));
+        assertThat(oblRes.getObligationsAtProjectSize(), is(0));
+    }
 }

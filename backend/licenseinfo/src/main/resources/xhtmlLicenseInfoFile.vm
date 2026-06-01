@@ -133,20 +133,25 @@
 
                     #if(${acknowledgements.get($releaseName)})
                         Acknowledgements:<br/>
-                            #set($acks = [])
-                            #set($acks = $acknowledgements.get($releaseName))
+                        #set($licenseAckMap = $acknowledgements.get($releaseName))
     <pre class="acknowledgements">
+#foreach($licenseName in $licenseAckMap.keySet())
+    #set($acks = $licenseAckMap.get($licenseName))
 #foreach($ack in ${acks})
-    #set($containsLink = $ack.matches($anchorRegEx))
-    #set($containsScript = $ack.matches($scriptRegEx))
-    #set($ackAsHtml = $esc.xml($ack))
-    #if($containsLink && !$containsScript)
-        #set($ackAsHtml = $ack)
-    #end
-$ackAsHtml
-#end
-    </pre>
-                    #end
+     <strong>$esc.xml($licenseName)</strong><br/>
+     #set($containsLink = $ack.matches($anchorRegEx))
+     #set($containsScript = $ack.matches($scriptRegEx))
+     #set($ackAsHtml = $esc.xml($ack))
+     #if($containsLink && !$containsScript)
+     #set($ackAsHtml = $ack)
+     #end
+     $ackAsHtml<br/>
+  <br/>
+     #end
+     #end
+         </pre>
+                #end
+
 
                     Licenses:<br/>
                     #set($licenses = [])
@@ -195,7 +200,9 @@ $copyrightAsHtml
 
     #if($allLicenseNamesWithTexts.size() > 0)
         <ul id="licenseTexts" style="list-style-type:none">
-        #foreach($license in $allLicenseNamesWithTexts)
+        #foreach($entry in $allLicenseNamesWithTexts.entrySet())
+            #set($license = $entry.value)
+            #set($licenseIds = $entry.getKey())
             #set($licenseName = "&lt;no license name available&gt;")
             #if($license.licenseName)
                 #set($licenseName = $esc.xml($license.licenseName))
@@ -212,7 +219,7 @@ $copyrightAsHtml
                 #end
             #end
 
-            #set($licenseId = $licenseNameWithTextToReferenceId.get($license))
+            #set($licenseId = $licenseIds)
             <li id="licenseTextItem$licenseId">
                 <h3>$licenseId: $licenseName<a class="top" href="#releaseHeader">&#8679;</a></h3>
     <pre class="licenseText" id="licenseText$licenseId">

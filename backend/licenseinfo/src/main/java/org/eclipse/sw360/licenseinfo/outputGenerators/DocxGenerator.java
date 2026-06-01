@@ -18,6 +18,7 @@ import org.apache.thrift.TException;
 import org.apache.xmlbeans.XmlCursor;
 import org.apache.xmlbeans.XmlException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360ConfigKeys;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
@@ -43,19 +44,16 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STUnderline;
 
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.eclipse.sw360.datahandler.common.CommonUtils.nullToEmptyString;
-import static org.eclipse.sw360.datahandler.common.WrappedException.wrapTException;
 import static org.eclipse.sw360.licenseinfo.outputGenerators.DocxUtils.*;
 
 public class DocxGenerator extends OutputGenerator<byte[]> {
@@ -90,13 +88,9 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
 
     private static final String EXT_ID_TABLE_HEADER_COL1 = "Identifier Name";
     private static final String EXT_ID_TABLE_HEADER_COL2 = "Identifier Value";
-    public static final String PROPERTIES_FILE_PATH = "/sw360.properties";
-    public static String FRIENDLY_RELEASE_URL;
 
     public DocxGenerator(OutputFormatVariant outputFormatVariant, String description) {
         super(DOCX_OUTPUT_TYPE, description, true, DOCX_MIME_TYPE, outputFormatVariant);
-        Properties props = CommonUtils.loadProperties(DocxGenerator.class, PROPERTIES_FILE_PATH);
-        FRIENDLY_RELEASE_URL = props.getProperty("release.friendly.url", "");
     }
 
     @Override
@@ -113,20 +107,19 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
             switch (getOutputVariant()) {
                 case DISCLOSURE:
                     docxTemplateFile = CommonUtils.loadResource(DocxGenerator.class, DOCX_TEMPLATE_FILE);
-                    xwpfDocument = new XWPFDocument(new ByteArrayInputStream(docxTemplateFile.get()));
-                    if (docxTemplateFile.isPresent()) {
-                        fillDisclosureDocument(
-                                xwpfDocument,
-                                projectLicenseInfoResults,
-                                project,
-                                licenseInfoHeaderText,
-                                false,
-                                externalIds,
-                                excludeReleaseVersion);
-                    } else {
+                    if (!docxTemplateFile.isPresent()) {
                         throw new SW360Exception(
                                 "Could not load the template for xwpf document: " + DOCX_TEMPLATE_FILE);
                     }
+                    xwpfDocument = new XWPFDocument(new ByteArrayInputStream(docxTemplateFile.get()));
+                    fillDisclosureDocument(
+                            xwpfDocument,
+                            projectLicenseInfoResults,
+                            project,
+                            licenseInfoHeaderText,
+                            false,
+                            externalIds,
+                            excludeReleaseVersion);
                     break;
                 case REPORT:
                     if (CommonUtils.isNullEmptyOrWhitespace(fileName)) {
@@ -135,21 +128,20 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
                         docxTemplateFile = CommonUtils.loadResource(DocxGenerator.class,
                                 System.getProperty("file.separator") + fileName + "." + DOCX_OUTPUT_TYPE);
                     }
-                    xwpfDocument = new XWPFDocument(new ByteArrayInputStream(docxTemplateFile.get()));
-                    if (docxTemplateFile.isPresent()) {
-                        fillReportDocument(
-                                xwpfDocument,
-                                projectLicenseInfoResults,
-                                project,
-                                licenseInfoHeaderText,
-                                true,
-                                obligationResults,
-                                user,
-                                obligationsStatus);
-                    } else {
+                    if (!docxTemplateFile.isPresent()) {
                         throw new SW360Exception(
                                 "Could not load the template for xwpf document: " + DOCX_TEMPLATE_REPORT_FILE);
                     }
+                    xwpfDocument = new XWPFDocument(new ByteArrayInputStream(docxTemplateFile.get()));
+                    fillReportDocument(
+                            xwpfDocument,
+                            projectLicenseInfoResults,
+                            project,
+                            licenseInfoHeaderText,
+                            true,
+                            obligationResults,
+                            user,
+                            obligationsStatus);
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown generator variant type: " + getOutputVariant());
@@ -363,6 +355,20 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
                 addFormattedTextInTableCell(row.addNewTableCell(), "Owner");
             }
         }
+        if (project.isSetProjectResponsible() && !project.getProjectResponsible().isEmpty()) {
+            User responsible = null;
+            try {
+                responsible = userClient.getByEmail(project.getProjectResponsible());
+            } catch (TException te) {
+                // a resulting null user object is handled below
+            }
+            if (responsible != null) {
+                XWPFTableRow row = table.insertNewTableRow(currentRow++);
+                addFormattedTextInTableCell(row.addNewTableCell(), responsible.getEmail());
+                addFormattedTextInTableCell(row.addNewTableCell(), responsible.getDepartment());
+                addFormattedTextInTableCell(row.addNewTableCell(), "Responsible");
+            }
+        }
 
         if (project.isSetRoles()) {
             for (Map.Entry<String, Set<String>> rolRelationship : project.getRoles().entrySet()) {
@@ -453,8 +459,9 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
     }
 
     private static void addHyperlink(XWPFParagraph paragraph, String releaseVersion, String releaseId) {
+        String friendlyReleaseUrl = SW360Utils.readConfig(SW360ConfigKeys.RELEASE_FRIENDLY_URL, "http://localhost:3000/release/releaseId");
         String id = paragraph.getDocument().getPackagePart().addExternalRelationship(
-                FRIENDLY_RELEASE_URL.replace("releaseId", releaseId), XWPFRelation.HYPERLINK.getRelation()).getId();
+                friendlyReleaseUrl.replace("releaseId", releaseId), XWPFRelation.HYPERLINK.getRelation()).getId();
 
         CTHyperlink newHyperLink = paragraph.getCTP().addNewHyperlink();
         newHyperLink.setId(id);
@@ -475,7 +482,7 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
         CTColor colour = CTColor.Factory.newInstance();
         colour.setVal("0000FF");
         // Set the color using XWPFRun
-        XWPFRun run = new XWPFRun(ctr, null);
+        XWPFRun run = new XWPFRun(ctr, (IRunBody)null);
         run.setColor("0000FF"); // Set the color to blue
         ctrpr.addNewU().setVal(STUnderline.SINGLE);
         ctrpr.addNewSz().setVal(BigInteger.valueOf(18L));
@@ -574,6 +581,18 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
             if (r == null) {
                 continue;
             }
+            if (r.getLanguagesSize() == 0 && r.getOperatingSystemsSize() == 0 && r.getSoftwarePlatformsSize() == 0) {
+                try {
+                    org.eclipse.sw360.datahandler.thrift.components.ComponentService.Iface componentClient =
+                            new ThriftClients().makeComponentClient();
+                    Release fullRelease = componentClient.getReleaseById(r.getId(), user);
+                    if (fullRelease != null) {
+                        r = fullRelease;
+                    }
+                } catch (TException e) {
+                    // fall back to the summary release if fetch fails
+                }
+            }
 
             XWPFTableRow row = table.insertNewTableRow(currentRow++);
 
@@ -617,7 +636,14 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
                 SW360Utils.getProjectComponentOrganisationLicenseObligationToDisplay(obligationsStatusAtProject,
                         obligations, oblLevel, true));
         if (!obligationsStatus.isEmpty()) {
+            Set<String> addedObligationKeys = new HashSet<>();
+
             obligationsStatus.entrySet().stream().forEach(o -> {
+                if (addedObligationKeys.contains(o.getKey())) {
+                    return;
+                }
+                addedObligationKeys.add(o.getKey());
+
                 ObligationStatusInfo osi = o.getValue();
                 currentRow[0] = currentRow[0] + 1;
                 XWPFTableRow row = table.insertNewTableRow(currentRow[0]);
@@ -655,9 +681,9 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
                                 .anyMatch(mlid -> mlid.equals(lid.replace("\n", "").replace("\r", "")))))
                 .forEach(o -> {
                     o.getLicenseIDs().stream().forEach(lid -> {
-                        Map<String, String> oblTopicText = new HashMap<String, String>();
-                        oblTopicText.put(o.getTopic(), o.getText());
-                        licenseIdToOblTopicText.put(lid, oblTopicText);
+                        licenseIdToOblTopicText
+                                .computeIfAbsent(lid, k -> new LinkedHashMap<>())
+                                .put(o.getTopic(), o.getText());
                     });
                 });
 
@@ -777,7 +803,7 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
         setText(document.createParagraph().createRun(), "Please note the following license conditions and copyright " +
                 "notices applicable to Open Source Software and/or other components (or parts thereof):");
         addNewLines(document, 0);
-        Map<String, Set<String>> sortedAcknowledgement = getAcknowledgement(projectLicenseInfoResults,
+        Map<String, Map<String, Set<String>>> sortedAcknowledgement = getAcknowledgement(projectLicenseInfoResults,
                 excludeReleaseVersion);
         for (LicenseInfoParsingResult parsingResult : projectLicenseInfoResults) {
             addReleaseTitle(document, parsingResult, excludeReleaseVersion);
@@ -804,18 +830,28 @@ public class DocxGenerator extends OutputGenerator<byte[]> {
         addPageBreak(document);
     }
 
-    private void addAcknowledgement(XWPFDocument document, Set<String> acknowledgements) {
-        if (CollectionUtils.isNotEmpty(acknowledgements)) {
+    private void addAcknowledgement(XWPFDocument document, Map<String, Set<String>> acknowledgements) {
+        if (acknowledgements!=null && !acknowledgements.isEmpty()) {
             XWPFRun ackRun = document.createParagraph().createRun();
-            addFormattedText(ackRun, "Acknowledgement", FONT_SIZE, true);
-            for (String acknowledgement : acknowledgements) {
-                setText(document.createParagraph().createRun(), nullToEmptyString(acknowledgement));
+            addFormattedText(ackRun, "Acknowledgements:", FONT_SIZE, true);
+            for (Map.Entry<String, Set<String>> entry : acknowledgements.entrySet()) {
+                String licenseName = entry.getKey();
+                Set<String> acknowledgementSet = entry.getValue();
+                if (!acknowledgementSet.isEmpty()) {
+                    // Print license name before each acknowledgement text
+                    for (String acknowledgement : acknowledgementSet) {
+                        XWPFRun licenseRun = document.createParagraph().createRun();
+                        addFormattedText(licenseRun, licenseName, FONT_SIZE, true);
+                        setText(document.createParagraph().createRun(), nullToEmptyString(acknowledgement));
+                        addNewLines(document, 1);
+                    }
+                }
             }
             addNewLines(document, 1);
         }
     }
 
-    private SortedMap<String, Set<String>> getAcknowledgement(
+    private SortedMap<String, Map<String, Set<String>>> getAcknowledgement(
             Collection<LicenseInfoParsingResult> projectLicenseInfoResults, boolean excludeReleaseVersion) {
 
         Map<Boolean, List<LicenseInfoParsingResult>> partitionedResults = projectLicenseInfoResults.stream()

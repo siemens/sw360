@@ -13,9 +13,11 @@ package org.eclipse.sw360.licenses;
 
 import com.ibm.cloud.cloudant.v1.Cloudant;
 
+import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.db.ObligationSearchHandler;
 import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.RequestSummary;
 import org.eclipse.sw360.datahandler.thrift.SW360Exception;
@@ -30,6 +32,7 @@ import org.apache.thrift.TException;
 import java.nio.ByteBuffer;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.io.IOException;
 
@@ -380,11 +383,48 @@ public class LicenseHandler implements LicenseService.Iface {
     }
 
     @Override
+    public Obligation getWithTextNodes(Obligation obligation, User user) throws TException {
+        return handler.getWithTextNodes(obligation, user);
+    }
+
+    @Override
     public String updateObligation(Obligation oblig, User user) throws TException {
         return handler.updateObligation(oblig, user);
     }
 
+    @Override
     public List<LicenseType> searchByLicenseType(String licenseType) {
         return handler.searchByLicenseType(licenseType);
+    }
+
+    @Override
+    public List<License> searchLicense(String searchText) {
+        if (CommonUtils.isNullEmptyOrWhitespace(searchText)) {
+            return handler.getLicenseSummary();
+        }
+        return handler.searchLicense(searchText);
+    }
+
+    @Override
+    public Map<PaginationData, List<Obligation>> searchObligationTextPaginated(
+            String searchText, ObligationLevel obligationLevel, PaginationData pageData
+    ) {
+        if (CommonUtils.isNotNullEmptyOrWhitespace(searchText)) {
+            return obligationSearchHandler.searchWithPagination(searchText, obligationLevel, pageData);
+        }
+        if (obligationLevel != null) {
+            Map<PaginationData, List<Obligation>> result = handler.getObligationsPaginated(pageData);
+            if (result == null || result.isEmpty()) {
+                return result;
+            }
+            Map.Entry<PaginationData, List<Obligation>> entry = result.entrySet().iterator().next();
+            List<Obligation> filtered = entry.getValue().stream()
+                    .filter(o -> obligationLevel.equals(o.getObligationLevel()))
+                    .collect(java.util.stream.Collectors.toList());
+            PaginationData pd = entry.getKey();
+            pd.setTotalRowCount(filtered.size());
+            return java.util.Collections.singletonMap(pd, filtered);
+        }
+        return handler.getObligationsPaginated(pageData);
     }
 }

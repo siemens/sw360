@@ -25,11 +25,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.io.IOException;
@@ -58,10 +57,10 @@ public class AttachmentSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360AttachmentService attachmentServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360ReleaseService releaseServiceMock;
 
     private Attachment attachment, attachment1;
@@ -177,11 +176,19 @@ public class AttachmentSpecTest extends TestRestDocsSpecBase {
 
     @Test
     public void should_document_create_attachment() throws Exception {
-        MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.multipart("/api/attachments")
+        var builder = MockMvcRequestBuilders.multipart("/api/attachments")
                 .file("files", "@/bom.spdx.rdf".getBytes())
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword));
         this.mockMvc.perform(builder).andExpect(status().isOk()).andDo(this.documentationHandler.document());
+    }
+
+    @Test
+    public void should_return_400_when_sha1_parameter_is_missing() throws Exception {
+        mockMvc.perform(get("/api/attachments")
+                .header("Authorization", TestHelper.generateAuthHeader(testUserId, testUserPassword))
+                .accept(MediaTypes.HAL_JSON))
+                .andExpect(status().isBadRequest());
     }
 
 }

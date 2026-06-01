@@ -11,10 +11,14 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class Sw360UserAuthenticationProvider implements AuthenticationProvider {
@@ -22,10 +26,11 @@ public class Sw360UserAuthenticationProvider implements AuthenticationProvider {
     @Autowired
     private Sw360UserDetailsService userDetailsService;
 
-    private PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     /**
-     * @param authentication the authentication request object. 
+     * @param authentication the authentication request object.
      * @return
      * @throws AuthenticationException
      */
@@ -39,15 +44,18 @@ public class Sw360UserAuthenticationProvider implements AuthenticationProvider {
     }
 
     private Authentication checkPassword(UserDetails userDetails, String rawPassword) {
-        if(passwordEncoder.matches(rawPassword, userDetails.getPassword())) {
-            return new UsernamePasswordAuthenticationToken(userDetails, rawPassword, userDetails.getAuthorities());
+        if (userDetails != null && rawPassword != null &&
+                passwordEncoder.matches(rawPassword, userDetails.getPassword())) {
+            List<GrantedAuthority> authorities = new ArrayList<>(userDetails.getAuthorities());
+            authorities.add(FactorGrantedAuthority.fromAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY));
+            return new UsernamePasswordAuthenticationToken(userDetails, rawPassword, authorities);
         } else {
             throw new BadCredentialsException("Bad credentials");
         }
     }
 
     /**
-     * @param authentication 
+     * @param authentication
      * @return
      */
     @Override

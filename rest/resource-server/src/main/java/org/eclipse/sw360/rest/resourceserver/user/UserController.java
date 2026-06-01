@@ -19,24 +19,30 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
+import org.eclipse.sw360.datahandler.common.SW360ConfigKeys;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.permissions.PermissionUtils;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.users.RestApiToken;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
+import org.eclipse.sw360.rest.resourceserver.configuration.SW360ConfigurationsService;
 import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.HalResource;
 import org.eclipse.sw360.rest.resourceserver.core.OpenAPIPaginationHelper;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
+import org.eclipse.sw360.rest.resourceserver.core.RestExceptionHandler;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.rest.webmvc.BasePathAwareController;
@@ -48,6 +54,7 @@ import org.springframework.hateoas.server.RepresentationModelProcessor;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,7 +71,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
@@ -76,12 +82,12 @@ import static org.eclipse.sw360.rest.resourceserver.user.Sw360UserService.EXPIRA
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 @BasePathAwareController
-@Slf4j
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 @RestController
 @SecurityRequirement(name = "tokenAuth")
 @SecurityRequirement(name = "basic")
 public class UserController implements RepresentationModelProcessor<RepositoryLinksResource> {
+    private static final Logger log = LogManager.getLogger(UserController.class);
 
     protected final EntityLinks entityLinks;
 
@@ -96,81 +102,67 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     @NonNull
     private final RestControllerHelper restControllerHelper;
 
+    @NonNull
+    private final SW360ConfigurationsService sw360ConfigurationsService;
+
     private static final ImmutableSet<User._Fields> setOfUserProfileFields =
             ImmutableSet.<User._Fields>builder().add(User._Fields.WANTS_MAIL_NOTIFICATION)
                     .add(User._Fields.NOTIFICATION_PREFERENCES).build();
 
     @Operation(summary = "List all of the service's users.",
             description = "List all of the service's users.", tags = {"Users"})
-    @RequestMapping(value = USERS_URL, method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Paginated list of users."),
+            @ApiResponse(responseCode = "204", description = "No users found.",
+                content = @Content)
+    })
+    @GetMapping(value = USERS_URL)
     public ResponseEntity<CollectionModel<EntityModel<User>>> getUsers(
             @Parameter(description = "Pagination requests", schema = @Schema(implementation = OpenAPIPaginationHelper.class))
             Pageable pageable,
             HttpServletRequest request,
-            @Parameter(description = "fullName of the users") @RequestParam(value = "givenname",
-                    required = false) String givenname,
-            @RequestParam(value = "email", required = false) String email,
-            @Parameter(description = "luceneSearch parameter to filter the users.") @RequestParam(
-                    value = "luceneSearch", required = false) boolean luceneSearch,
+            @Parameter(description = "Given Name of the users")
+            @RequestParam(value = "givenname", required = false) String givenname,
+            @Parameter(description = "Last Name of the users")
             @RequestParam(value = "lastname", required = false) String lastname,
+            @Parameter(description = "Email of the user")
+            @RequestParam(value = "email", required = false) String email,
+            @Parameter(description = "Department of the users")
             @RequestParam(value = "department", required = false) String department,
-            @RequestParam(value = "usergroup", required = false) UserGroup usergroup
+            @Parameter(description = "Role of the users")
+            @RequestParam(value = "usergroup", required = false) UserGroup usergroup,
+            @Parameter(description = "luceneSearch parameter to filter the users.")
+            @RequestParam(value = "luceneSearch", required = false) boolean luceneSearch,
+            @Parameter(description = "Search term to filter users by first name, last name, or email. Uses full-text Nouveau/Lucene search.")
+            @RequestParam(value = "searchText", required = false) String searchText
     ) throws TException, URISyntaxException, PaginationParameterException, ResourceClassNotFoundException {
-        PaginationResult<User> paginationResult = null;
-        List<User> sw360Users = new ArrayList<>();
-        boolean isSearchByName = givenname != null && !givenname.isEmpty();
-        boolean isSearchByLastName = lastname != null && !lastname.isEmpty();
-        boolean isSearchByDepartment = CommonUtils.isNotNullEmptyOrWhitespace(department);
-        boolean isUserGroup = usergroup != null && !Objects.equals(usergroup, "");
-        if (luceneSearch) {
-            Map<String, Set<String>> filterMap = new HashMap<>();
-            if (CommonUtils.isNotNullEmptyOrWhitespace(givenname)) {
-                Set<String> values = CommonUtils.splitToSet(givenname);
-                values = values.stream()
-                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
-                        .collect(Collectors.toSet());
-                filterMap.put(User._Fields.GIVENNAME.getFieldName(), values);
-            }
-            if (CommonUtils.isNotNullEmptyOrWhitespace(email)) {
-                Set<String> values = CommonUtils.splitToSet(email);
-                values = values.stream()
-                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
-                        .collect(Collectors.toSet());
-                filterMap.put(User._Fields.EMAIL.getFieldName(), values);
-            }
-            if (CommonUtils.isNotNullEmptyOrWhitespace(department)) {
-                Set<String> values = CommonUtils.splitToSet(department);
-                filterMap.put(User._Fields.DEPARTMENT.getFieldName(), values);
-            }
-            if (isUserGroup) {
-                Set<String> values = CommonUtils.splitToSet(usergroup.toString());
-                filterMap.put(User._Fields.USER_GROUP.getFieldName(), values);
-            }
-            if (CommonUtils.isNotNullEmptyOrWhitespace(lastname)) {
-                Set<String> values = CommonUtils.splitToSet(lastname);
-                values = values.stream()
-                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
-                        .collect(Collectors.toSet());
-                filterMap.put(User._Fields.LASTNAME.getFieldName(), values);
-            }
-            List<User> userByGivenName = userService.refineSearch(filterMap);
-            paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-                    userByGivenName, SW360Constants.TYPE_USER);
+        User user = restControllerHelper.getSw360UserFromAuthentication();
+        restControllerHelper.throwIfSecurityUser(user);
+
+        Map<PaginationData, List<User>> paginatedUsers = null;
+        if (CommonUtils.isNotNullEmptyOrWhitespace(searchText)) {
+            paginatedUsers = userService.searchUsersByNameOrEmail(searchText.trim(), pageable);
         } else {
-            if (isSearchByName) {
-                sw360Users.addAll(userService.searchUserByName(givenname));
-            } else if (isSearchByLastName) {
-                sw360Users.addAll(userService.searchUserByLastName(lastname));
-            } else if (isSearchByDepartment) {
-                sw360Users.addAll(userService.searchUserByDepartment(department));
-            } else if (isUserGroup) {
-                sw360Users.addAll(userService.searchUserByUserGroup(usergroup));
+            Map<String, Set<String>> filterMap = getFilterMap(givenname, lastname, email, department,
+                    usergroup, luceneSearch);
+            if (luceneSearch) {
+                paginatedUsers = userService.refineSearch(filterMap, pageable);
             } else {
-                sw360Users = userService.getAllUsers();
+                if (filterMap.isEmpty()) {
+                    paginatedUsers = userService.getUsersWithPagination(pageable);
+                } else {
+                    paginatedUsers = userService.searchUsersByExactValues(filterMap, pageable);
+                }
             }
-            paginationResult = restControllerHelper.createPaginationResult(request, pageable,
-                    sw360Users, SW360Constants.TYPE_USER);
         }
+        PaginationResult<User> paginationResult = null;
+        List<User> allUsers = new ArrayList<>(paginatedUsers.values().iterator().next());
+        int totalCount = Math.toIntExact(paginatedUsers.keySet().stream()
+                .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
+
+        paginationResult = restControllerHelper.paginationResultFromPaginatedList(
+                request, pageable, allUsers, SW360Constants.TYPE_USER, totalCount);
+
         List<EntityModel<User>> userResources = new ArrayList<>();
         for (User sw360User : paginationResult.getResources()) {
             User embeddedUser = restControllerHelper.convertToEmbeddedGetUsers(sw360User);
@@ -193,15 +185,23 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     // for compatibility with older version of the REST API
     @Operation(summary = "Get a single user.", description = "Get a single user by email.",
             tags = {"Users"})
-    @RequestMapping(value = USERS_URL + "/{email:.+}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User with given email.")
+    })
+    @GetMapping(value = USERS_URL + "/{email:.+}")
     public ResponseEntity<EntityModel<User>> getUserByEmail(
             @Parameter(description = "The email of the user to be retrieved.")
             @PathVariable("email") String email
     ) {
         String decodedEmail;
         decodedEmail = URLDecoder.decode(email, StandardCharsets.UTF_8);
+        User sw360User;
 
-        User sw360User = userService.getUserByEmail(decodedEmail);
+        try {
+            sw360User = userService.getUserByEmail(decodedEmail);
+        } catch (RuntimeException e) {
+            throw new ResourceNotFoundException("User not found");
+        }
         HalResource<User> halResource = createHalUser(sw360User);
         return new ResponseEntity<>(halResource, HttpStatus.OK);
     }
@@ -210,7 +210,10 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     // getUserByEmail())
     @Operation(summary = "Get a single user.", description = "Get a single user by id.",
             tags = {"Users"})
-    @RequestMapping(value = USERS_URL + "/byid/{id:.+}", method = RequestMethod.GET)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User with given ID.")
+    })
+    @GetMapping(value = USERS_URL + "/byid/{id:.+}")
     public ResponseEntity<EntityModel<User>> getUser(
             @Parameter(description = "The id of the user to be retrieved.")
             @PathVariable("id") String id
@@ -222,11 +225,19 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     @Operation(summary = "Create a new user.", description = "Create a user (not in Liferay).",
             tags = {"Users"})
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "User created successfully.")
+    })
     @PostMapping(value = USERS_URL)
     public ResponseEntity<EntityModel<User>> createUser(
             @Parameter(description = "The user to be created.")
             @RequestBody User user
     ) {
+        User sw360User = restControllerHelper.getSw360UserFromAuthentication();
+        if (!PermissionUtils.isAdmin(sw360User)) {
+            throw new AccessDeniedException("User is not authorized to create users");
+        }
         if (CommonUtils.isNullEmptyOrWhitespace(user.getPassword())) {
             throw new BadRequestClientException(
                     "Password can not be null or empty or whitespace!");
@@ -243,6 +254,9 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     @Operation(summary = "Get current user's profile.", description = "Get current user's profile.",
             tags = {"Users"})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Current user profile.")
+    })
     @GetMapping(value = USERS_URL + "/profile")
     public ResponseEntity<HalResource<User>> getUserProfile() {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
@@ -252,6 +266,9 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     @Operation(summary = "Update user's profile.", description = "Update user's profile.",
             tags = {"Users"})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Profile updated successfully.")
+    })
     @PatchMapping(value = USERS_URL + "/profile")
     public ResponseEntity<HalResource<User>> updateUserProfile(
             @Parameter(description = "Updated user profile", schema = @Schema(example = """
@@ -295,7 +312,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             description = "List all of rest api tokens of current user.",
             responses = {@ApiResponse(responseCode = "200", description = "List of tokens.")},
             tags = {"Users"})
-    @RequestMapping(value = USERS_URL + "/tokens", method = RequestMethod.GET)
+    @GetMapping(value = USERS_URL + "/tokens")
     public ResponseEntity<CollectionModel<EntityModel<RestApiToken>>> getUserRestApiTokens() {
         final User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         List<RestApiToken> restApiTokens = sw360User.getRestApiTokens();
@@ -313,9 +330,11 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             description = "Create rest api token for current user.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Create token successfully."),
-                    @ApiResponse(responseCode = "500", description = "Create token failure.")},
+                    @ApiResponse(responseCode = "403", description = "API token requested with write authority when not allowed"),
+                    @ApiResponse(responseCode = "500", description = "Create token failure.")
+            },
             tags = {"Users"})
-    @RequestMapping(value = USERS_URL + "/tokens", method = RequestMethod.POST)
+    @PostMapping(value = USERS_URL + "/tokens")
     public ResponseEntity<String> createUserRestApiToken(
             @Parameter(description = "Token request",
                     schema = @Schema(
@@ -333,7 +352,14 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
     ) throws TException {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         RestApiToken restApiToken = userService.convertToRestApiToken(requestBody, sw360User);
-        String token = RandomStringUtils.random(20, true, true);
+        String tokenLengthStr = sw360ConfigurationsService.getSW360Configs()
+                .get(SW360ConfigKeys.REST_API_TOKEN_LENGTH);
+        if (CommonUtils.isNullEmptyOrWhitespace(tokenLengthStr)) {
+            throw new BadRequestClientException(
+                    "API token length is not configured. Please set '" + SW360ConfigKeys.REST_API_TOKEN_LENGTH + "' in SW360 configurations.");
+        }
+        int tokenLength = Integer.parseInt(tokenLengthStr);
+        String token = RandomStringUtils.secure().nextAlphanumeric(tokenLength);
         restApiToken.setToken(BCrypt.hashpw(token, API_TOKEN_HASH_SALT));
         sw360User.addToRestApiTokens(restApiToken);
         userService.updateUser(sw360User);
@@ -347,7 +373,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
                     @ApiResponse(responseCode = "204", description = "Revoke token successfully."),
                     @ApiResponse(responseCode = "404", description = "Token name not found.")},
             tags = {"Users"})
-    @RequestMapping(value = USERS_URL + "/tokens", method = RequestMethod.DELETE)
+    @DeleteMapping(value = USERS_URL + "/tokens")
     public ResponseEntity<String> revokeUserRestApiToken(
             @Parameter(description = "Name of token to be revoked.",
                     example = "MyToken")
@@ -384,7 +410,7 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
                                 "secondaryGrpList": ["DEPARTMENT1","DEPARTMENT2"]
                             }
                             """))})})
-    @RequestMapping(value = USERS_URL + "/groupList", method = RequestMethod.GET)
+    @GetMapping(value = USERS_URL + "/groupList")
     public ResponseEntity<Map<String, List<String>>> getGroupList() {
         User sw360User = restControllerHelper.getSw360UserFromAuthentication();
         List<String> primaryGrpList = new ArrayList<>();
@@ -406,6 +432,9 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     @Operation(summary = "Update an existing user.", description = "Update an existing user",
             tags = {"Users"})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User updated successfully.")
+    })
     @PatchMapping(value = USERS_URL + "/{id}")
     @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<EntityModel<User>> patchUser(
@@ -431,6 +460,11 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
 
     @Operation(summary = "Get existing departments.", description = "Get existing departments from all users",
             tags = {"Users"})
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "List of departments."),
+            @ApiResponse(responseCode = "400", description = "Invalid type parameter (must be primary or secondary)",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RestExceptionHandler.ErrorMessage.class)))
+    })
     @GetMapping(value = USERS_URL + "/departments")
     public ResponseEntity<?> getExistingDepartments(
             @Parameter(description = "Type of department (primary, secondary)")
@@ -444,5 +478,52 @@ public class UserController implements RepresentationModelProcessor<RepositoryLi
             case "secondary" -> new ResponseEntity<>(userService.getExistingSecondaryDepartments(), HttpStatus.OK);
             default -> new ResponseEntity<>("Type must be: primary or secondary", HttpStatus.BAD_REQUEST);
         };
+    }
+
+    /**
+     * Create a map of filters with the field name in the key and expected value in the value (as set).
+     * @return Filter map from the user's request.
+     */
+    private @NonNull Map<String, Set<String>> getFilterMap(
+            String givenName, String lastName, String email, String department,
+            UserGroup usergroup, boolean luceneSearch
+    ) {
+        Map<String, Set<String>> filterMap = new HashMap<>();
+        if (CommonUtils.isNotNullEmptyOrWhitespace(givenName)) {
+            Set<String> values = CommonUtils.splitToSet(givenName);
+            if (luceneSearch) {
+                values = values.stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+            }
+            filterMap.put(User._Fields.GIVENNAME.getFieldName(), values);
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(email)) {
+            Set<String> values = CommonUtils.splitToSet(email);
+            if (luceneSearch) {
+                values = values.stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareFuzzyQuery)
+                        .collect(Collectors.toSet());
+            }
+            filterMap.put(User._Fields.EMAIL.getFieldName(), values);
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(department)) {
+            Set<String> values = CommonUtils.splitToSet(department);
+            filterMap.put(User._Fields.DEPARTMENT.getFieldName(), values);
+        }
+        if (usergroup != null) {
+            Set<String> values = CommonUtils.splitToSet(usergroup.toString());
+            filterMap.put(User._Fields.USER_GROUP.getFieldName(), values);
+        }
+        if (CommonUtils.isNotNullEmptyOrWhitespace(lastName)) {
+            Set<String> values = CommonUtils.splitToSet(lastName);
+            if (luceneSearch) {
+                values = values.stream()
+                        .map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
+                        .collect(Collectors.toSet());
+            }
+            filterMap.put(User._Fields.LASTNAME.getFieldName(), values);
+        }
+        return filterMap;
     }
 }

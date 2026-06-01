@@ -19,34 +19,39 @@ import org.eclipse.sw360.datahandler.common.SW360ConfigKeys;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
 import org.eclipse.sw360.datahandler.couchdb.AttachmentConnector;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.Visibility;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult;
+import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoRequestStatus;
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.licenseinfo.TestHelper.AttachmentContentStore;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.*;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 import org.w3c.dom.Document;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.eclipse.sw360.licenseinfo.TestHelper.*;
 import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.withSettings;
 
@@ -64,6 +69,9 @@ public class SPDXParserTest {
 
     @Mock
     private AttachmentConnector connector;
+
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule();
 
     public static final String spdxExampleFile = "SPDXRdfExample-v2.0.rdf";
     public static final String spdx11ExampleFile = "SPDXRdfExample-v1.1.rdf";
@@ -94,7 +102,6 @@ public class SPDXParserTest {
 
     @Before
     public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
         attachmentContentStore = new AttachmentContentStore(connector);
 
         parser = new SPDXParser(connector, attachmentContentStore.getAttachmentContentProvider());
@@ -108,25 +115,23 @@ public class SPDXParserTest {
             int numberOfCoyprights, String exampleCopyright, Set<String> exampleConcludedLicenseIds) {
         assertLicenseInfo(result);
 
-        assertThat(result.getFilenames().size(), is(1));
-        assertThat(result.getFilenames().get(0), is(exampleFile));
+        assertEquals(1, result.getFilenames().size());
+        assertEquals(exampleFile, result.getFilenames().get(0));
 
-        assertThat(result.getLicenseNamesWithTextsSize(), is(expectedLicenses.size()));
+        assertEquals(expectedLicenses.size(), result.getLicenseNamesWithTextsSize());
         expectedLicenses.stream()
-                .forEach(licenseId -> assertThat(result.getLicenseNamesWithTexts().stream()
+                .forEach(licenseId -> assertTrue(result.getLicenseNamesWithTexts().stream()
                         .map(LicenseNameWithText::getLicenseName)
-                        .anyMatch(licenseId::equals), is(true)));
-        assertThat(result.getLicenseNamesWithTexts().stream()
+                        .anyMatch(licenseId::equals)));
+        assertTrue(result.getLicenseNamesWithTexts().stream()
                         .map(lt -> lt.getLicenseText())
-                        .anyMatch(t -> t.contains("The CyberNeko Software License, Version 1.0")),
-                is(true));
+                        .anyMatch(t -> t.contains("The CyberNeko Software License, Version 1.0")));
 
-        assertThat(result.getCopyrightsSize(), is(numberOfCoyprights));
-        assertThat(result.getCopyrights().stream()
-                        .anyMatch(c -> c.contains(exampleCopyright)),
-                is(true));
+        assertEquals(numberOfCoyprights, result.getCopyrightsSize());
+        assertTrue(result.getCopyrights().stream()
+                        .anyMatch(c -> c.contains(exampleCopyright)));
 
-        assertThat(result.getConcludedLicenseIds(), containsInAnyOrder(exampleConcludedLicenseIds.toArray()));
+        assertTrue(containsInAnyOrder(exampleConcludedLicenseIds.toArray()).matches(result.getConcludedLicenseIds()));
     }
 
     @Test
@@ -137,8 +142,14 @@ public class SPDXParserTest {
                 .setFilename(exampleFile);
 
         InputStream input = makeAttachmentContentStream(exampleFile);
-        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newDefaultInstance();
         dbFactory.setNamespaceAware(true);
+        dbFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        dbFactory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        dbFactory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        dbFactory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        dbFactory.setXIncludeAware(false);
+        dbFactory.setExpandEntityReferences(false);
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
         Document spdxDocument = dBuilder.parse(input);
         spdxDocument.getDocumentElement().normalize();
@@ -174,6 +185,58 @@ public class SPDXParserTest {
             assertLicenseInfoParsingResult(result);
             assertIsResultOfExample(result.getLicenseInfo(), exampleFile, expectedLicenses, numberOfCoyprights,
                     exampleCopyright, exampleConcludedLicenseIds);
+        }
+    }
+
+    @Test
+    public void testXXEAttackIsBlocked() throws Exception {
+        String xxePayload = "<?xml version=\"1.0\"?>\n" +
+                "<!DOCTYPE foo [\n" +
+                "  <!ENTITY xxe SYSTEM \"file:///etc/passwd\">\n" +
+                "]>\n" +
+                "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n" +
+                "         xmlns:spdx=\"http://spdx.org/rdf/terms#\">\n" +
+                "  <spdx:SpdxDocument>\n" +
+                "    <spdx:name>&xxe;</spdx:name>\n" +
+                "  </spdx:SpdxDocument>\n" +
+                "</rdf:RDF>";
+
+        AttachmentContent attachmentContent = new AttachmentContent()
+                .setId("xxe-test")
+                .setFilename("malicious.rdf");
+
+        // Register content in the store (so AttachmentContentProvider can resolve it),
+        // then override the mock to return our XXE payload instead of a file resource.
+        attachmentContentStore.put(attachmentContent);
+        InputStream xxeStream = new ByteArrayInputStream(xxePayload.getBytes(StandardCharsets.UTF_8));
+        Mockito.when(connector.getAttachmentStream(Mockito.eq(attachmentContent), Mockito.any(), Mockito.any()))
+                .thenReturn(xxeStream);
+
+        // With disallow-doctype-decl=true, the parser rejects DOCTYPE declarations.
+        // openAsSpdx catches SAXException and throws SW360Exception, but
+        // getLicenseInfo wraps it and returns FAILURE status.
+        Attachment attachment = new Attachment()
+                .setAttachmentContentId("xxe-test")
+                .setFilename("malicious.rdf")
+                .setAttachmentType(AttachmentType.COMPONENT_LICENSE_INFO_XML);
+
+        // The parser should reject the XXE payload. With disallow-doctype-decl=true,
+        // openAsSpdx throws SW360Exception (wrapping SAXException) when it encounters DOCTYPE.
+        try {
+            LicenseInfoParsingResult result = parser.getLicenseInfos(attachment, dummyUser,
+                            new Project()
+                                    .setVisbility(Visibility.ME_AND_MODERATORS)
+                                    .setCreatedBy(dummyUser.getEmail())
+                                    .setAttachments(Collections.singleton(new Attachment().setAttachmentContentId("xxe-test"))))
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+
+            // If no exception, result must not be SUCCESS
+            assertTrue("XXE payload should not be parsed successfully",
+                    result == null || result.getStatus() != LicenseInfoRequestStatus.SUCCESS);
+        } catch (SW360Exception e) {
+            // Expected — parser rejects DOCTYPE declaration and throws SW360Exception
         }
     }
 }

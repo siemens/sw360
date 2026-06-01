@@ -27,8 +27,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Collections;
 
 import org.apache.thrift.TException;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.attachments.AttachmentContent;
 import org.eclipse.sw360.datahandler.thrift.changelogs.ChangeLogs;
 import org.eclipse.sw360.datahandler.thrift.changelogs.ChangedFields;
@@ -45,8 +47,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -58,7 +60,7 @@ public class ChangeLogSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360ChangeLogService changeLogServiceMock;
 
     private final List<String> docType = List.of(new Project().getType(), new Component().getType(),
@@ -114,7 +116,10 @@ public class ChangeLogSpecTest extends TestRestDocsSpecBase {
         changeLogs.add(changeLog);
         changeLogs.add(changeLog2);
 
-        given(this.changeLogServiceMock.getChangeLogsByDocumentId(any(), any())).willReturn(changeLogs);
+        given(this.changeLogServiceMock.getChangeLogsByDocumentIdPaginated(any(), any(), any())).willReturn(Collections.singletonMap(
+                new PaginationData().setRowsPerPage(2).setDisplayStart(0).setTotalRowCount(2),
+                changeLogs
+        ));
     }
 
     @Test

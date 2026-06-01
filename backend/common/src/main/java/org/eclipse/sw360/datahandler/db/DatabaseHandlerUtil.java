@@ -504,7 +504,7 @@ public class DatabaseHandlerUtil {
         try {
             return mapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
-            log.error("Error occured while converting Object to Json : ", e);
+            log.error("Error occurred while converting Object to Json : ", e);
             throw new RuntimeException(e);
         }
     }
@@ -539,7 +539,7 @@ public class DatabaseHandlerUtil {
               logMap.put("changeTimestamp",changeLogParent.getChangeTimestamp());
               changelog.debug(convertObjectToJson(logMap));
           } catch (Exception exp) {
-              log.error("Error occured while creating Select Logs", exp);
+              log.error("Error occurred while creating Select Logs", exp);
           }
         };
 
@@ -906,27 +906,27 @@ public class DatabaseHandlerUtil {
     private static ObjectMapper initAndGetObjectMapper() {
         if (mapper == null) {
             mapper = new ObjectMapper();
-            mapper.addMixInAnnotations(Attachment.class, AttachmentMixin.class);
-            mapper.addMixInAnnotations(ObligationStatusInfo.class, ObligationStatusInfoMixin.class);
-            mapper.addMixInAnnotations(ClearingInformation.class, ClearingInformationMixin.class);
-            mapper.addMixInAnnotations(COTSDetails.class, COTSDetailsMixin.class);
-            mapper.addMixInAnnotations(EccInformation.class, EccInformationMixin.class);
-            mapper.addMixInAnnotations(Vendor.class, VendorMixin.class);
-            mapper.addMixInAnnotations(Repository.class, RepositoryMixin.class);
-            mapper.addMixInAnnotations(ProjectProjectRelationship.class, ProjectProjectRelationshipMixin.class);
-            mapper.addMixInAnnotations(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
-            mapper.addMixInAnnotations(CheckSum.class, CheckSumMixin.class);
-            mapper.addMixInAnnotations(Annotations.class, AnnotationsMixin.class);
-            mapper.addMixInAnnotations(ExternalDocumentReferences.class, ExternalDocumentReferencesMixin.class);
-            mapper.addMixInAnnotations(Creator.class, CreatorMixin.class);
-            mapper.addMixInAnnotations(OtherLicensingInformationDetected.class, OtherLicensingInformationDetectedMixin.class);
-            mapper.addMixInAnnotations(PackageVerificationCode.class, PackageVerificationCodeMixin.class);
-            mapper.addMixInAnnotations(ExternalReference.class, ExternalReferenceMixin.class);
-            mapper.addMixInAnnotations(RelationshipsBetweenSPDXElements.class, RelationshipsBetweenSPDXElementsMixin.class);
-            mapper.addMixInAnnotations(SnippetInformation.class, SnippetInformationMixin.class);
-            mapper.addMixInAnnotations(SnippetRange.class, SnippetRangeMixin.class);
-            mapper.addMixInAnnotations(Obligation.class, ObligationMixin.class);
-            mapper.addMixInAnnotations(LicenseType.class, LicenseTypeMixin.class);
+            mapper.addMixIn(Attachment.class, AttachmentMixin.class);
+            mapper.addMixIn(ObligationStatusInfo.class, ObligationStatusInfoMixin.class);
+            mapper.addMixIn(ClearingInformation.class, ClearingInformationMixin.class);
+            mapper.addMixIn(COTSDetails.class, COTSDetailsMixin.class);
+            mapper.addMixIn(EccInformation.class, EccInformationMixin.class);
+            mapper.addMixIn(Vendor.class, VendorMixin.class);
+            mapper.addMixIn(Repository.class, RepositoryMixin.class);
+            mapper.addMixIn(ProjectProjectRelationship.class, ProjectProjectRelationshipMixin.class);
+            mapper.addMixIn(ProjectReleaseRelationship.class, ProjectReleaseRelationshipMixin.class);
+            mapper.addMixIn(CheckSum.class, CheckSumMixin.class);
+            mapper.addMixIn(Annotations.class, AnnotationsMixin.class);
+            mapper.addMixIn(ExternalDocumentReferences.class, ExternalDocumentReferencesMixin.class);
+            mapper.addMixIn(Creator.class, CreatorMixin.class);
+            mapper.addMixIn(OtherLicensingInformationDetected.class, OtherLicensingInformationDetectedMixin.class);
+            mapper.addMixIn(PackageVerificationCode.class, PackageVerificationCodeMixin.class);
+            mapper.addMixIn(ExternalReference.class, ExternalReferenceMixin.class);
+            mapper.addMixIn(RelationshipsBetweenSPDXElements.class, RelationshipsBetweenSPDXElementsMixin.class);
+            mapper.addMixIn(SnippetInformation.class, SnippetInformationMixin.class);
+            mapper.addMixIn(SnippetRange.class, SnippetRangeMixin.class);
+            mapper.addMixIn(Obligation.class, ObligationMixin.class);
+            mapper.addMixIn(LicenseType.class, LicenseTypeMixin.class);
         }
         return mapper;
     }
@@ -951,7 +951,7 @@ public class DatabaseHandlerUtil {
                     }
                 }
             } catch (Exception exp) {
-                log.warn("Error occured while writing to a file", exp);
+                log.warn("Error occurred while writing to a file", exp);
             }
         };
     }
@@ -998,7 +998,7 @@ public class DatabaseHandlerUtil {
                     }
                 }
             } catch (Exception exp) {
-                log.warn("Error occured while writing to a file", exp);
+                log.warn("Error occurred while writing to a file", exp);
             }
         };
     }
@@ -1025,7 +1025,7 @@ public class DatabaseHandlerUtil {
                         attachmentContent = attachmentConnector.getAttachmentContent(attachmentContentId);
                     } catch (SW360Exception e) {
                         log.error(
-                                "Error occured while fetching Attachment content. During Update Project to store Attachment in fileSystem",
+                                "Error occurred while fetching Attachment content. During Update Project to store Attachment in fileSystem",
                                 e);
                     }
                     if (attachmentContent == null)
@@ -1119,4 +1119,3 @@ public class DatabaseHandlerUtil {
         return tempFile;
     }
 }
-

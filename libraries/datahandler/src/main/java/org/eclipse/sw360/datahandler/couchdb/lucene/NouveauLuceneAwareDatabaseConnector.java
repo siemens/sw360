@@ -16,7 +16,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.permissions.ProjectPermissions;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.users.User;
@@ -32,6 +34,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -40,7 +43,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -54,11 +56,21 @@ import static com.google.common.base.Strings.nullToEmpty;
  */
 public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConnector {
 
+    /**
+     * Fields in projects which can be searched with
+     * ${@code SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN}
+     */
+    public static final Set<String> EMPTY_SEARCH_FIELDS = Set.of(
+            Project._Fields.BUSINESS_UNIT.getFieldName(),
+            Project._Fields.TAG.getFieldName()
+    );
+
     private static final Logger log = LogManager.getLogger(NouveauLuceneAwareDatabaseConnector.class);
 
     private static final Joiner AND = Joiner.on(" AND ");
     private static final Joiner OR = Joiner.on(" OR ");
     private static final String RANGE_TO = " TO ";
+    private static final Gson GSON = new Gson();
 
     private final DatabaseConnectorCloudant connector;
 
@@ -117,11 +129,44 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
     }
 
     /**
+     * Search with lucene with pagination support
+     */
+    public <T> Map<PaginationData, List<T>> searchView(
+            Class<T> type, String indexName, String queryString,
+            PaginationData pageData, String sortColumn, boolean sortAscending
+    ) {
+        Map<PaginationData, List<String>> idMap = searchIds(type, indexName, queryString,
+                pageData, sortColumn, sortAscending);
+
+        PaginationData respPageData = idMap.keySet().iterator().next();
+        List<T> collections = connector.get(type, idMap.values().iterator().next());
+
+        return Collections.singletonMap(respPageData, collections);
+    }
+
+    /**
      * Search with lucene using the previously declared search function only for ids
      */
     public <T> List<String> searchIds(Class<T> type, String indexName, String queryString) {
         NouveauResult queryNouveauResult = searchView(indexName, queryString, false);
         return getIdsFromResult(queryNouveauResult);
+    }
+
+    /**
+     * Search with lucene for ids with pagination support.
+     */
+    public <T> Map<PaginationData, List<String>> searchIds(
+            Class<T> type, String indexName, String queryString,
+            PaginationData pageData, String sortColumn, boolean sortAscending
+    ) {
+        NouveauResult queryNouveauResult = searchView(indexName, queryString,
+                false, pageData, sortColumn, sortAscending);
+        if (queryNouveauResult != null) {
+            pageData.setTotalRowCount(queryNouveauResult.getTotalHits());
+        } else {
+            pageData.setTotalRowCount(0);
+        }
+        return Collections.singletonMap(pageData, getIdsFromResult(queryNouveauResult));
     }
 
     /**
@@ -132,10 +177,9 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
         List<NouveauResult.Hits> hits = queryNouveauResult.getHits();
         hits.sort(new NouveauResultComparator());
         List<T> results = new ArrayList<>();
-        Gson gson = new Gson();
         for (NouveauResult.Hits hit : hits) {
             if (hit != null && hit.getDoc() != null && !hit.getDoc().isEmpty()) {
-                results.add(gson.fromJson(gson.toJson(hit.getDoc()), type));
+                results.add(GSON.fromJson(GSON.toJsonTree(hit.getDoc()), type));
             }
         }
         return results;
@@ -183,6 +227,19 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
         return callLuceneDirectly(indexName, queryString, includeDocs);
     }
 
+    /**
+     * Search with lucene with pagination support
+     */
+    private @Nullable NouveauResult searchView(String indexName, String queryString, boolean includeDocs,
+                                               PaginationData pageData, String sortColumn,
+                                               boolean sortAscending) {
+        if (isNullOrEmpty(queryString)) {
+            return null;
+        }
+
+        return callLuceneDirectly(indexName, queryString, includeDocs, pageData, sortColumn, sortAscending);
+    }
+
     private @Nullable NouveauResult callLuceneDirectly(String indexName, String queryString, boolean includeDocs) {
         NouveauQuery query = new NouveauQuery(queryString);
         query.setIncludeDocs(includeDocs);
@@ -195,6 +252,53 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
             log.error("Nouveau query failed: {}", e.getResponseBody(), e);
         }
         return null;
+    }
+
+    private @Nullable NouveauResult callLuceneDirectly(String indexName, String queryString, boolean includeDocs,
+                                                       @NotNull PaginationData pageData, String sortColumn,
+                                                       boolean sortAscending) {
+        final int limit = pageData.getRowsPerPage() > 0 ? pageData.getRowsPerPage() : DatabaseSettings.LUCENE_SEARCH_LIMIT;
+        final int requiredPage = pageData.getDisplayStart() / limit;
+
+        NouveauQuery query = new NouveauQuery(queryString);
+        query.setIncludeDocs(includeDocs);
+        if (sortColumn != null && !sortColumn.isEmpty()) {
+            query.setSort(sortAscending ? sortColumn : "-" + sortColumn);
+        } else {
+            query.setSort(null);
+        }
+        query.setLimit(limit);
+
+        int currentPage = 0;
+        String bookmark = "";
+        String previousBookmark = "";
+        NouveauResult result = null;
+        try {
+            do {
+                if (!bookmark.isEmpty()) {
+                    query.reset();
+                    query.setBookmark(bookmark);
+                    previousBookmark = bookmark;
+                }
+                result = queryNouveau(indexName, query);
+                bookmark = result.getBookmark();
+                currentPage += 1;
+            } while (moreResultsAvailable(result, previousBookmark) && currentPage <= requiredPage);
+        } catch (ServiceResponseException e) {
+            log.error("Nouveau query failed: {}", e.getResponseBody(), e);
+        }
+        return result;
+    }
+
+    /**
+     * Check if there are more results available based on the current result and bookmark.
+     * @param result The result of the previous query.
+     * @param bookmark The bookmark from the previous query.
+     * @return True if there are more results available, false otherwise.
+     */
+    private boolean moreResultsAvailable(NouveauResult result, String bookmark) {
+        return result != null && result.getHits() != null && !result.getHits().isEmpty()
+                && !bookmark.equals(result.getBookmark());
     }
 
     /////////////////////////
@@ -223,12 +327,109 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
     /**
      * Search the database for a given string and types
      */
-    public <T> List<T> searchViewWithRestrictions(Class<T> type, String indexName,
-                                                  String text,
-                                                  final @NotNull Map<String, Set<String>> subQueryRestrictions) {
-        List <String> subQueries = new ArrayList<>();
-        for (Map.Entry<String, Set<String>> restriction : subQueryRestrictions.entrySet()) {
+    public <T> List<T> searchViewWithRestrictionsWithAnd(
+            Class<T> type, String indexName, String text, final @NotNull Map<String, Set<String>> subQueryRestrictions
+    ) {
+        String query = convertToRestrictiveQueryWithAnd(type, text, subQueryRestrictions);
 
+        return searchView(type, indexName, query);
+    }
+
+    /**
+     * Search the database for a given string and types, with pagination support.
+     * This function uses `AND` to join the restrictions.
+     */
+    public <T> Map<PaginationData, List<T>> searchViewWithRestrictionsWithAnd(
+            Class<T> type, String indexName, String text,
+            final @NotNull Map<String, Set<String>> subQueryRestrictions,
+            PaginationData pageData, String sortColumn, boolean sortAscending
+    ) {
+        String query = convertToRestrictiveQueryWithAnd(type, text, subQueryRestrictions);
+        return searchView(type, indexName, query, pageData, sortColumn, sortAscending);
+    }
+
+    /**
+     * Search the database for a given string and types, with pagination support.
+     * This function uses `OR` to join the restrictions.
+     */
+    public <T> Map<PaginationData, List<T>> searchViewWithRestrictionsWithOr(
+            Class<T> type, String indexName, String text,
+            final @NotNull Map<String, Set<String>> subQueryRestrictions,
+            PaginationData pageData, String sortColumn, boolean sortAscending
+    ) {
+        String query = convertToRestrictiveQueryWithOr(type, text, subQueryRestrictions);
+        return searchView(type, indexName, query, pageData, sortColumn, sortAscending);
+    }
+
+    private static <T> @NotNull String convertToRestrictiveQueryWithAnd(Class<T> type, String text, @NotNull Map<String, Set<String>> subQueryRestrictions) {
+        return AND.join(convertToRestrictiveQuery(type, text, subQueryRestrictions));
+    }
+
+    private static <T> @NotNull String convertToRestrictiveQueryWithOr(Class<T> type, String text, @NotNull Map<String, Set<String>> subQueryRestrictions) {
+        return OR.join(convertToRestrictiveQuery(type, text, subQueryRestrictions));
+    }
+
+    /**
+     * Create query for complex scenarios based on "OR" or "AND" keys for Nouveau queries.
+     * For example input like bellow:<br />
+     * <pre>
+     * {@code
+     * {
+     *   "OR": {
+     *     "field1": ["val1"],
+     *     "field2": ["val1"]
+     *   },
+     *   "AND": {
+     *     "field3": ["val2", "val3"]
+     *   }
+     * }
+     * }
+     * </pre>
+     * You will get the output:
+     * <pre>
+     * {@code
+     * List<String> query = [
+     *   "(( field1:"val1*" val1* ) OR ( field2:"val1*" val1* ))",
+     *   "( field3:"val2*" val2* AND field3:"val3*" val3* )"
+     * ]
+     * }
+     * </pre>
+     * This can later be joined using another joiner like and to get final query:
+     * {@code (( field1:"val1*" val1* ) OR ( field2:"val1*" val1* )) AND
+     *  ( field3:"val2*" val2* AND field3:"val3*" val3* )}
+     * @param type Class for which filtering
+     * @param text Text to search
+     * @param subQueryRestrictions Restrictions with joiner. See description for example.
+     * @return List of queries
+     * @param <T> Class for which filtering
+     */
+    public static <T> @NotNull List<String> createComplexQuery(
+            Class<T> type, String text,
+            @NotNull Map<String, Map<String, Set<String>>> subQueryRestrictions
+    ) {
+        List<String> subQueries = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Set<String>>> restriction : subQueryRestrictions.entrySet()) {
+            boolean isPlural = restriction.getValue().size() > 1;
+            String query = switch (restriction.getKey()) {
+                case "OR" -> convertToRestrictiveQueryWithOr(type, text, restriction.getValue());
+                case "AND" -> convertToRestrictiveQueryWithAnd(type, text, restriction.getValue());
+                default -> null;
+            };
+            if (query == null) {
+                continue;
+            }
+            if (isPlural) {
+                subQueries.add("(" + query + ")");
+            } else {
+                subQueries.add(query);
+            }
+        }
+        return subQueries;
+    }
+
+    private static <T> @NotNull List<String> convertToRestrictiveQuery(Class<T> type, String text, @NotNull Map<String, Set<String>> subQueryRestrictions) {
+        List<String> subQueries = new ArrayList<>();
+        for (Map.Entry<String, Set<String>> restriction : subQueryRestrictions.entrySet()) {
             final Set<String> filterSet = restriction.getValue();
 
             if (!filterSet.isEmpty()) {
@@ -246,16 +447,27 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
             // get all packages with name field and then negate with releaseId field to find orphan packages
             subQueries.add("(name:*) NOT (releaseId:*)");
         }
-        String query = AND.join(subQueries);
-
-        return searchView(type, indexName, query);
+        return subQueries;
     }
 
     private static @NotNull String formatSubquery(@NotNull Set<String> filterSet, final String fieldName) {
+        List<String> queryParts = new ArrayList<>();
+        if (EMPTY_SEARCH_FIELDS.contains(fieldName)
+                && filterSet.contains(SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN)) {
+            queryParts.add("%s:\"%s\"".formatted(fieldName, SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN));
+        }
+
         final Function<String, String> addType = input -> {
-            if (fieldName.equals("businessUnit") || fieldName.equals("tag") || fieldName.equals("projectResponsible") || fieldName.equals("createdBy")) {
+            // Handle pre-formatted queries from prepareWildcardQuery
+            if (input.startsWith("\"") && input.endsWith("\"")) {
+                // Exact phrase search - just prepend field name
+                return fieldName + ":" + input;
+            } else if (input.startsWith("(") && input.contains("\"")) {
+                // Wildcard query with parentheses - prepend field name
+                return fieldName + ":" + input;
+            } else if (fieldName.equals("businessUnit") || fieldName.equals("tag") || fieldName.equals("projectResponsible") || fieldName.equals("createdBy") || fieldName.equals("email")) {
                 return fieldName + ":\"" + input + "\"";
-            } if (fieldName.equals("createdOn") || fieldName.equals("timestamp")) {
+            } else if (fieldName.equals("createdOn") || fieldName.equals("timestamp")) {
                 try {
                     return fieldName + ":" + formatDateNouveauFormat(input);
                 } catch (ParseException e) {
@@ -266,17 +478,23 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
             }
         };
 
-        Stream<String> searchFilters = filterSet.stream().map(addType);
-        return "( " + OR.join(searchFilters.collect(Collectors.toList())) + " ) ";
+        queryParts.addAll(filterSet.stream()
+                .filter(value -> !SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN.equals(value))
+                .map(addType)
+                .toList());
+        return "( " + OR.join(queryParts) + " ) ";
     }
 
     public static @NotNull String prepareWildcardQuery(@NotNull String query) {
-        String leadingWildcardChar = DatabaseSettings.LUCENE_LEADING_WILDCARD ? "*" : "";
         if (query.startsWith("\"") && query.endsWith("\"")) {
-            return "(\"" + sanitizeQueryInput(query) + "\")";
+            // Exact phrase search - strip outer quotes first, sanitize, then add quotes back
+            String innerText = query.substring(1, query.length() - 1);
+            String sanitized = sanitizeQueryInput(innerText);
+            // Return just the quoted text without parentheses for exact phrase search
+            return "\"" + sanitized + "\"";
         } else {
             String wildCardQuery = Arrays.stream(sanitizeQueryInput(query)
-                    .split(" ")).map(q -> leadingWildcardChar + q + "*")
+                    .split(" ")).map(q -> q + "*")
                     .collect(Collectors.joining(" "));
             return "(\"" + wildCardQuery + "\" " + wildCardQuery + ")";
         }
@@ -289,7 +507,7 @@ public class NouveauLuceneAwareDatabaseConnector extends LuceneAwareCouchDbConne
     public List<Project> searchProjectViewWithRestrictionsAndFilter(String indexName, String text,
                                                                     final Map<String, Set<String>> subQueryRestrictions,
                                                                     User user) {
-        List<Project> projectList = searchViewWithRestrictions(Project.class, indexName, text,
+        List<Project> projectList = searchViewWithRestrictionsWithAnd(Project.class, indexName, text,
                 subQueryRestrictions);
         return projectList.stream().filter(ProjectPermissions.isVisible(user)).collect(Collectors.toList());
     }

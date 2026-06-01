@@ -15,15 +15,18 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentSortColumn;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.nouveau.designdocument.NouveauDesignDocument;
 import org.eclipse.sw360.nouveau.designdocument.NouveauIndexDesignDocument;
 import org.eclipse.sw360.nouveau.designdocument.NouveauIndexFunction;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,9 +61,11 @@ public class ComponentSearchHandler {
                 "    arrayToStringIndex(doc.mainLicenseIds, 'mainLicenseIds');" +
                 "    if(doc.componentType && typeof(doc.componentType) == 'string' && doc.componentType.length > 0) {" +
                 "      index('text', 'componentType', doc.componentType, {'store': true});" +
+                "      index('string', 'componentType_sort', doc.componentType);" +
                 "    }" +
                 "    if(doc.name && typeof(doc.name) == 'string' && doc.name.length > 0) {" +
                 "      index('text', 'name', doc.name, {'store': true});"+
+                "      index('string', 'name_sort', doc.name);"+
                 "    }" +
                 "    if(doc.createdBy && typeof(doc.createdBy) == 'string' && doc.createdBy.length > 0) {" +
                 "      index('text', 'createdBy', doc.createdBy, {'store': true});"+
@@ -89,30 +94,52 @@ public class ComponentSearchHandler {
     }
 
     public List<Component> search(String text, final Map<String, Set<String>> subQueryRestrictions ){
-        return connector.searchViewWithRestrictions(Component.class, luceneSearchView.getIndexName(),
+        return connector.searchViewWithRestrictionsWithAnd(Component.class, luceneSearchView.getIndexName(),
                 text, subQueryRestrictions);
     }
 
-    public List<Component> searchAccessibleComponents(String text, final Map<String,
-            Set<String>> subQueryRestrictions, User user ){
-        List<Component> resultComponentList = connector.searchViewWithRestrictions(Component.class,
-                luceneSearchView.getIndexName(), text, subQueryRestrictions);
-        List<Component> componentList = new ArrayList<Component>();
-        for (Component component : resultComponentList) {
-            if (makePermission(component, user).isActionAllowed(RequestedAction.READ)) {
-                componentList.add(component);
-            }
-        }
-        return componentList;
+    public Map<PaginationData, List<Component>> searchAccessibleComponents(String text, final Map<String,
+            Set<String>> subQueryRestrictions, User user, @Nonnull PaginationData pageData) {
+        String sortColumn = getSortColumnName(pageData);
+        Map<PaginationData, List<Component>> resultComponentList = connector
+                .searchViewWithRestrictionsWithAnd(Component.class,
+                        luceneSearchView.getIndexName(), text, subQueryRestrictions,
+                        pageData, sortColumn, pageData.isAscending());
+
+        PaginationData respPageData = resultComponentList.keySet().iterator().next();
+        List<Component> componentList = resultComponentList.values().iterator().next();
+
+        componentList = componentList.stream().filter(component ->
+                makePermission(component, user).isActionAllowed(RequestedAction.READ))
+                .toList();
+
+        return Collections.singletonMap(respPageData, componentList);
     }
 
     public List<Component> searchWithAccessibility(String text, final Map<String, Set<String>> subQueryRestrictions,
-                                                   User user ){
-        List<Component> resultComponentList = connector.searchViewWithRestrictions(Component.class,
+                                                   User user) {
+        List<Component> resultComponentList = connector.searchViewWithRestrictionsWithAnd(Component.class,
                 luceneSearchView.getIndexName(), text, subQueryRestrictions);
         for (Component component : resultComponentList) {
             makePermission(component, user).fillPermissionsInOther(component);
         }
         return resultComponentList;
+    }
+
+    /**
+     * Convert sort column number back to sorting column name. This function makes sure to use the string column (with
+     * `_sort` suffix) for text indexes.
+     * @param pageData Pagination Data from the request.
+     * @return Sort column name. Defaults to createdOn
+     */
+    private static @Nonnull String getSortColumnName(@Nonnull PaginationData pageData) {
+        return switch (ComponentSortColumn.findByValue(pageData.getSortColumnNumber())) {
+            case ComponentSortColumn.BY_NAME -> "name_sort";
+            case ComponentSortColumn.BY_VENDOR -> "vendorNames_sort";
+            case ComponentSortColumn.BY_MAINLICENSE -> "mainLicenseIds_sort";
+            case ComponentSortColumn.BY_TYPE -> "componentType_sort";
+            case null -> "createdOn";
+            default -> "createdOn";
+        };
     }
 }

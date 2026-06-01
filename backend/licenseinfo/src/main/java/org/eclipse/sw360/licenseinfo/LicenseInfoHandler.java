@@ -25,8 +25,8 @@ import org.eclipse.sw360.datahandler.common.ThriftEnumUtils;
 import org.eclipse.sw360.datahandler.common.WrappedException.WrappedTException;
 import org.eclipse.sw360.datahandler.db.AttachmentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
-import org.eclipse.sw360.datahandler.db.DatabaseHandlerUtil;
 import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
+import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.ThriftUtils;
 import org.eclipse.sw360.datahandler.thrift.attachments.Attachment;
@@ -75,7 +75,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
     protected List<OutputGenerator<?>> outputGenerators;
     protected ComponentDatabaseHandler componentDatabaseHandler;
     protected ProjectDatabaseHandler projectDatabaseHandler;
-    protected Cache<Object[], List<LicenseInfoParsingResult>> licenseInfoCache;
+    protected Cache<String, List<LicenseInfoParsingResult>> licenseInfoCache;
     protected Cache<String, LicenseInfoParsingResult> licenseInfoCacheForEvaluation;
     protected Cache<String, List<ObligationParsingResult>> obligationCache;
     protected Cache<String, List<ObligationParsingResult>> obligationCacheForEvaluation;
@@ -576,13 +576,10 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         }
 
         if (licenseInfoCache != null) {
-            for (Entry<Object[], List<LicenseInfoParsingResult>> entry : licenseInfoCache.asMap().entrySet()) {
-                Object[] key = entry.getKey();
-                List<LicenseInfoParsingResult> cachedValue = entry.getValue();
-                if (attachmentContentId.equals(key[0].toString()) && includeConcludedLicense == (boolean) key[1]
-                        && cachedValue != null) {
-                    return cachedValue;
-                }
+            String cacheKey = attachmentContentId + ":" + includeConcludedLicense;
+            List<LicenseInfoParsingResult> cachedResult = licenseInfoCache.getIfPresent(cacheKey);
+            if (cachedResult != null) {
+                return cachedResult;
             }
         }
 
@@ -621,7 +618,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
             results = assignReleaseToLicenseInfoParsingResults(results, release);
             results = assignComponentToLicenseInfoParsingResults(results, release, user);
 
-            Object[] cacheKey = new Object[] { attachmentContentId, includeConcludedLicense };
+            String cacheKey = attachmentContentId + ":" + includeConcludedLicense;
             licenseInfoCache.put(cacheKey, results);
             return results;
         } catch (WrappedTException exception) {
@@ -703,7 +700,6 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
                 .filter(obligation -> !(SW360Constants.OBLIGATION_TOPIC_UNKNOWN.equals(obligation.getTopic())))
                 // sort the obligations by topic in ascending order
                 .sorted(Comparator.comparing(ObligationAtProject::getTopic, String.CASE_INSENSITIVE_ORDER))
-                .collect(Collectors.toList()).stream()
                 // create a Map<licenseId, Set<ObligationAtProject>>
                 .flatMap(obligation -> obligation.getLicenseIDs().stream()
                         .map(id -> new AbstractMap.SimpleEntry<>(obligation, id)))
@@ -712,7 +708,16 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
 
         LicenseInfo licenseInfo = licenseResult.getLicenseInfo();
         licenseInfo.getLicenseNamesWithTexts()
-                .forEach(license -> license.setObligationsAtProject(licenseIdToObligations.get(license.getLicenseName())));
+                .forEach(license -> {
+                    Set<ObligationAtProject> obligations = null;
+                    if (license.isSetLicenseSpdxId()) {
+                        obligations = licenseIdToObligations.get(license.getLicenseSpdxId());
+                    }
+                    if (obligations == null) {
+                        obligations = licenseIdToObligations.get(license.getLicenseName());
+                    }
+                    license.setObligationsAtProject(obligations);
+                });
         licenseInfo.setTotalObligations(obligationResult.getObligationsAtProjectSize());
         licenseObligationMappingCache.put(licenseResult.getAttachmentContentId(), licenseResult);
         return licenseResult;
@@ -1011,7 +1016,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         assertNotNull(generatorClassname);
         return outputGenerators.stream()
                 .filter(outputGenerator -> generatorClassname.equals(outputGenerator.getClass().getSimpleName()))
-                .findFirst().orElseThrow(() -> new TException("Unknown output generator: " + generatorClassname));
+                .findFirst().orElseThrow(() -> new SW360Exception("Unknown output generator: " + generatorClassname));
     }
 
     protected OutputGenerator<?> getOutputGeneratorByClassnameAndVariant(String generatorClassname, OutputFormatVariant generatorVariant) throws TException {
@@ -1020,7 +1025,7 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
         return outputGenerators.stream()
                 .filter(outputGenerator -> generatorClassname.equals(outputGenerator.getClass().getSimpleName()))
                 .filter(outputGenerator -> generatorVariant.equals(outputGenerator.getOutputVariant()))
-                .findFirst().orElseThrow(() -> new TException("Unknown output generator: " + generatorClassname));
+                .findFirst().orElseThrow(() -> new SW360Exception("Unknown output generator: " + generatorClassname + " or variant: " + generatorVariant));
     }
 
     private LicenseInfoParsingResult getLicenseInfoForAttachment(Release release, Attachment attachment, User user)
@@ -1061,6 +1066,40 @@ public class LicenseInfoHandler implements LicenseInfoService.Iface {
 
             })).flatMap(Collection::stream).collect(Collectors.toList());
             filterEmptyLicenses(results);
+
+            // Merge duplicate licenses in licenseInfoResult by combining their sourceFiles
+            for (LicenseInfoParsingResult result : results) {
+                if (result.getLicenseInfo() != null && result.getLicenseInfo().getLicenseNamesWithTexts() != null) {
+                    Set<LicenseNameWithText> originalLicenses = result.getLicenseInfo().getLicenseNamesWithTexts();
+                    Map<String, LicenseNameWithText> mergedLicenses = new LinkedHashMap<>();
+
+                    for (LicenseNameWithText license : originalLicenses) {
+                        String licenseName = license.getLicenseName();
+                        if (mergedLicenses.containsKey(licenseName)) {
+                            // Merge sourceFiles from duplicate license into the first occurrence
+                            LicenseNameWithText existing = mergedLicenses.get(licenseName);
+                            if (existing.getSourceFiles() != null && license.getSourceFiles() != null) {
+                                // Extract the newline-separated strings from both sets
+                                String existingFiles = existing.getSourceFiles().iterator().next();
+                                String newFiles = license.getSourceFiles().iterator().next();
+                                // Combine them with newline separator
+                                String mergedFiles = existingFiles + "\n" + newFiles;
+                                // Create new set with the merged string
+                                Set<String> mergedSet = new HashSet<>();
+                                mergedSet.add(mergedFiles);
+                                existing.setSourceFiles(mergedSet);
+                            } else if (existing.getSourceFiles() == null && license.getSourceFiles() != null) {
+                                existing.setSourceFiles(license.getSourceFiles());
+                            }
+                        } else {
+                            mergedLicenses.put(licenseName, license);
+                        }
+                    }
+
+                    // Update the licenseNamesWithTexts with merged data
+                    result.getLicenseInfo().setLicenseNamesWithTexts(new HashSet<>(mergedLicenses.values()));
+                }
+            }
 
             results = assignReleaseToLicenseInfoParsingResults(results, release);
             results = assignComponentToLicenseInfoParsingResults(results, release, user);

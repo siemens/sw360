@@ -27,9 +27,11 @@ import org.eclipse.sw360.datahandler.thrift.components.ClearingReport;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentDTO;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
+import org.eclipse.sw360.datahandler.thrift.components.ComponentSortColumn;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseLink;
 import org.eclipse.sw360.datahandler.thrift.projects.Project;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
+import org.eclipse.sw360.datahandler.thrift.components.ReleaseSortColumn;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vulnerabilities.VulnerabilityDTO;
 import org.eclipse.sw360.rest.resourceserver.core.AwareOfRestServices;
@@ -40,6 +42,8 @@ import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -54,7 +58,7 @@ import static org.eclipse.sw360.datahandler.common.CommonUtils.isNullEmptyOrWhit
 import static org.eclipse.sw360.datahandler.common.SW360ConfigKeys.IS_FORCE_UPDATE_ENABLED;
 
 @Service
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class Sw360ComponentService implements AwareOfRestServices<Component> {
 
     @NonNull
@@ -66,9 +70,11 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     @NonNull
     private final Sw360VulnerabilityService vulnerabilityService;
 
-    public List<Component> getComponentsForUser(User sw360User) throws TException {
+    public Map<PaginationData, List<Component>> getRecentComponentsSummaryWithPagination(User sw360User,
+                                                                                         Pageable pageable) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        return sw360ComponentClient.getComponentSummary(sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.getRecentComponentsSummaryWithPagination(sw360User, pageData);
     }
 
     public Release getReleaseById(String id, User sw360User) {
@@ -84,11 +90,19 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
     }
 
     public Component getComponentForUserById(String componentId, User sw360User) throws TException {
-        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        Component component = sw360ComponentClient.getComponentById(componentId, sw360User);
-        Map<String, String> sortedAdditionalData = CommonUtils.getSortedMap(component.getAdditionalData(), true);
-        component.setAdditionalData(sortedAdditionalData);
-        return component;
+        try {
+            ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+            Component component = sw360ComponentClient.getComponentById(componentId, sw360User);
+            Map<String, String> sortedAdditionalData = CommonUtils.getSortedMap(component.getAdditionalData(), true);
+            component.setAdditionalData(sortedAdditionalData);
+            return component;
+        } catch (SW360Exception sw360Exp) {
+            if (sw360Exp.getErrorCode() == 404) {
+                throw new ResourceNotFoundException("Component does not exist! id=" + componentId);
+            } else {
+                throw sw360Exp;
+            }
+        }
     }
 
     public Set<Project> getProjectsByComponentId(String componentId, User sw360User) throws TException {
@@ -169,6 +183,9 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
             throw new BadRequestClientException("Component name field cannot be empty or contain only whitespace character");
         } else if (requestStatus == RequestStatus.DUPLICATE_ATTACHMENT) {
             throw new RuntimeException("Multiple attachments with same name or content cannot be present in attachment list.");
+        } else if (requestStatus == RequestStatus.DUPLICATE) {
+            throw new HttpClientErrorException(HttpStatus.CONFLICT,
+                    "A component with the same name already exists.");
         } else if (requestStatus != RequestStatus.SUCCESS && requestStatus != RequestStatus.SENT_TO_MODERATOR) {
             throw new RuntimeException("sw360 component with name '" + component.getName() + " cannot be updated.");
         }
@@ -184,14 +201,63 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         }
     }
 
-    public List<Component> searchComponentByName(String name) throws TException {
+    public Map<PaginationData, List<Component>> searchComponentByExactNamePaginated(
+            User sw360User, String name, Pageable pageable
+    ) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        return sw360ComponentClient.searchComponentForExport(name.toLowerCase(), false);
+        return sw360ComponentClient.searchComponentByExactNamePaginated(sw360User, name, pageableToPaginationData(pageable));
     }
 
     public List<Release> getReleasesByComponentId(String id,User user) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
         return sw360ComponentClient.getReleasesFullDocsFromComponentId(id, user);
+    }
+
+    public Map<PaginationData, List<ReleaseLink>> getReleaseLinksByComponentIdWithPagination(String id, User user, Pageable pageable) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        PaginationData pageData = pageableToPaginationDataForReleases(pageable);
+        Map<PaginationData, List<Release>> paginatedReleases = sw360ComponentClient.getReleasesFromComponentIdWithPagination(id, user, pageData);
+
+        PaginationData resultPageData = paginatedReleases.keySet().iterator().next();
+        List<Release> releases = paginatedReleases.values().iterator().next();
+
+        List<ReleaseLink> releaseLinks = convertReleasesToReleaseLinks(releases);
+        Map<PaginationData, List<ReleaseLink>> result = new HashMap<>();
+        result.put(resultPageData, releaseLinks);
+        return result;
+    }
+
+    private List<ReleaseLink> convertReleasesToReleaseLinks(List<Release> releases) {
+        List<ReleaseLink> releaseLinks = new ArrayList<>();
+        releases.forEach(release -> {
+            ReleaseLink releaseLink = new ReleaseLink();
+            releaseLink.setId(release.getId());
+            releaseLink.setName(release.getName());
+            releaseLink.setVersion(release.getVersion());
+            releaseLink.setClearingState(release.getClearingState());
+            releaseLink.setCreatedBy(release.getCreatedBy());
+
+            ClearingReport clearingReport = new ClearingReport();
+            Set<Attachment> attachments = getAttachmentForClearingReport(release);
+            if (!attachments.equals(Collections.emptySet())) {
+                Set<Attachment> attachmentsAccepted = getAttachmentsStatusAccept(attachments);
+                if (!attachmentsAccepted.isEmpty()) {
+                    clearingReport.setClearingReportStatus(ClearingReportStatus.DOWNLOAD);
+                    clearingReport.setAttachments(attachmentsAccepted);
+                    releaseLink.setClearingReport(clearingReport);
+                } else {
+                    clearingReport.setClearingReportStatus(ClearingReportStatus.NO_STATUS);
+                    releaseLink.setClearingReport(clearingReport);
+                }
+            } else {
+                clearingReport.setClearingReportStatus(ClearingReportStatus.NO_REPORT);
+                releaseLink.setClearingReport(clearingReport);
+            }
+
+            releaseLink.setMainlineState(release.getMainlineState());
+            releaseLinks.add(releaseLink);
+        });
+        return releaseLinks;
     }
 
     public List<ReleaseLink> convertReleaseToReleaseLink(String id,User user) throws TException {
@@ -211,7 +277,7 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
             Set<Attachment> attachments = getAttachmentForClearingReport(release);
             if (!attachments.equals(Collections.emptySet())) {
                 Set<Attachment> attachmentsAccepted = getAttachmentsStatusAccept(attachments);
-                if(attachmentsAccepted.size() != 0) {
+                if(!attachmentsAccepted.isEmpty()) {
                     clearingReport.setClearingReportStatus(ClearingReportStatus.DOWNLOAD);
                     clearingReport.setAttachments(attachmentsAccepted);
                     releaseLink.setClearingReport(clearingReport);
@@ -247,9 +313,8 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
 
     private Boolean checkStatusAttachment(Release release){
         final Set<Attachment> attachments = release.getAttachments();
-        boolean checkStatusAttachment = attachments.stream().anyMatch(attachment ->
+        return attachments.stream().anyMatch(attachment ->
                 CheckStatus.ACCEPTED.equals(attachment.getCheckStatus()));
-        return checkStatusAttachment;
     }
 
     private ComponentService.Iface getThriftComponentClient() throws TTransportException {
@@ -339,7 +404,6 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
      *
      * @param componentId Ids of Component
      * @return int                    Number of projects
-     * @throws TException
      */
     public int countProjectsByComponentId(String componentId, User sw360user) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
@@ -348,9 +412,16 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         return projectService.countProjectsByReleaseIds(releaseIds);
     }
 
-    public List<Component> refineSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
+    public Map<PaginationData, List<Component>> refineSearch(Map<String, Set<String>> filterMap, User sw360User, Pageable pageable) throws TException {
         ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
-        return sw360ComponentClient.refineSearchAccessibleComponents(null, filterMap, sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.refineSearchAccessibleComponents(null, filterMap, sw360User, pageData);
+    }
+
+    public Map<PaginationData, List<Component>> searchComponentByExactValues(Map<String, Set<String>> filterMap, User sw360User, Pageable pageable) throws TException {
+        ComponentService.Iface sw360ComponentClient = getThriftComponentClient();
+        PaginationData pageData = pageableToPaginationData(pageable);
+        return sw360ComponentClient.searchComponentByExactValues(filterMap, sw360User, pageData);
     }
 
     /**
@@ -400,5 +471,59 @@ public class Sw360ComponentService implements AwareOfRestServices<Component> {
         }
 
         return releases;
+    }
+
+    /**
+     * Converts a Pageable object to a PaginationData object.
+     *
+     * @param pageable the Pageable object to convert
+     * @return a PaginationData object representing the pagination information
+     */
+    private static PaginationData pageableToPaginationData(@NotNull Pageable pageable) {
+        ComponentSortColumn column = ComponentSortColumn.BY_CREATEDON;
+        boolean ascending = false;
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            String property = order.getProperty();
+            column = switch (property) {
+                case "createdOn" -> ComponentSortColumn.BY_CREATEDON;
+                case "name" -> ComponentSortColumn.BY_NAME;
+                case "vendorNames" -> ComponentSortColumn.BY_VENDOR;
+                case "mainLicenseIds" -> ComponentSortColumn.BY_MAINLICENSE;
+                case "type" -> ComponentSortColumn.BY_TYPE;
+                default -> column; // Default to BY_CREATEDON if no match
+            };
+            ascending = order.isAscending();
+        }
+        return new PaginationData().setDisplayStart((int) pageable.getOffset())
+                .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(column.getValue()).setAscending(ascending);
+    }
+
+    /**
+     * Converts a Pageable object to a PaginationData object using ReleaseSortColumn mapping.
+     * Sort properties: name (0), version (1), clearingState (2), mainlineState (3).
+     *
+     * @param pageable the Pageable object to convert
+     * @return a PaginationData object representing the pagination information
+     */
+    private static PaginationData pageableToPaginationDataForReleases(@NotNull Pageable pageable) {
+        ReleaseSortColumn column = ReleaseSortColumn.BY_NAME;
+        boolean ascending = true;
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            String property = order.getProperty();
+            column = switch (property) {
+                case "name" -> ReleaseSortColumn.BY_NAME;
+                case "version" -> ReleaseSortColumn.BY_VERSION;
+                case "clearingState" -> ReleaseSortColumn.BY_CLEARING_STATE;
+                case "mainlineState" -> ReleaseSortColumn.BY_MAINLINE_STATE;
+                default -> column;
+            };
+            ascending = order.isAscending();
+        }
+        return new PaginationData().setDisplayStart((int) pageable.getOffset())
+                .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(column.getValue()).setAscending(ascending);
     }
 }

@@ -57,7 +57,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor(onConstructor = @__(@Autowired))
+@RequiredArgsConstructor
 public class Sw360ModerationRequestService {
     private static final Logger log = LogManager.getLogger(Sw360ModerationRequestService.class);
 
@@ -196,6 +196,22 @@ public class Sw360ModerationRequestService {
     public long getTotalCountOfRequests(User sw360User) throws TException {
         Map<String, Long> countInfo = getThriftModerationClient().getCountByModerationState(sw360User);
         long totalCount = 0;
+        totalCount += countInfo.getOrDefault("OPEN", 0L);
+        totalCount += countInfo.getOrDefault("CLOSED", 0L);
+        return totalCount;
+    }
+
+    /**
+     * Get total count of moderation requests with user as a moderator and specific requesting user.
+     *
+     * @param moderator Moderator
+     * @param requestingUser Requesting user
+     * @return Count of moderation requests
+     * @throws TException Throws exception in case of error
+     */
+    public long getTotalCountByModerationStateAndRequestingUser(User moderator, User requestingUser) throws TException {
+        Map<String, Long> countInfo = getThriftModerationClient().getCountByModerationStateAndRequestingUser(moderator, requestingUser);
+        long totalCount = 0L;
         totalCount += countInfo.getOrDefault("OPEN", 0L);
         totalCount += countInfo.getOrDefault("CLOSED", 0L);
         return totalCount;

@@ -4,9 +4,10 @@ SPDX-License-Identifier: EPL-2.0
 */
 package org.eclipse.sw360.keycloak.event.listener;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.eclipse.sw360.keycloak.common.Sw360UserService;
 import org.eclipse.sw360.keycloak.event.listener.service.Sw360KeycloakAdminEventService;
 import org.eclipse.sw360.keycloak.event.listener.service.Sw360KeycloakUserEventService;
-import org.eclipse.sw360.keycloak.event.listener.service.Sw360UserService;
 import org.jboss.logging.Logger;
 import org.keycloak.events.Event;
 import org.keycloak.events.EventListenerProvider;
@@ -16,8 +17,6 @@ import org.keycloak.events.admin.OperationType;
 import org.keycloak.events.admin.ResourceType;
 import org.keycloak.models.KeycloakSession;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * Custom Event Listener Provider for SW360.
  * @author smruti.sahoo@siemens.com
@@ -26,14 +25,13 @@ public class Sw360CustomEventListenerProvider implements EventListenerProvider {
 
     private static final Logger log = Logger.getLogger(Sw360CustomEventListenerProvider.class);
 
-    private final ObjectMapper objectMapper;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     Sw360UserService userService;
     Sw360KeycloakAdminEventService keycloakAdminEventService;
     Sw360KeycloakUserEventService keycloakUserEventService;
 
     public Sw360CustomEventListenerProvider(KeycloakSession keycloakSession) {
-        this.objectMapper = new ObjectMapper();
         this.userService = new Sw360UserService();
         keycloakAdminEventService = new Sw360KeycloakAdminEventService(userService, objectMapper, keycloakSession);
         keycloakUserEventService = new Sw360KeycloakUserEventService(userService, objectMapper, keycloakSession);

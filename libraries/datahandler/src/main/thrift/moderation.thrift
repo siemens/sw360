@@ -34,7 +34,6 @@ typedef licenses.License License
 typedef licenses.Obligation Obligation
 typedef components.ComponentType ComponentType
 typedef projects.ClearingRequest ClearingRequest
-typedef sw360.ClearingRequestSize ClearingSize
 typedef spdxdocument.SPDXDocument SPDXDocument
 typedef documentcreationinformation.DocumentCreationInformation DocumentCreationInformation
 typedef packageinformation.PackageInformation PackageInformation
@@ -280,6 +279,12 @@ service ModerationService {
      **/
     RequestStatus deleteModerationRequest(1: string id, 2: User user);
 
+     /**
+     * delete clearing request specified by id if user is requesting user of the clearing request
+     *or has sufficient permissions.
+     **/
+    RequestStatus deleteClearingRequest(1: string id, 2: User user);
+
     /**
      * write clearing request for project to database
      **/
@@ -316,11 +321,6 @@ service ModerationService {
     oneway void updateClearingRequestForChangeInProjectBU(1: string crId, 2: string businessUnit, 3: User user);
 
     /**
-     * update clearing request if project's BU is changed
-     **/
-    oneway  void updateClearingRequestForChangeInClearingSize(1: string crId, 2: ClearingSize size);
-
-    /**
      * get clearing request by Id for view/read
      **/
     ClearingRequest getClearingRequestById(1: string id, 2: User user);
@@ -351,6 +351,11 @@ service ModerationService {
     map<string, i64> getCountByRequester(1: User user);
 
     /**
+     * get count of moderation requests by moderation state for a specific moderator and requesting user
+     **/
+    map<string, i64> getCountByModerationStateAndRequestingUser(1: User moderator, 2: User requestingUser);
+
+    /**
      * get requesting users departments
      **/
     set<string> getRequestingUserDepts();
@@ -359,4 +364,14 @@ service ModerationService {
      * get the count of open CR with priority 'critical' and user group
      **/
     i32 getOpenCriticalCrCountByGroup(1: string group);
+
+    /**
+     * get recent clearing requests with pagination
+     **/
+    map<PaginationData, list<ClearingRequest>> getRecentClearingRequestsWithPagination(1: User user, 2: PaginationData pageData);
+
+    /**
+     * search clearing requests by filters with pagination
+     **/
+    map<PaginationData, list<ClearingRequest>> searchClearingRequestsByFilters(1: User user, 2: map<string, set<string>> filterMap, 3: PaginationData pageData);
 }

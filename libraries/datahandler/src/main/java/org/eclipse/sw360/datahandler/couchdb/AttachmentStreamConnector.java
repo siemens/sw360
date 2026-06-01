@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -119,14 +120,17 @@ public class AttachmentStreamConnector {
                     ZipEntry zipEntry;
 
                     String originalFileName = attachment.getFilename();
-                    if (!fileNameUsageMap.containsKey(originalFileName)) {
-                        fileNameUsageMap.put(originalFileName, 0);
-                        zipEntry = new ZipEntry(originalFileName);
+                    // Sanitize filename to prevent path traversal
+                    String sanitizedFileName = CommonUtils.sanitizeFilename(originalFileName);
+
+                    if (!fileNameUsageMap.containsKey(sanitizedFileName)) {
+                        fileNameUsageMap.put(sanitizedFileName, 0);
+                        zipEntry = new ZipEntry(sanitizedFileName);
                     } else {
-                        int count = fileNameUsageMap.get(originalFileName);
+                        int count = fileNameUsageMap.get(sanitizedFileName);
                         count += 1;
-                        fileNameUsageMap.put(originalFileName, count);
-                        zipEntry = getDeduplicatedZipEntry(originalFileName, fileNameUsageMap);
+                        fileNameUsageMap.put(sanitizedFileName, count);
+                        zipEntry = getDeduplicatedZipEntry(sanitizedFileName, fileNameUsageMap);
                     }
 
                     zip.putNextEntry(zipEntry);
@@ -171,7 +175,7 @@ public class AttachmentStreamConnector {
 
         try {
             downloadStream = attachmentContentDownloader.download(attachmentContent, downloadTimeout);
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException | IllegalArgumentException e) {
             String msg = "Cannot download attachment " + attachmentContent.getId() + " from URL";
             log.error(msg, e);
             throw new SW360Exception(msg);
@@ -218,7 +222,8 @@ public class AttachmentStreamConnector {
                 try {
                     return connector.getAttachment(attachmentId, partFileName);
                 } catch (ServiceResponseException e) {
-                    log.error("Cannot find part " + (part - 1) + " of attachment " + attachmentId, e);
+                    log.error("Cannot find part {} of attachment {}", part - 1, attachmentId, e);
+                    log.error("Debugging info: {}", e.getDebuggingInfo());
                     return null;
                 }
             }

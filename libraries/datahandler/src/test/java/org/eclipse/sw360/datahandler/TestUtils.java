@@ -16,6 +16,7 @@ import com.google.common.collect.Ordering;
 import com.ibm.cloud.cloudant.v1.Cloudant;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseInstanceCloudant;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseInstanceTrackerCloudant;
+import org.eclipse.sw360.datahandler.cloudantclient.DatabaseRepositoryCloudantClient;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
@@ -24,6 +25,7 @@ import org.apache.thrift.TBase;
 import org.apache.thrift.TFieldIdEnum;
 import org.hamcrest.*;
 import org.hamcrest.collection.IsEmptyCollection;
+import org.junit.Assert;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -38,8 +40,6 @@ import static com.google.common.collect.Iterables.tryFind;
 import static com.google.common.collect.Ordering.usingToString;
 import static java.lang.String.format;
 import static java.util.Collections.sort;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeNoException;
 import static org.mockito.Mockito.doReturn;
@@ -87,7 +87,7 @@ public class TestUtils {
     }
 
     public static void assertTestString(String testString) {
-        assertThat(testString, containsString("test"));
+        Assert.assertTrue(testString.contains("test"));
     }
 
     public static Answer failOnUnexpectedMethod() {
@@ -132,6 +132,10 @@ public class TestUtils {
         if (instance.checkIfDbExists(dbName))
             instance.deleteDatabase(dbName);
 
+        // Forget the JVM-wide design-doc/index init cache for this database;
+        // recreating it below would otherwise skip the design-doc PUT.
+        DatabaseRepositoryCloudantClient.forgetInitialisedDesignArtifacts(dbName);
+
         // Giving 500ms Delay between Deleting and Creating test Db
         try {
             Thread.sleep(500);
@@ -148,6 +152,10 @@ public class TestUtils {
             instance.deleteDatabase(dbName);
         }
         instance.createDB(dbName);
+
+        // Newly-created DB has no design docs/indexes; clear the cache so
+        // the first repository constructed against it actually installs them.
+        DatabaseRepositoryCloudantClient.forgetInitialisedDesignArtifacts(dbName);
 
         DatabaseInstanceTrackerCloudant.destroy();
     }
@@ -270,8 +278,8 @@ public class TestUtils {
 
     public static void assumeCanConnectTo(String url) {
         try {
-            new URL(url).openConnection().getInputStream().close();
-        } catch (IOException e) {
+            new URI(url).toURL().openConnection().getInputStream().close();
+        } catch (IOException | URISyntaxException e) {
             assumeNoException(e);
         }
     }

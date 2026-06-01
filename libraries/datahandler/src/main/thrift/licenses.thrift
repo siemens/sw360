@@ -24,6 +24,7 @@ typedef sw360.CustomProperties CustomProperties
 typedef sw360.RequestSummary RequestSummary
 typedef sw360.Quadratic Quadratic
 typedef sw360.SW360Exception SW360Exception
+typedef sw360.PaginationData PaginationData
 typedef i32 int
 
 
@@ -46,6 +47,12 @@ enum ObligationElementStatus {
     UPDATED = 0,
     DEFINED = 1
     UNDEFINED = 2
+}
+
+enum ObligationSortColumn {
+    BY_TITLE = 0,
+    BY_TEXT = 1,
+    BY_LEVEL = 2
 }
 
 struct Obligation {
@@ -287,7 +294,7 @@ service LicenseService {
      **/
     list<Obligation> getObligationsByLicenseId( 1: string id);
 
-    LicenseType getLicenseTypeById( 1: string id);
+    LicenseType getLicenseTypeById( 1: string id) throws (1: SW360Exception exp);
 
     /**
      * return filled obligation
@@ -372,8 +379,23 @@ service LicenseService {
      **/
     string convertTextToNode(1:Obligation Obligation, 2: User user);
 
+    /**
+     * convert the Text to Node and return Obligation with the Node set
+     **/
+    Obligation getWithTextNodes(1:Obligation Obligation, 2: User user);
+
      /**
      * Search licenses by partial or full licenseType match (case-insensitive).
      */
     list<LicenseType> searchByLicenseType(1: string licenseType);
+
+    /**
+     * Search licenses by shortname or fullname
+     */
+    list<License> searchLicense(1: string searchText);
+
+    /**
+     * Search obligations by title or text with pagination
+     */
+    map<PaginationData, list<Obligation>> searchObligationTextPaginated(1: string searchText, 2: ObligationLevel obligationLevel, 3: PaginationData pageData);
 }

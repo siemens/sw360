@@ -27,22 +27,21 @@ import org.eclipse.sw360.datahandler.thrift.projects.ProjectRelationship;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectState;
 import org.eclipse.sw360.datahandler.thrift.projects.ProjectType;
 import org.eclipse.sw360.datahandler.thrift.users.User;
+import org.eclipse.sw360.datahandler.thrift.users.UserGroup;
 import org.eclipse.sw360.rest.resourceserver.TestHelper;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.ModerationPatch;
 import org.eclipse.sw360.rest.resourceserver.moderationrequest.Sw360ModerationRequestService;
 import org.eclipse.sw360.rest.resourceserver.project.Sw360ProjectService;
 import org.eclipse.sw360.rest.resourceserver.release.Sw360ReleaseService;
-import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,16 +79,16 @@ public class ModerationRequestSpecTest extends TestRestDocsSpecBase {
     @Value("${sw360.test-user-password}")
     private String testUserPassword;
 
-    @MockBean
+    @MockitoBean
     private Sw360ReleaseService releaseServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360ModerationRequestService moderationRequestServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Sw360ProjectService projectServiceMock;
 
-    @MockBean
+    @MockitoBean
     private Project project;
     private ModerationRequest moderationRequest;
 
@@ -204,6 +202,7 @@ public class ModerationRequestSpecTest extends TestRestDocsSpecBase {
         user.setEmail(testUserId);
         user.setFullname("John Doe");
         user.setDepartment("xyz");
+        user.setUserGroup(UserGroup.ADMIN);
 
         given(this.releaseServiceMock.getReleaseForUserById(eq(moderationRequest.getDocumentId()), any())).willReturn(releaseAdditions);
         given(this.userServiceMock.getUserByEmail(moderationRequest.getRequestingUser())).willReturn(new User("test.admin@sw360.org", "DEPT").setId("12345"));
@@ -497,7 +496,7 @@ public class ModerationRequestSpecTest extends TestRestDocsSpecBase {
                                 subsectionWithPath("_links").description("<<resources-index-links,Links>> to other resources")
                         )));
     }
-    
+
     @Test
     public void should_document_check_user_message_moderationrequests() throws Exception {
         project = new Project();
