@@ -19,10 +19,12 @@ import org.eclipse.sw360.datahandler.db.AttachmentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ComponentDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.PackageDatabaseHandler;
 import org.eclipse.sw360.datahandler.db.ProjectDatabaseHandler;
+import org.eclipse.sw360.datahandler.db.SvmConnector;
 import org.eclipse.sw360.datahandler.entitlement.ProjectModerator;
 import org.eclipse.sw360.datahandler.thrift.MainlineState;
 import org.eclipse.sw360.datahandler.thrift.ProjectReleaseRelationship;
 import org.eclipse.sw360.datahandler.thrift.ReleaseRelationship;
+import org.eclipse.sw360.datahandler.thrift.RequestStatus;
 import org.eclipse.sw360.datahandler.thrift.Visibility;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentType;
@@ -46,6 +48,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.eclipse.sw360.datahandler.TestUtils.assertTestString;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProjectDatabaseHandlerTest {
@@ -59,9 +62,13 @@ public class ProjectDatabaseHandlerTest {
     private List<Release> releases;
     private List<Component> components;
     private ProjectDatabaseHandler handler;
+    private ComponentDatabaseHandler componentHandler;
 
     @Mock
     private ProjectModerator moderator;
+
+    @Mock
+    SvmConnector svmConnector;
 
     private static final User user = new User().setEmail("admin@sw360.org").setDepartment("DEPARTMENT");
 
@@ -176,10 +183,11 @@ public class ProjectDatabaseHandlerTest {
             databaseConnector.add(project);
         }
 
-        ComponentDatabaseHandler componentHandler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, attachmentsDbName);
         AttachmentDatabaseHandler attachmentDatabaseHandler = new AttachmentDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, attachmentsDbName);
         PackageDatabaseHandler packageHandler = new PackageDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, changeLogsDbName, attachmentsDbName, attachmentDatabaseHandler, componentHandler);
+        componentHandler = new ComponentDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, attachmentsDbName);
         handler = new ProjectDatabaseHandler(DatabaseSettingsTest.getConfiguredClient(), dbName, attachmentsDbName, moderator, componentHandler, packageHandler, attachmentDatabaseHandler);
+        handler.setSvmConnector(svmConnector);
     }
 
     private ProjectReleaseRelationship newDefaultProjectReleaseRelationship() {
@@ -383,6 +391,23 @@ public class ProjectDatabaseHandlerTest {
         Assert.assertTrue(linkedProjects.contains(link5));
     }
 
+    @Test
+    public void testUpdateProjectsWithSvmTrackingFeedback() throws Exception {
+        Project project = projects.getFirst();
+        Release release = releases.getFirst();
+
+        when(svmConnector.fetchComponentMappings())
+                .thenReturn(ImmutableMap.of(release.getId(), ImmutableMap.of(SW360Constants.SVM_COMPONENT_ID_KEY, 123),
+                        project.getId(), ImmutableMap.of(SW360Constants.SVM_COMPONENT_ID_KEY, 456)));
+        RequestStatus requestStatus = handler.updateProjectsWithSvmTrackingFeedback();
+
+        Assert.assertEquals(RequestStatus.SUCCESS, requestStatus);
+        Release r1A = componentHandler.getRelease("R1A", user);
+        Assert.assertEquals(release.getExternalIds(), r1A.getExternalIds());
+        Project p1 = handler.getProjectById(project.getId(), user);
+        Assert.assertEquals("456", p1.getExternalIds().get(SW360Constants.SVM_COMPONENT_ID));
+    }
+
     private void stripRandomPartsOfNodeIds(List<ProjectLink> linkedProjects) {
         linkedProjects.forEach(pl -> {
             if (pl.isSetNodeId()){
@@ -406,6 +431,4 @@ public class ProjectDatabaseHandlerTest {
             }
         });
     }
-
-
 }

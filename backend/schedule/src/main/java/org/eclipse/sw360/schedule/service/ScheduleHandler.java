@@ -76,7 +76,13 @@ public class ScheduleHandler implements ScheduleService.Iface {
                 successSync = wrapSupplierException(() -> ThriftClients.makeProjectClient().exportForMonitoringList(), serviceName);
                 break;
             case ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE:
-                successSync = wrapSupplierException(() -> ThriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback(), serviceName);
+                successSync = wrapSupplierException(() -> {
+                    RequestStatus releaseStatus = ThriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback();
+                    if (releaseStatus != RequestStatus.SUCCESS) {
+                        return releaseStatus;
+                    }
+                    return ThriftClients.makeProjectClient().updateProjectsWithSvmTrackingFeedback();
+                }, serviceName);
                 break;
             case ThriftClients.DELETE_ATTACHMENT_SERVICE:
                 successSync = wrapSupplierException(() -> ThriftClients.makeAttachmentClient().deleteOldAttachmentFromFileSystem(), serviceName);
@@ -126,7 +132,13 @@ public class ScheduleHandler implements ScheduleService.Iface {
                 case ThriftClients.SVM_LIST_UPDATE_SERVICE ->
                         ThriftClients.makeProjectClient().exportForMonitoringList();
                 case ThriftClients.SVM_TRACKING_FEEDBACK_SERVICE ->
-                        ThriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback();
+                        {
+                            RequestStatus releaseStatus = ThriftClients.makeComponentClient().updateReleasesWithSvmTrackingFeedback();
+                            if (releaseStatus != RequestStatus.SUCCESS) {
+                                yield releaseStatus;
+                            }
+                            yield ThriftClients.makeProjectClient().updateProjectsWithSvmTrackingFeedback();
+                        }
                 case ThriftClients.IMPORT_DEPARTMENT_SERVICE ->
                         ThriftClients.makeUserClient().importDepartmentSchedule();
                 case ThriftClients.SRC_UPLOAD_SERVICE ->

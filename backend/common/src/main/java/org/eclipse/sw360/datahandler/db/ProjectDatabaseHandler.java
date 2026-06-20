@@ -20,6 +20,7 @@ import com.google.common.collect.*;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import com.ibm.cloud.cloudant.v1.model.DocumentResult;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.thrift.TException;
@@ -117,6 +118,7 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
     private final ComponentDatabaseHandler componentDatabaseHandler;
     private final PackageDatabaseHandler packageDatabaseHandler;
     private final PackageRepository packageRepository;
+    private SvmConnector svmConnector;
 
     private static final Pattern PLAUSIBLE_GID_REGEXP = Pattern.compile("^[zZ].{7}$");
     private final RelationsUsageRepository relUsageRepository;
@@ -2920,5 +2922,73 @@ public class ProjectDatabaseHandler extends AttachmentAwareDatabaseHandler {
                         .collect(Collectors.toList())
         );
         return detailReleaseNode;
+    }
+
+    public RequestStatus updateProjectsWithSvmTrackingFeedback() {
+        try {
+            Map<String, Map<String, Object>> componentMappings = getSvmConnector().fetchComponentMappings();
+            List<Project> projects = repository.getProjectsIgnoringNotFound(componentMappings.keySet());
+            projects.forEach(p -> {
+                Map<String, String> externalIds = p.isSetExternalIds() ? p.getExternalIds() : new HashMap<>();
+                Map<String, String> additionalData = p.isSetAdditionalData() ? p.getAdditionalData() : new HashMap<>();
+
+                Map<String, Object> projectSVMData = componentMappings.get(p.getId());
+                if (!CommonUtils.isNullOrEmptyMap(projectSVMData)) {
+                    Project originalProjectData = p.deepCopy();
+                    Object svmComponentId = projectSVMData.get(SW360Constants.SVM_COMPONENT_ID_KEY);
+                    Object shortStatus = projectSVMData.get(SW360Constants.SVM_SHORT_STATUS_KEY);
+                    boolean isChanged = false;
+                    if (svmComponentId != null) {
+                        String previousValue = externalIds.get(SW360Constants.SVM_COMPONENT_ID);
+                        if (previousValue == null || !previousValue.equals(svmComponentId.toString())) {
+                            externalIds.put(SW360Constants.SVM_COMPONENT_ID, svmComponentId.toString());
+                            p.setExternalIds(externalIds);
+                            isChanged = true;
+                        }
+                    }
+
+                    if (shortStatus != null && CommonUtils.isNotNullEmptyOrWhitespace(shortStatus.toString())) {
+                        String previousValue = additionalData.get(SW360Constants.SVM_SHORT_STATUS);
+                        if (previousValue == null || !previousValue.equals(shortStatus.toString())) {
+                            additionalData.put(SW360Constants.SVM_SHORT_STATUS, shortStatus.toString());
+                            p.setAdditionalData(additionalData);
+                            isChanged = true;
+                        }
+                    }
+
+                    if (isChanged) {
+                        dbHandlerUtil.addChangeLogs(p, originalProjectData, SW360Constants.SVM_SCHEDULER_EMAIL,
+                                Operation.UPDATE, attachmentConnector, Lists.newArrayList(), null, null);
+                    }
+                }
+            });
+            List<DocumentResult> documentOperationResults = repository.executeBulk(projects);
+            documentOperationResults = documentOperationResults.stream().filter(res -> res.getError() != null || !res.isOk())
+                    .toList();
+            if (documentOperationResults.isEmpty()) {
+                log.info("SVMTF: updated {} projects", projects.size());
+            } else {
+                log.error("SVMTF: Failed saving projects: {}", documentOperationResults);
+                return RequestStatus.FAILURE;
+            }
+        } catch (IOException | SW360Exception e) {
+            log.error(e);
+            return RequestStatus.FAILURE;
+        }
+
+        return RequestStatus.SUCCESS;
+    }
+
+    @NotNull
+    private SvmConnector getSvmConnector() {
+        if (svmConnector == null) {
+            svmConnector = new SvmConnector();
+        }
+        return svmConnector;
+    }
+
+    public ProjectDatabaseHandler setSvmConnector(SvmConnector svmConnector) {
+        this.svmConnector = svmConnector;
+        return this;
     }
 }

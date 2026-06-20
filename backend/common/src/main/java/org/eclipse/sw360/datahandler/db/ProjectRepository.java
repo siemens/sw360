@@ -832,4 +832,8 @@ public class ProjectRepository extends SummaryAwareRepository<Project> {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
+
+    public List<Project> getProjectsIgnoringNotFound(Collection<String> ids) {
+        return getConnector().get(Project.class, ids, true);
+    }
 }

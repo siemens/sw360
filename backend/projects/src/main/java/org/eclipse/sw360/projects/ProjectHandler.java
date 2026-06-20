@@ -693,4 +693,9 @@ public class ProjectHandler implements ProjectService.Iface {
             throws SW360Exception {
         return handler.getLinkedReleasesInDependencyNetworkOfProject(projectId, sw360User);
     }
+
+    @Override
+    public RequestStatus updateProjectsWithSvmTrackingFeedback() throws TException {
+        return handler.updateProjectsWithSvmTrackingFeedback();
+    }
 }

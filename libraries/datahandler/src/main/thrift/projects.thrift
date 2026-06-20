@@ -764,4 +764,9 @@ service ProjectService {
     * Get linked releases information in dependency network of a project
     */
     list<ReleaseNode> getLinkedReleasesInDependencyNetworkOfProject(1: string projectId, 2: User sw360User) throws (1: SW360Exception exp);
+
+    /**
+     * loads component mappings from SVM and stores the SVM ids in the external ids of the respective projects
+     **/
+    RequestStatus updateProjectsWithSvmTrackingFeedback();
 }
