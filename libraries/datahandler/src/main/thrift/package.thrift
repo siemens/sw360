@@ -88,6 +88,16 @@ enum PackageManager {
     YOCTO = 34
 }
 
+enum PackageSortColumn {
+    BY_SCORE = -2,
+    BY_CREATEDON = -1,
+    BY_NAME = 0,
+    BY_VERSION = 1,
+    BY_PURL = 2,
+    BY_LICENSE = 3,
+    BY_PACKAGE_MANAGER = 4,
+}
+
 service PackageService {
     /**
      * Get Package by Id
@@ -185,8 +195,9 @@ service PackageService {
     list<Package> searchByPurl(1: string purl);
 
     /**
-     * search packages in database that match subQueryRestrictions
+     * Paginated search for packages with multi-field filter map and access control.
+     * Search text should be included in the subQueryRestrictions map under the "name" key.
      */
-    list<Package> refineSearchAccessiblePackages(1: string text, 2: map<string, set<string>> subQueryRestrictions, 3: User user);
+    map<PaginationData, list<Package>> refineSearchAccessiblePackages(1: map<string, set<string>> subQueryRestrictions, 2: User user, 3: PaginationData pageData);
 
 }

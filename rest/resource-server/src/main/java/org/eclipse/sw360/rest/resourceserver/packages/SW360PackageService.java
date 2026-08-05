@@ -28,6 +28,7 @@ import org.eclipse.sw360.datahandler.thrift.SW360Exception;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
 import org.eclipse.sw360.datahandler.thrift.packages.PackageService;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageSortColumn;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.eclipse.sw360.rest.resourceserver.core.RestControllerHelper;
@@ -39,6 +40,8 @@ import org.springframework.stereotype.Service;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+
+import org.jetbrains.annotations.NotNull;
 
 @Service
 @RequiredArgsConstructor
@@ -172,31 +175,47 @@ public class SW360PackageService {
     }
 
 
-    public List<Package> refineSearch(Map<String, Set<String>> filterMap, User sw360User) throws TException {
+    public Map<PaginationData, List<Package>> refineSearch(Map<String, Set<String>> filterMap, User sw360User, Pageable pageable) throws TException {
         PackageService.Iface sw360PackageClient = getThriftPackageClient();
-        return sw360PackageClient.refineSearchAccessiblePackages(null, filterMap, sw360User);
+        PaginationData pageData = pageableToPaginationData(pageable, PackageSortColumn.BY_SCORE, true);
+        return sw360PackageClient.refineSearchAccessiblePackages(filterMap, sw360User, pageData);
     }
 
     private static PaginationData pageableToPaginationData(Pageable pageable) {
-        int sortColumn = -1; // default: createdOn view in backend
-        boolean ascending = true;
+        return pageableToPaginationData(pageable, PackageSortColumn.BY_CREATEDON, false);
+    }
+
+    private static PaginationData pageableToPaginationData(@NotNull Pageable pageable,
+                                                            PackageSortColumn defaultColumn,
+                                                            Boolean defaultAscending) {
+        PackageSortColumn column = PackageSortColumn.BY_CREATEDON;
+        boolean ascending = false;
 
         if (pageable.getSort().isSorted()) {
             Sort.Order order = pageable.getSort().iterator().next();
-            sortColumn = switch (order.getProperty()) {
-                case "name" -> 0;
-                case "licenseIds", "licenses" -> 3;
-                case "packageManager" -> 4;
-                case "createdOn" -> -1;
-                default -> -1;
+            String property = order.getProperty();
+            column = switch (property) {
+                case "name" -> PackageSortColumn.BY_NAME;
+                case "version" -> PackageSortColumn.BY_VERSION;
+                case "purl" -> PackageSortColumn.BY_PURL;
+                case "licenseIds", "licenses" -> PackageSortColumn.BY_LICENSE;
+                case "packageManager" -> PackageSortColumn.BY_PACKAGE_MANAGER;
+                case "createdOn" -> PackageSortColumn.BY_CREATEDON;
+                case "score" -> PackageSortColumn.BY_SCORE;
+                default -> column;
             };
             ascending = order.isAscending();
+        } else {
+            if (defaultColumn != null) {
+                column = defaultColumn;
+                if (defaultAscending != null) {
+                    ascending = defaultAscending;
+                }
+            }
         }
-
-        return new PaginationData()
-                .setDisplayStart((int) pageable.getOffset())
+        return new PaginationData().setDisplayStart((int) pageable.getOffset())
                 .setRowsPerPage(pageable.getPageSize())
-                .setSortColumnNumber(sortColumn)
+                .setSortColumnNumber(column.getValue())
                 .setAscending(ascending);
     }
 }

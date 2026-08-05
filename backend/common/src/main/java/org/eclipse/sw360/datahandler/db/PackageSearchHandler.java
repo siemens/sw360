@@ -10,93 +10,133 @@
 package org.eclipse.sw360.datahandler.db;
 
 import com.ibm.cloud.cloudant.v1.Cloudant;
-import com.google.gson.Gson;
+import org.eclipse.sw360.datahandler.cloudantclient.BaseNouveauSearchHandler;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
+import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
+import org.eclipse.sw360.datahandler.thrift.PaginationData;
 import org.eclipse.sw360.datahandler.thrift.packages.Package;
+import org.eclipse.sw360.datahandler.thrift.packages.PackageSortColumn;
+import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.nouveau.designdocument.NouveauDesignDocument;
-import org.eclipse.sw360.nouveau.designdocument.NouveauIndexDesignDocument;
-import org.eclipse.sw360.nouveau.designdocument.NouveauIndexFunction;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.eclipse.sw360.common.utils.SearchUtils.OBJ_ARRAY_TO_STRING_INDEX;
-import static org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector.prepareWildcardQuery;
+import static org.eclipse.sw360.datahandler.permissions.PermissionUtils.makePermission;
 import static org.eclipse.sw360.nouveau.LuceneAwareCouchDbConnector.DEFAULT_DESIGN_PREFIX;
+import static org.eclipse.sw360.nouveau.LuceneAwareCouchDbConnector.SCORE_SORTING_FIELD;
 
-public class PackageSearchHandler {
+/**
+ * Nouveau search handler for Packages with paginated access control filtering.
+ *
+ * @author abdul.kapti@siemens-healthineers.com
+ */
+public class PackageSearchHandler extends BaseNouveauSearchHandler<Package> {
 
     private static final String DDOC_NAME = DEFAULT_DESIGN_PREFIX + "lucene";
 
-    private static final NouveauIndexDesignDocument luceneSearchView
-        = new NouveauIndexDesignDocument("packages",
-            new NouveauIndexFunction(
-                "function(doc) {" +
-                OBJ_ARRAY_TO_STRING_INDEX +
-                "    if (!doc.type || doc.type != 'package') return;" +
-                "    if (doc.name && typeof(doc.name) == 'string' && doc.name.length > 0) {" +
-                "      index('text', 'name', doc.name, {'store': true});"+
-                "    }" +
-                "    if (doc.version && typeof(doc.version) == 'string' && doc.version.length > 0) {" +
-                "      index('text', 'version', doc.version, {'store': true});"+
-                "    }" +
-                "    if (doc.purl && typeof(doc.purl) == 'string' && doc.purl.length > 0) {" +
-                "      index('text', 'purl', doc.purl, {'store': true});"+
-                "    }" +
-                "    if (doc.releaseId && typeof(doc.releaseId) == 'string' && doc.releaseId.length > 0) {" +
-                "      index('text', 'releaseId', doc.releaseId, {'store': true});"+
-                "    }" +
-                "    if (doc.vcs && typeof(doc.vcs) == 'string' && doc.vcs.length > 0) {" +
-                "      index('text', 'vcs', doc.vcs, {'store': true});"+
-                "    }" +
-                "    if (doc.packageManager && typeof(doc.packageManager) == 'string' && doc.packageManager.length > 0) {" +
-                "      index('text', 'packageManager', doc.packageManager, {'store': true});"+
-                "    }" +
-                "    if (doc.packageType && typeof(doc.packageType) == 'string' && doc.packageType.length > 0) {" +
-                "      index('text', 'packageType', doc.packageType, {'store': true});"+
-                "    }" +
-                "    if (doc.createdBy && typeof(doc.createdBy) == 'string' && doc.createdBy.length > 0) {" +
-                "      index('text', 'createdBy', doc.createdBy, {'store': true});"+
-                "    }" +
-                "    if(doc.createdOn && doc.createdOn.length) {"+
-                "      var dt = new Date(doc.createdOn);"+
-                "      var formattedDt = `${dt.getFullYear()}${(dt.getMonth()+1).toString().padStart(2,'0')}${dt.getDate().toString().padStart(2,'0')}`;" +
-                "      index('double', 'createdOn', Number(formattedDt), {'store': true});"+
-                "    }" +
-                "    arrayToStringIndex(doc.licenseIds, 'licenseIds');" +
-                "}"));
+    // -------------------------------------------------------------------------
+    //  Field spec declarations
+    // -------------------------------------------------------------------------
 
+    private static final List<IndexField> PACKAGE_FIELDS = List.of(
+            IndexField.standard("name"),
+            IndexField.standard("version"),
+            IndexField.simple("purl"),
+            IndexField.simple("releaseId"),
+            IndexField.simple("vcs"),
+            IndexField.simple("packageManager", "keyword"),
+            IndexField.simple("packageType", "keyword"),
+            IndexField.simple("createdBy", "email"),
+            IndexField.date("createdOn")
+    );
+
+    /**
+     * Package-specific JS for array-backed fields that should support text
+     * and sort lookups via arrayToStringIndex helper.
+     */
+    private static final String PACKAGE_CUSTOM_JS =
+            "    arrayToStringIndex(doc.licenseIds, 'licenseIds');";
+
+    /**
+     * Analyzer overrides for fields created by {@code arrayToStringIndex}.
+     * The helper generates {@code <field>_sort} string indexes that require
+     * the {@code keyword} analyzer for correct sorting behavior.
+     */
+    private static final Map<String, String> PACKAGE_CUSTOM_ANALYZERS = Map.of(
+            "licenseIds_sort", "keyword"
+    );
+
+    private static final BuiltIndexDefinition PACKAGE_INDEX_DEFINITION = buildIndexFunction(
+            "package",
+            SW360Constants.PROJECT_SEARCH_EMPTY_TOKEN,
+            PACKAGE_FIELDS,
+            PACKAGE_CUSTOM_JS,
+            PACKAGE_CUSTOM_ANALYZERS,
+            "standard"
+    );
+
+    // -------------------------------------------------------------------------
+    //  Constructor
+    // -------------------------------------------------------------------------
 
     private final NouveauLuceneAwareDatabaseConnector connector;
 
-    public PackageSearchHandler(Cloudant client, String dbName) throws IOException {
-        DatabaseConnectorCloudant db = new DatabaseConnectorCloudant(client, dbName);
+    public PackageSearchHandler(Cloudant cClient, String dbName) throws IOException {
+        super(Package.class, "packages", PACKAGE_INDEX_DEFINITION);
+        DatabaseConnectorCloudant db = new DatabaseConnectorCloudant(cClient, dbName);
         connector = new NouveauLuceneAwareDatabaseConnector(db, DDOC_NAME, dbName, db.getInstance().getGson());
-        Gson gson = db.getInstance().getGson();
-        NouveauDesignDocument searchView = new NouveauDesignDocument();
-        searchView.setId(DDOC_NAME);
-        searchView.addNouveau(luceneSearchView, gson);
-        connector.addDesignDoc(searchView);
+        setup(connector, db);
     }
 
-    public List<Package> searchPackagesWithRestrictions(String text, final Map<String , Set<String>> subQueryRestrictions) {
-        return connector.searchViewWithRestrictionsWithAnd(Package.class, luceneSearchView.getIndexName(),
+    // -------------------------------------------------------------------------
+    //  Public search API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Paginated search with permission filtering.
+     */
+    public Map<PaginationData, List<Package>> searchAccessiblePackages(
+            final Map<String, Set<String>> subQueryRestrictions, User user, PaginationData pageData) {
+        Map<PaginationData, List<Package>> result = baseSearch(connector, subQueryRestrictions, pageData);
+
+        PaginationData respPageData = result.keySet().iterator().next();
+        List<Package> packageList = result.values().iterator().next();
+
+        packageList = packageList.stream().filter(pkg ->
+                makePermission(pkg, user).isActionAllowed(RequestedAction.READ))
+                .toList();
+
+        return Collections.singletonMap(respPageData, packageList);
+    }
+
+    /**
+     * Non-paginated search (legacy callers).
+     */
+    public List<Package> search(String text, final Map<String, Set<String>> subQueryRestrictions) {
+        return connector.searchViewWithRestrictionsWithAnd(Package.class, getIndexName(),
                 text, subQueryRestrictions);
     }
 
-    public List<Package> searchPackages(String searchText) {
-        return connector.searchView(Package.class, luceneSearchView.getIndexName(),
-                prepareWildcardQuery(searchText));
-    }
+    // -------------------------------------------------------------------------
+    //  Sort column mapping
+    // -------------------------------------------------------------------------
 
-    public List<Package> searchAccessiblePackages(String text, final Map<String,
-            Set<String>> subQueryRestrictions, User user ){
-        List<Package> resultPackageList = connector.searchViewWithRestrictionsWithAnd(Package.class,
-                luceneSearchView.getIndexName(), text, subQueryRestrictions);
-        return resultPackageList;
+    @Override
+    protected List<String> mapSortColumn(int sortColumnNumber) {
+        String revDir = "-";
+        return switch (PackageSortColumn.findByValue(sortColumnNumber)) {
+            case PackageSortColumn.BY_NAME -> List.of("name_sort", revDir + "createdOn");
+            case PackageSortColumn.BY_VERSION -> List.of("version_sort", "name_sort", revDir + "createdOn");
+            case PackageSortColumn.BY_PURL -> List.of("purl_sort", SCORE_SORTING_FIELD, "name_sort", revDir + "createdOn");
+            case PackageSortColumn.BY_LICENSE -> List.of("licenseIds_sort", SCORE_SORTING_FIELD, "name_sort", revDir + "createdOn");
+            case PackageSortColumn.BY_PACKAGE_MANAGER -> List.of("packageManager_sort", SCORE_SORTING_FIELD, "name_sort", revDir + "createdOn");
+            case PackageSortColumn.BY_CREATEDON -> List.of("createdOn");
+            case null, default -> List.of(SCORE_SORTING_FIELD);
+        };
     }
 }

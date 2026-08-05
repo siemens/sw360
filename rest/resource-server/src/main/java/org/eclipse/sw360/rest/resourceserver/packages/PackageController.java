@@ -17,7 +17,6 @@ import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import com.google.common.collect.Sets;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,7 +34,6 @@ import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.common.CommonUtils;
 import org.eclipse.sw360.datahandler.common.SW360Constants;
 import org.eclipse.sw360.datahandler.common.SW360Utils;
-import org.eclipse.sw360.datahandler.couchdb.lucene.NouveauLuceneAwareDatabaseConnector;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationParameterException;
 import org.eclipse.sw360.datahandler.resourcelists.PaginationResult;
 import org.eclipse.sw360.datahandler.resourcelists.ResourceClassNotFoundException;
@@ -275,13 +273,12 @@ public class PackageController implements RepresentationModelProcessor<Repositor
         Integer totalCount = null;
         Map<String, Set<String>> restrictions = getFilterMap(name, version, purl, packageManager, licenses, createdBy, createdOn);
         if (luceneSearch) {
-            if (CommonUtils.isNotNullEmptyOrWhitespace(name)) {
-                Set<String> values = CommonUtils.splitToSet(name);
-                values = values.stream().map(NouveauLuceneAwareDatabaseConnector::prepareWildcardQuery)
-                        .collect(Collectors.toSet());
-                restrictions.put(Package._Fields.NAME.getFieldName(), values);
+            Map<PaginationData, List<Package>> paginatedPackages = packageService.refineSearch(restrictions, sw360User, pageable);
+            if (paginatedPackages != null && !paginatedPackages.isEmpty()) {
+                sw360Packages.addAll(paginatedPackages.values().iterator().next());
+                totalCount = Math.toIntExact(paginatedPackages.keySet().stream()
+                        .findFirst().map(PaginationData::getTotalRowCount).orElse(0L));
             }
-            sw360Packages.addAll(packageService.refineSearch(restrictions, sw360User));
         } else {
             boolean requestContainsPaging = pageable != null && pageable.isPaged();
             boolean useDbPagination = requestContainsPaging && restrictions.isEmpty() && !orphanPackage;
