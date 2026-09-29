@@ -149,4 +149,53 @@ public class LicenseInfoHandlerTest {
         licenseNameWithText.setAcknowledgements(acknowledgements);
         return licenseNameWithText;
     }
+
+    @org.junit.jupiter.api.Test
+    public void testGetProjectObligationStatusInitializesNewObligationsAsOpen() throws Exception {
+        handler = new LicenseInfoHandler(Mockito.mock(AttachmentDatabaseHandler.class), null, null);
+        org.eclipse.sw360.datahandler.thrift.attachments.Attachment att =
+                new org.eclipse.sw360.datahandler.thrift.attachments.Attachment()
+                        .setAttachmentContentId("att-1");
+        Release release = new Release().setId("rel-1").setAttachments(ImmutableSet.of(att));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject obl =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject()
+                        .setTopic("Provide Source")
+                        .setId("obl-1")
+                        .setText("Must provide source")
+                        .setType("OBLIGATION");
+
+        LicenseNameWithText license = new LicenseNameWithText()
+                .setLicenseSpdxId("GPL-2.0")
+                .setLicenseName("GPL 2.0")
+                .setObligationsAtProject(ImmutableSet.of(obl, obl.deepCopy().setTopic("Existing topic")));
+
+        LicenseInfo licenseInfo = new LicenseInfo()
+                .setLicenseNamesWithTexts(ImmutableSet.of(license));
+
+        LicenseInfoParsingResult parsingResult = new LicenseInfoParsingResult()
+                .setAttachmentContentId("att-1")
+                .setRelease(release)
+                .setLicenseInfo(licenseInfo);
+
+        var saved = new org.eclipse.sw360.datahandler.thrift.projects.ObligationStatusInfo()
+                .setStatus(org.eclipse.sw360.datahandler.thrift.ObligationStatus.ACKNOWLEDGED_OR_FULFILLED)
+                .setComment("Preserve this comment");
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseObligationsStatusInfo result =
+                handler.getProjectObligationStatus(
+                        new java.util.HashMap<>(java.util.Map.of("Existing topic", saved)),
+                        ImmutableList.of(parsingResult),
+                        java.util.Collections.emptyMap());
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getObligationStatusMap().get("Provide Source"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                org.eclipse.sw360.datahandler.thrift.ObligationStatus.OPEN,
+                result.getObligationStatusMap().get("Provide Source").getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("", result.getObligationStatusMap().get("Provide Source").getComment());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                org.eclipse.sw360.datahandler.thrift.ObligationStatus.ACKNOWLEDGED_OR_FULFILLED,
+                result.getObligationStatusMap().get("Existing topic").getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("Preserve this comment",
+                result.getObligationStatusMap().get("Existing topic").getComment());
+    }
 }

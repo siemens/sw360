@@ -21,6 +21,7 @@ import org.eclipse.sw360.datahandler.thrift.*;
 import org.eclipse.sw360.datahandler.thrift.components.Component;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.components.ReleaseClearingStatusData;
+import org.eclipse.sw360.datahandler.thrift.licenses.ObligationLevel;
 import org.eclipse.sw360.datahandler.thrift.projects.*;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 
@@ -63,6 +64,7 @@ public class ProjectDatabaseHandlerTest {
     private DatabaseConnectorCloudant databaseConnector;
 
     @Before
+    @org.junit.jupiter.api.BeforeEach
     public void setUp() throws Exception {
         assertTestString(dbName);
         assertTestString(attachmentsDbName);
@@ -153,6 +155,7 @@ public class ProjectDatabaseHandlerTest {
     }
 
     @After
+    @org.junit.jupiter.api.AfterEach
     public void tearDown() throws Exception {
         // Delete the database
         TestUtils.deleteDatabase(DatabaseSettingsTest.getConfiguredClient(), dbName);
@@ -658,6 +661,204 @@ public class ProjectDatabaseHandlerTest {
         Assert.assertEquals(2, user3Releases.size());
         Set<String> user3Ids = user3Releases.stream().map(Release::getId).collect(Collectors.toSet());
         Assert.assertTrue(containsInAnyOrder("r1", "r3").matches(user3Ids));
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testReopenAffectedObligationsWhenNewReleaseAddedToProject() throws Exception {
+        checkObligationReset("addition");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testPreserveObligationCommentsWhenReplacingRelease() throws Exception {
+        checkObligationReset("replacement");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testReopenObligationsWhenLinkingPackage() throws Exception {
+        checkObligationReset("package");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testLeaveObligationsUnchangedWithoutAddedRelease() throws Exception {
+        checkObligationReset("unchanged");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testRejectProjectUpdateWhenObligationParsingFails() throws Exception {
+        checkObligationReset("failure");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testRejectProjectUpdateWhenParserReportsFailure() throws Exception {
+        checkObligationReset("reported-failure");
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testDoNotReopenNonLicenseObligationWithSameTopic() throws Exception {
+        checkObligationReset("admin");
+    }
+
+    private void checkObligationReset(String scenario) throws Exception {
+        boolean parsingFailed = scenario.endsWith("failure");
+        org.eclipse.sw360.datahandler.thrift.attachments.Attachment cliAttachment =
+                new org.eclipse.sw360.datahandler.thrift.attachments.Attachment()
+                        .setAttachmentContentId("att-r4")
+                        .setFilename("r4-cli.xml")
+                        .setAttachmentType(org.eclipse.sw360.datahandler.thrift.attachments.AttachmentType.COMPONENT_LICENSE_INFO_XML)
+                        .setCheckStatus(org.eclipse.sw360.datahandler.thrift.attachments.CheckStatus.ACCEPTED);
+
+        Release r4WithCli = handler.getReleasesForLicenseClearing("P1", user1, false, null, null, null).stream()
+                .filter(r -> "r4".equals(r.getId()))
+                .findFirst()
+                .orElseThrow();
+        r4WithCli.setAttachments(Collections.singleton(cliAttachment));
+        databaseConnector.update(r4WithCli);
+
+        ObligationStatusInfo unaffectedObl = new ObligationStatusInfo()
+                .setId("obl-1")
+                .setText("Unaffected text")
+                .setStatus(ObligationStatus.ACKNOWLEDGED_OR_FULFILLED)
+                .setComment("Existing comment 1")
+                .setLicenseIds(new HashSet<>(Collections.singletonList("MIT")))
+                .setReleaseIdToAcceptedCLI(new HashMap<>(Map.of("r1", "att-r1")));
+
+        ObligationStatusInfo affectedObl = new ObligationStatusInfo()
+                .setId("obl-2")
+                .setText("Affected text")
+                .setStatus(ObligationStatus.ACKNOWLEDGED_OR_FULFILLED)
+                .setComment("Existing comment 2")
+                .setLicenseIds(new HashSet<>(Collections.singletonList("GPL-2.0")))
+                .setReleaseIdToAcceptedCLI(new HashMap<>(Map.of("r2", "att-r2")));
+        if ("admin".equals(scenario)) {
+            affectedObl.setObligationLevel(ObligationLevel.PROJECT_OBLIGATION);
+        }
+
+        Map<String, ObligationStatusInfo> initialMap = new HashMap<>();
+        initialMap.put("Topic Unaffected", unaffectedObl);
+        initialMap.put("Topic Affected", affectedObl);
+
+        ObligationList obligationList = new ObligationList()
+                .setProjectId("P2")
+                .setLinkedObligationStatus(initialMap);
+        handler.addLinkedObligations(obligationList, user2);
+
+        Project p2 = handler.getProjectById("P2", user2);
+        Map<String, ProjectReleaseRelationship> updatedReleases = new HashMap<>(p2.getReleaseIdToUsage());
+        updatedReleases.put("r4", new ProjectReleaseRelationship(ReleaseRelationship.CONTAINED, MainlineState.MAINLINE));
+        if ("replacement".equals(scenario)) {
+            updatedReleases.remove("r2");
+        } else if ("unchanged".equals(scenario) || "package".equals(scenario)) {
+            updatedReleases.remove("r4");
+        }
+        p2.setReleaseIdToUsage(updatedReleases);
+        org.eclipse.sw360.datahandler.thrift.packages.Package linkedPackage =
+                new org.eclipse.sw360.datahandler.thrift.packages.Package().setId("pkg-4").setReleaseId("r4");
+        if ("package".equals(scenario)) {
+            databaseConnector.add(linkedPackage);
+            p2.setPackageIds(new HashMap<>(Map.of("pkg-4", new ProjectPackageRelationship())));
+        }
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService.Client licenseClientMock =
+                Mockito.mock(org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService.Client.class);
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject oblAffectedFromCli =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject()
+                        .setTopic("Topic Affected")
+                        .setId("obl-2")
+                        .setText("Affected text")
+                        .setType("OBLIGATION")
+                        .setLicenseIDs(Collections.singletonList("GPL-2.0"));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject oblNewFromCli =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationAtProject()
+                        .setTopic("Topic New")
+                        .setId("obl-3")
+                        .setText("New obligation text")
+                        .setType("OBLIGATION")
+                        .setLicenseIDs(Collections.singletonList("Apache-2.0"));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText licenseGpl =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText()
+                        .setLicenseSpdxId("GPL-2.0")
+                        .setLicenseName("GPL 2.0")
+                        .setObligationsAtProject(Collections.singleton(oblAffectedFromCli));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText licenseApache =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseNameWithText()
+                        .setLicenseSpdxId("Apache-2.0")
+                        .setLicenseName("Apache 2.0")
+                        .setObligationsAtProject(Collections.singleton(oblNewFromCli));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo licenseInfo =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfo()
+                        .setLicenseNamesWithTexts(new HashSet<>(Arrays.asList(licenseGpl, licenseApache)));
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult parsingResult =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoParsingResult()
+                        .setAttachmentContentId("att-r4")
+                        .setRelease(r4WithCli)
+                        .setLicenseInfo(licenseInfo);
+
+        org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationParsingResult obligationParsingResult =
+                new org.eclipse.sw360.datahandler.thrift.licenseinfo.ObligationParsingResult()
+                        .setAttachmentContentId("att-r4")
+                        .setRelease(r4WithCli)
+                        .setObligationsAtProject(Arrays.asList(oblAffectedFromCli, oblNewFromCli));
+
+        lenient().when(licenseClientMock.getLicenseInfoForAttachment(any(), eq("att-r4"), eq(false), any()))
+                .thenReturn(Collections.singletonList(parsingResult));
+        lenient().when(licenseClientMock.getObligationsForAttachment(any(), eq("att-r4"), any()))
+                .thenReturn(Collections.singletonList(obligationParsingResult));
+        lenient().when(licenseClientMock.createLicenseToObligationMapping(any(), any()))
+                .thenReturn(parsingResult);
+
+        try (org.mockito.MockedStatic<ThriftClients> mockedThriftClients = Mockito.mockStatic(ThriftClients.class, Mockito.CALLS_REAL_METHODS)) {
+            mockedThriftClients.when(ThriftClients::makeLicenseInfoClient).thenReturn(licenseClientMock);
+            if ("package".equals(scenario)) {
+                var packageClient = Mockito.mock(org.eclipse.sw360.datahandler.thrift.packages.PackageService.Client.class);
+                when(packageClient.getPackageByIds(any())).thenReturn(List.of(linkedPackage));
+                mockedThriftClients.when(ThriftClients::makePackageClient).thenReturn(packageClient);
+            }
+            if ("failure".equals(scenario)) {
+                when(licenseClientMock.getLicenseInfoForAttachment(any(), eq("att-r4"), eq(false), any()))
+                        .thenThrow(new org.apache.thrift.TException("Cannot parse CLI"));
+            } else if ("reported-failure".equals(scenario)) {
+                parsingResult.setStatus(org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoRequestStatus.FAILURE);
+            }
+            if (parsingFailed) {
+                org.junit.jupiter.api.Assertions.assertThrows(SW360Exception.class, () -> handler.updateProject(p2, user2));
+                org.junit.jupiter.api.Assertions.assertFalse(
+                        handler.getProjectById("P2", user2).getReleaseIdToUsage().containsKey("r4"));
+            } else {
+                org.junit.jupiter.api.Assertions.assertEquals(RequestStatus.SUCCESS, handler.updateProject(p2, user2));
+            }
+
+        }
+
+        ObligationList updatedObligationList = handler.getLinkedObligations(p2.getLinkedObligationId(), user2);
+        Map<String, ObligationStatusInfo> updatedStatusMap = updatedObligationList.getLinkedObligationStatus();
+
+        // 1. Existing obligation with no newly added components: status and comment remain unchanged
+        ObligationStatusInfo afterUnaffected = updatedStatusMap.get("Topic Unaffected");
+        org.junit.jupiter.api.Assertions.assertEquals(unaffectedObl, afterUnaffected);
+
+        // 2. Existing obligation affected by newly added component: reopened to OPEN, comment preserved
+        ObligationStatusInfo afterAffected = updatedStatusMap.get("Topic Affected");
+        boolean reopened = !parsingFailed && !"unchanged".equals(scenario) && !"admin".equals(scenario);
+        org.junit.jupiter.api.Assertions.assertNotNull(afterAffected);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                reopened ? ObligationStatus.OPEN : ObligationStatus.ACKNOWLEDGED_OR_FULFILLED, afterAffected.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("Existing comment 2", afterAffected.getComment());
+        org.junit.jupiter.api.Assertions.assertEquals("Affected text", afterAffected.getText());
+        if (reopened) {
+            org.junit.jupiter.api.Assertions.assertEquals("att-r4", afterAffected.getReleaseIdToAcceptedCLI().get("r4"));
+        }
+        if ("replacement".equals(scenario)) {
+            org.junit.jupiter.api.Assertions.assertFalse(afterAffected.getReleaseIdToAcceptedCLI().containsKey("r2"));
+        }
+
+        // New entries are derived by the existing read workflow, not persisted by the update hook.
+        org.junit.jupiter.api.Assertions.assertFalse(updatedStatusMap.containsKey("Topic New"));
     }
 
     private ProjectWithReleaseRelationTuple createTuple(Project p) {
