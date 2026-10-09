@@ -10,10 +10,13 @@
  */
 package org.eclipse.sw360.clients.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.eclipse.sw360.http.HttpClient;
+import org.eclipse.sw360.http.HttpClientFactoryImpl;
+import org.eclipse.sw360.http.config.HttpClientConfig;
 import org.eclipse.sw360.http.utils.HttpConstants;
 
 import java.net.URI;
@@ -144,6 +147,55 @@ public final class SW360ClientConfig {
                 token,
                 Validate.notNull(httpClient, "HTTP client cannot be null"),
                 Validate.notNull(mapper, "Object Mapper cannot be null"));
+    }
+
+    /**
+     * Creates a new token-first {@code SW360ClientConfig} that authenticates
+     * against SW360 with a bearer token only. No authentication URL or
+     * credentials are required in this mode.
+     *
+     * @param restURL    the base URL for REST requests to the SW360 instance
+     * @param token      the bearer token used for authentication
+     * @param httpClient the HTTP client to interact with the SW360 server
+     * @param mapper     the JSON object mapper
+     * @return the newly created instance
+     */
+    public static SW360ClientConfig createConfigWithToken(String restURL, String token, HttpClient httpClient,
+                                                          ObjectMapper mapper) {
+        return new SW360ClientConfig(
+                URI.create(stripTrailingSeparator(Validate.notEmpty(restURL, "Undefined REST URL"))),
+                "",
+                "",
+                "",
+                "",
+                "",
+                Validate.notEmpty(token, "Undefined token"),
+                Validate.notNull(httpClient, "HTTP client cannot be null"),
+                Validate.notNull(mapper, "Object Mapper cannot be null"));
+    }
+
+    /**
+     * Returns the authentication mode that applies to this configuration: a
+     * direct bearer token when one is present, otherwise credential-based
+     * token exchange.
+     *
+     * @return the authentication mode selected for this configuration
+     */
+    public Sw360AuthenticationMode getAuthenticationMode() {
+        return StringUtils.isNotBlank(getToken()) ? Sw360AuthenticationMode.TOKEN : Sw360AuthenticationMode.CREDENTIALS;
+    }
+
+    /**
+     * Returns a builder for the token-first, minimal-setup way to create a
+     * {@code SW360ClientConfig}. This is the recommended entry point for
+     * standalone consumers: provide the target environment base URL and
+     * either a bearer token or credentials; the HTTP client and object mapper
+     * are created automatically when not supplied.
+     *
+     * @return a new {@code Builder}
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
@@ -282,5 +334,96 @@ public final class SW360ClientConfig {
      */
     private static String stripTrailingSeparator(String url) {
         return StringUtils.stripEnd(url, HttpConstants.URL_PATH_SEPARATOR);
+    }
+
+    /**
+     * <p>
+     * A builder for the token-first, minimal-setup way to create a
+     * {@code SW360ClientConfig}. Only {@code baseUrl} plus either
+     * {@code token} or the credential settings ({@code authUrl}, {@code user},
+     * {@code password}, {@code clientId}, {@code clientSecret}) are required.
+     * </p>
+     * <p>
+     * When a token is supplied it always takes precedence over credentials.
+     * The HTTP client and JSON object mapper are created with sensible
+     * defaults when not explicitly provided.
+     * </p>
+     */
+    public static final class Builder {
+        private String baseUrl;
+        private String authUrl;
+        private String token;
+        private String user;
+        private String password;
+        private String clientId;
+        private String clientSecret;
+        private HttpClient httpClient;
+        private ObjectMapper objectMapper;
+
+        private Builder() {
+        }
+
+        public Builder baseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+            return this;
+        }
+
+        public Builder authUrl(String authUrl) {
+            this.authUrl = authUrl;
+            return this;
+        }
+
+        public Builder token(String token) {
+            this.token = token;
+            return this;
+        }
+
+        public Builder user(String user) {
+            this.user = user;
+            return this;
+        }
+
+        public Builder password(String password) {
+            this.password = password;
+            return this;
+        }
+
+        public Builder clientId(String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        public Builder clientSecret(String clientSecret) {
+            this.clientSecret = clientSecret;
+            return this;
+        }
+
+        public Builder httpClient(HttpClient httpClient) {
+            this.httpClient = httpClient;
+            return this;
+        }
+
+        public Builder objectMapper(ObjectMapper objectMapper) {
+            this.objectMapper = objectMapper;
+            return this;
+        }
+
+        /**
+         * Builds the {@code SW360ClientConfig}. A token takes precedence over
+         * credentials when both are supplied.
+         *
+         * @return the newly created, immutable configuration
+         */
+        public SW360ClientConfig build() {
+            HttpClient client = httpClient != null ? httpClient
+                    : new HttpClientFactoryImpl().newHttpClient(HttpClientConfig.basicConfig());
+            ObjectMapper mapper = objectMapper != null ? objectMapper
+                    : new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+            if (StringUtils.isNotBlank(token)) {
+                return createConfigWithToken(baseUrl, token, client, mapper);
+            }
+            return createConfig(baseUrl, authUrl, user, password, clientId, clientSecret, token, client, mapper);
+        }
     }
 }

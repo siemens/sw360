@@ -19,8 +19,8 @@ import org.eclipse.sw360.http.utils.FailedRequestException;
 import org.eclipse.sw360.clients.config.SW360ClientConfig;
 import org.eclipse.sw360.http.utils.HttpUtils;
 import org.eclipse.sw360.clients.rest.AbstractMockServerTest;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -43,7 +43,7 @@ public class SW360AuthenticationClientIT extends AbstractMockServerTest {
     private SW360AuthenticationClient authenticationClient;
     private SW360AuthenticationClient authenticationClientForUserToken;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         SW360ClientConfig clientConfig = createClientConfig();
         authenticationClient = new SW360AuthenticationClient(clientConfig);

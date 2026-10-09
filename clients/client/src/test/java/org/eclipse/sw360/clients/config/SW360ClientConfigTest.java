@@ -14,10 +14,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
 import org.eclipse.sw360.http.HttpClient;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class SW360ClientConfigTest {
@@ -39,86 +40,101 @@ public class SW360ClientConfigTest {
      */
     private ObjectMapper mapper;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         httpClient = mock(HttpClient.class);
         mapper = mock(ObjectMapper.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullRestUrlThrows() {
-        SW360ClientConfig.createConfig(null, AUTH_URL, USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(null, AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyRestUrlThrows() {
-        SW360ClientConfig.createConfig("", AUTH_URL, USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig("", AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidResUrlThrows() {
-        SW360ClientConfig.createConfig("this is not a valid URL?!", AUTH_URL, USER, PASSWORD, CLIENT_ID,
-                CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig("this is not a valid URL?!", AUTH_URL, USER,
+                PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullAuthUrlThrows() {
-        SW360ClientConfig.createConfig(REST_URL, null, USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, null, USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyAuthUrlThrows() {
-        SW360ClientConfig.createConfig(REST_URL, "", USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, "", USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullUserThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, null, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, null, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyUserThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, "", PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, "", PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullPasswordThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, null, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, null, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyPasswordThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, "", CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, "", CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullClientThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, null, CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, null,
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyClientThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, "", CLIENT_PASS, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, "",
+                CLIENT_PASS, USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullClientPasswordThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID, null, USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                null, USER_TOKEN, httpClient, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testEmptyClientPasswordThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID, "", USER_TOKEN, httpClient, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                "", USER_TOKEN, httpClient, mapper)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullHttpClientThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, null, mapper);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, null, mapper)).isInstanceOf(NullPointerException.class);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullObjectMapperThrows() {
-        SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID, CLIENT_PASS, USER_TOKEN, httpClient, null);
+        assertThatThrownBy(() -> SW360ClientConfig.createConfig(REST_URL, AUTH_URL, USER, PASSWORD, CLIENT_ID,
+                CLIENT_PASS, USER_TOKEN, httpClient, null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
