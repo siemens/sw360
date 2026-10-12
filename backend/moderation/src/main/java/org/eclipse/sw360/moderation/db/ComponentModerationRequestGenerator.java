@@ -26,8 +26,15 @@ public class ComponentModerationRequestGenerator extends ModerationRequestGenera
         updateDocument = updateComponent;
         actualDocument = actualComponent;
 
-        documentAdditions = new Component();
-        documentDeletions = new Component();
+        // Reuse the additions/deletions already accumulated on the request (if any),
+        // instead of always starting from a blank Component. This ensures that when
+        // multiple moderation requests are created for the same component while a
+        // previous one is still pending, the diffs get combined/merged into the
+        // existing request rather than the new diff replacing/overwriting it.
+        // See ProjectModerationRequestGenerator for the equivalent, already working,
+        // pattern used for Project (and transitively for Release) moderation requests.
+        documentAdditions = request.isSetComponentAdditions() ? request.getComponentAdditions() : new Component();
+        documentDeletions = request.isSetComponentDeletions() ? request.getComponentDeletions() : new Component();
         //required fields:
         documentAdditions.setName(updateComponent.getName());
         documentAdditions.setId(actualComponent.getId());
@@ -35,6 +42,28 @@ public class ComponentModerationRequestGenerator extends ModerationRequestGenera
         documentDeletions.setId(actualComponent.getId());
 
         for (Component._Fields field : Component._Fields.values()) {
+
+            //ignored fields - must be skipped unconditionally, BEFORE the null-based
+            //addition/deletion checks below. Otherwise, whenever the incoming "update"
+            //component does not carry these (aggregated/derived) fields - which is the
+            //normal case for a plain field edit coming from the UI/REST layer - they
+            //would be wrongly treated as "deletions" of the actual component's values,
+            //causing e.g. Releases to incorrectly show up as part of the moderation
+            //request even though only an unrelated field was changed.
+            switch (field) {
+                case PERMISSIONS:
+                case DOCUMENT_STATE:
+                //releases and related fields are not updated via moderation requests
+                case RELEASES:
+                case RELEASE_IDS:
+                case MAIN_LICENSE_IDS:
+                case LANGUAGES:
+                case OPERATING_SYSTEMS:
+                case VENDOR_NAMES:
+                    continue;
+                default:
+                    break;
+            }
 
             if(actualComponent.getFieldValue(field) == null){
                 documentAdditions.setFieldValue(field, updateComponent.getFieldValue(field));
@@ -44,17 +73,6 @@ public class ComponentModerationRequestGenerator extends ModerationRequestGenera
 
             } else if(!actualComponent.getFieldValue(field).equals(updateComponent.getFieldValue(field))) {
                 switch (field) {
-                    //ignored fields
-                    case PERMISSIONS:
-                    case DOCUMENT_STATE:
-                    //releases and related fields are not updated via moderation requests
-                    case RELEASES:
-                    case RELEASE_IDS:
-                    case MAIN_LICENSE_IDS:
-                    case LANGUAGES:
-                    case OPERATING_SYSTEMS:
-                    case VENDOR_NAMES:
-                        break;
                     case ATTACHMENTS:
                         dealWithAttachments(Component._Fields.ATTACHMENTS);
                         break;
