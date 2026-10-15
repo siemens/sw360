@@ -18,6 +18,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPublicKey;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -157,5 +160,30 @@ class KeyManagerTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Could not load JWT signing keystore")
                 .hasMessageContaining("JWT_SECRETKEY");
+    }
+
+    @Test
+    void detectsBundledDefaultKey(@TempDir Path tempDir) throws Exception {
+        Path ksFile = tempDir.resolve("jwt-keystore.jks");
+        seedKeystoreFile(ksFile);
+
+        KeyManager km = keyManagerWithPath(ksFile.toString());
+        RSAKey bundledKey = km.rsaKey();
+
+        assertThat(km.isBundledDefaultKey(bundledKey))
+                .as("Bundled keystore RSA key must be detected as the default development key")
+                .isTrue();
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair customKp = kpg.generateKeyPair();
+        RSAKey customKey = new RSAKey.Builder((RSAPublicKey) customKp.getPublic())
+                .privateKey(customKp.getPrivate())
+                .keyIDFromThumbprint()
+                .build();
+
+        assertThat(km.isBundledDefaultKey(customKey))
+                .as("Freshly generated custom RSA key must not be detected as the default key")
+                .isFalse();
     }
 }

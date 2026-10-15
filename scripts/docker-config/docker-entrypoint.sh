@@ -20,6 +20,11 @@ mkdir -p /etc/sw360/authorization /etc/sw360/rest
 # 1) Docker secret JWT_KEYSTORE (operator override)
 # 2) Existing persisted /etc/sw360/jwt-keystore.jks
 # 3) Bundled fallback /app/sw360/jwt-keystore.jks
+DEFAULT_JWT_KEYSTORE_SHA256=""
+if [ -f /app/sw360/jwt-keystore.jks ]; then
+  DEFAULT_JWT_KEYSTORE_SHA256="$(sha256sum /app/sw360/jwt-keystore.jks | awk '{print $1}')"
+fi
+
 if [ -f /run/secrets/JWT_KEYSTORE ]; then
   cp /run/secrets/JWT_KEYSTORE /etc/sw360/jwt-keystore.jks
   chmod 600 /etc/sw360/jwt-keystore.jks
@@ -34,6 +39,19 @@ else
   echo "WARNING: No JWT keystore found at /etc/sw360/jwt-keystore.jks and no" \
        "Docker secret JWT_KEYSTORE or bundled fallback at /app/sw360/jwt-keystore.jks." >&2
   echo "WARNING: Authorization server startup may fail if no classpath fallback is available." >&2
+fi
+
+if [ -f /etc/sw360/jwt-keystore.jks ] && [ -n "$DEFAULT_JWT_KEYSTORE_SHA256" ]; then
+  ACTIVE_JWT_KEYSTORE_SHA256="$(sha256sum /etc/sw360/jwt-keystore.jks | awk '{print $1}')"
+  if [ "$ACTIVE_JWT_KEYSTORE_SHA256" = "$DEFAULT_JWT_KEYSTORE_SHA256" ]; then
+    echo "WARNING: Using the default development JWT signing keystore (/etc/sw360/jwt-keystore.jks)." >&2
+    echo "WARNING: This keystore is for development/CI only and MUST NOT be used in production." >&2
+    echo "WARNING: Replace JWT_KEYSTORE and JWT_SECRETKEY before exposing this instance." >&2
+  fi
+fi
+if [ "${JWT_SECRETKEY:-sw360SecretKey}" = "sw360SecretKey" ]; then
+  echo "WARNING: Using the default development JWT_SECRETKEY ('sw360SecretKey')." >&2
+  echo "WARNING: Set a strong JWT_SECRETKEY for production deployments." >&2
 fi
 
 # Seed the S/MIME e-mail signing keystore from an optional Docker secret.

@@ -63,7 +63,10 @@ public class KeyManager {
     /** Classpath resource bundled inside the WAR as a development / CI fallback. */
     private static final String CLASSPATH_KEYSTORE = "/jwt-keystore.jks";
 
-    @Value("${jwt.secretkey:sw360SecretKey}")
+    /** Default development password for {@code jwt-keystore.jks}. */
+    static final String DEFAULT_SECRET_KEY = "sw360SecretKey";
+
+    @Value("${jwt.secretkey:" + DEFAULT_SECRET_KEY + "}")
     private String secretKey;
 
     /**
@@ -101,11 +104,60 @@ public class KeyManager {
         // public key. The same keystore therefore always produces the same kid,
         // so resource-server JWKS caches stay valid across authorization-server
         // restarts (and across nodes in an HA deployment sharing the same keystore).
-        return new RSAKey.Builder(publicKey)
+        RSAKey rsaKey = new RSAKey.Builder(publicKey)
                 .privateKey(privateKey)
                 .expirationTime(cl.getTime())
                 .keyIDFromThumbprint()
                 .build();
+        warnIfDefaultCredentialsInUse(rsaKey);
+        return rsaKey;
+    }
+
+    /**
+     * Logs a prominent warning when the bundled development keystore or default
+     * keystore password is in use so operators notice before exposing an
+     * instance in production.
+     */
+    void warnIfDefaultCredentialsInUse(RSAKey activeKey) {
+        boolean defaultKey = isBundledDefaultKey(activeKey);
+        boolean defaultPassword = DEFAULT_SECRET_KEY.equals(secretKey);
+
+        if (defaultKey || defaultPassword) {
+            log.warn("SECURITY WARNING: The SW360 Authorization Server is using the default development " +
+                    "JWT signing configuration (defaultKeystore={}, defaultPassword={}). " +
+                    "This configuration is intended for development and CI only and MUST NOT be used in production. " +
+                    "Generate a dedicated keystore (rest/rest-common/tools/generateJwtStore.sh) and set a strong " +
+                    "JWT_SECRETKEY / jwt.secretkey.", defaultKey, defaultPassword);
+        }
+    }
+
+    /**
+     * Checks whether the active signing key has the same RFC 7638 thumbprint
+     * ({@code kid}) as the bundled classpath development keystore.
+     */
+    boolean isBundledDefaultKey(RSAKey activeKey) {
+        if (activeKey == null || activeKey.getKeyID() == null) {
+            return false;
+        }
+        try (InputStream in = getClasspathKeystore()) {
+            if (in == null) {
+                return false;
+            }
+            KeyStore bundledKs = KeyStore.getInstance("JKS");
+            bundledKs.load(in, DEFAULT_SECRET_KEY.toCharArray());
+            Certificate cert = bundledKs.getCertificate(KEY_ALIAS);
+            if (!(cert != null && cert.getPublicKey() instanceof RSAPublicKey bundledPub)) {
+                return false;
+            }
+            String bundledKid = new RSAKey.Builder(bundledPub)
+                    .keyIDFromThumbprint()
+                    .build()
+                    .getKeyID();
+            return activeKey.getKeyID().equals(bundledKid);
+        } catch (Exception e) {
+            log.debug("Could not inspect bundled classpath keystore for default-key check: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -143,7 +195,9 @@ public class KeyManager {
                 }
             }
             Files.copy(seedStream, ksFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            log.info("Seeded JWT signing keystore from bundled classpath fallback to '{}'.", keystoreFile);
+            log.warn("Seeded JWT signing keystore from bundled classpath fallback to '{}'. " +
+                    "This default keystore is for development/CI only and MUST NOT be used in production.",
+                    keystoreFile);
         } catch (IOException e) {
             log.warn("Could not persist bundled JWT keystore to '{}': {}. " +
                      "Using classpath copy for this JVM run only.", keystoreFile, e.getMessage());
