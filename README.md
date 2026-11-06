@@ -1,6 +1,6 @@
 # SW360
 
-[![Website](https://img.shields.io/badge/website-SW360-blue)](https://eclipse.dev/sw360/)
+[![Website](https://img.shields.io/badge/website-SW360-blue)](https://eclipse.dev/sw360/) 
 [![Eclipse Public License 2.0](https://img.shields.io/badge/license-EPL--2.0-green.svg "Eclipse Public License 2.0")](LICENSE)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/eclipse/sw360)](https://github.com/eclipse/sw360/releases/latest)
 [![Slack Channel](https://img.shields.io/badge/slack-sw360chat-blue.svg?longCache=true&logo=slack)](https://join.slack.com/t/sw360chat/shared_invite/enQtNzg5NDQxMTQyNjA5LThiMjBlNTRmOWI0ZjJhYjc0OTk3ODM4MjBmOGRhMWRmN2QzOGVmMzQwYzAzN2JkMmVkZTI1ZjRhNmJlNTY4ZGI)
