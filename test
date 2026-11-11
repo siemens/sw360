@@ -1,0 +1,7 @@
+To retrieve all projects from SW360, we utilize the api/projects?allDetails=true API call. This method is preferred because it conveniently fetches all projects with the necessary fields in a single request. However, we would also like to utilize the **componentType**and relation of the releases from the linkedReleases list. The api call returns the relation with the linkedReleases but not the componentType.
+
+
+I noticed that the api/releases?fields=componentType can return the componentType, but we don't want to fetch all releases for that, because that is unnecessary resource usage.
+
+
+If possible could you please, extend the API response to include the componentType in the LinkedReleases when requesting all projects with all details?
