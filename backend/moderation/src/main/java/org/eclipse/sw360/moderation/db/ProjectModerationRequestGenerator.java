@@ -32,11 +32,13 @@ public class ProjectModerationRequestGenerator extends ModerationRequestGenerato
             documentAdditions = request.getProjectAdditions();
         } else {
             documentAdditions = new Project();
+            unsetFieldsWithThriftDefaults(documentAdditions);
         }
         if (request.getProjectDeletions()!=null) {
             documentDeletions = request.getProjectDeletions();
         } else {
             documentDeletions = new Project();
+            unsetFieldsWithThriftDefaults(documentDeletions);
         }
         //required fields:
         documentAdditions.setName(updateProject.getName());
@@ -95,5 +97,17 @@ public class ProjectModerationRequestGenerator extends ModerationRequestGenerato
         request.setProjectAdditions(documentAdditions);
         request.setProjectDeletions(documentDeletions);
         return request;
+    }
+
+    /**
+     * Clears fields with a Thrift default value so only genuine diffs get recorded as set.
+     * A freshly constructed {@link Project} always reports these fields as "set" to their
+     * default, even when untouched; without this, the diff loop below would leave phantom
+     * default values on the stored additions/deletions documents.
+     */
+    private void unsetFieldsWithThriftDefaults(Project project) {
+        project.unsetProjectType();
+        project.unsetState();
+        project.unsetVisbility();
     }
 }

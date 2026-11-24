@@ -22,6 +22,10 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.thrift.TException;
 
+import java.util.EnumSet;
+import java.util.Objects;
+import java.util.Set;
+
 /**
  * Moderation for the project service
  *
@@ -104,6 +108,12 @@ public class ProjectModerator extends Moderator<Project._Fields, Project> {
         }
     }
 
+    /** Fields with a Thrift default value, always reported as "set" even when unchanged. */
+    private static final Set<Project._Fields> FIELDS_WITH_THRIFT_DEFAULTS = EnumSet.of(
+            Project._Fields.VISBILITY,
+            Project._Fields.PROJECT_TYPE,
+            Project._Fields.STATE);
+
     public Project updateProjectFromModerationRequest(Project project, Project projectAdditions, Project projectDeletions){
 
         for (Project._Fields field : Project._Fields.values()) {
@@ -111,8 +121,10 @@ public class ProjectModerator extends Moderator<Project._Fields, Project> {
                 continue;
             }
 
-            if (field == Project._Fields.VISBILITY && projectAdditions != null && projectDeletions != null
-                    && projectAdditions.getVisbility() == projectDeletions.getVisbility()) {
+            if (FIELDS_WITH_THRIFT_DEFAULTS.contains(field) && projectAdditions != null && projectDeletions != null
+                    && Objects.equals(projectAdditions.getFieldValue(field), projectDeletions.getFieldValue(field))) {
+                // Addition and deletion are identical: this is not a real change, most likely an
+                // artifact of the Thrift default value being present on both sides. Skip it.
                 continue;
             }
 
@@ -138,6 +150,15 @@ public class ProjectModerator extends Moderator<Project._Fields, Project> {
                             projectAdditions.getAttachments(),
                             projectDeletions.getAttachments()));
                     break;
+                case VISBILITY:
+                case PROJECT_TYPE:
+                case STATE:
+                    project = updateFieldProneToDefaultValues(
+                            field,
+                            project,
+                            projectAdditions,
+                            projectDeletions);
+                    break;
                 default:
                     project = updateBasicField(
                             field,
@@ -147,6 +168,29 @@ public class ProjectModerator extends Moderator<Project._Fields, Project> {
                             projectDeletions);
             }
 
+        }
+        return project;
+    }
+
+    /**
+     * Applies additions/deletions for a Thrift-defaulted field only if the live value still
+     * matches the recorded "before" value. If the project was already modified concurrently
+     * (e.g. someone else applied the same or a conflicting change directly), the moderation
+     * request's proposed value is discarded instead of blindly overwriting the live value.
+     */
+    private Project updateFieldProneToDefaultValues(Project._Fields field, Project project, Project projectAdditions, Project projectDeletions) {
+        Object liveValue = project.getFieldValue(field);
+        Object recordedBeforeValue = projectDeletions.isSet(field) ? projectDeletions.getFieldValue(field) : null;
+
+        if (projectDeletions.isSet(field) && !Objects.equals(liveValue, recordedBeforeValue)) {
+            log.warn("Skipping moderation change for field '" + field.getFieldName() + "' on project "
+                    + project.getId() + ": current value no longer matches the value recorded in the "
+                    + "moderation request (concurrent modification detected). Keeping current value.");
+            return project;
+        }
+
+        if (projectAdditions.isSet(field)) {
+            project.setFieldValue(field, projectAdditions.getFieldValue(field));
         }
         return project;
     }
